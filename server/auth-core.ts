@@ -102,9 +102,9 @@ export const hashPassword = async (password: string, iterations = DEFAULT_PBKDF2
   return `pbkdf2$${iterations}$${b64(salt)}$${b64(bits)}`
 }
 
-/** 迭代次数只接受合理区间：数据库里被改坏的记录不该变成一次 CPU 炸弹 */
+/** 迭代次数只接受合理区间：数据库里被改坏的记录不该变成一次 CPU 炸弹；上限受 Workers 限制 */
 const MIN_ITERATIONS = 1000
-const MAX_ITERATIONS = 1000000
+const MAX_ITERATIONS = 100000
 
 export const verifyPassword = async (password: string, stored: string): Promise<boolean> => {
   const parts = stored.split('$')
@@ -116,14 +116,17 @@ export const verifyPassword = async (password: string, stored: string): Promise<
     return false
   }
   let salt: Uint8Array<ArrayBuffer>
-  let expected: string
+  // 比较的是 base64 文本本身：atob 出来的是二进制串，和 b64(bits) 长度都不一样
+  const expected = parts[3]
   try {
     salt = Uint8Array.from(atob(parts[2]), (c) => c.charCodeAt(0))
-    expected = atob(parts[3])
+    if (atob(expected).length === 0) {
+      return false
+    }
   } catch {
     return false
   }
-  if (salt.length === 0 || expected.length === 0) {
+  if (salt.length === 0) {
     return false
   }
   try {

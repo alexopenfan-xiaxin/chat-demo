@@ -3,6 +3,12 @@ import {
   takeRateLimit, verifyPassword, type Env,
 } from '../../../server/auth-core'
 
+/**
+ * 邮箱不存在时也走一遍哈希，避免用响应时间判断账号是否存在。
+ * 迭代次数必须 ≤ 100000（Workers 的 PBKDF2 上限），写大了会抛错变成 500。
+ */
+const DUMMY_HASH = 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+
 /** 账号级失败次数上限与锁定时长（秒） */
 const MAX_FAILURES = 5
 const LOCK_SECONDS = 900
@@ -36,7 +42,7 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
     .first<{ id: string; email: string; password_hash: string; failed_attempts: number; locked_until: number }>()
   const now = Math.floor(Date.now() / 1000)
   // 邮箱不存在也走一遍哈希，避免用响应时间判断账号是否存在
-  const stored = user?.password_hash ?? 'pbkdf2$210000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+  const stored = user?.password_hash ?? DUMMY_HASH
   const ok = await verifyPassword(password, stored)
 
   // 锁到期就把计数清零：否则只要再错一次就会重新锁满，攻击者每 15 分钟打 5 次
