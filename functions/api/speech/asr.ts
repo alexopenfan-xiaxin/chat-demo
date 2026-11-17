@@ -48,7 +48,7 @@ export const onRequestPost = guarded(async (context: { request: Request; env: Sp
     }
   )
   if (!response.ok) {
-    return json({ error: '语音识别失败了' }, response.status === 429 ? 429 : 502)
+    return json({ error: '语音识别失败了' }, response.status === 429 ? 429 : 503)
   }
   const payload = (await response.json()) as { result?: { text?: string } }
   const text = typeof payload.result?.text === 'string' ? payload.result.text.trim() : ''
