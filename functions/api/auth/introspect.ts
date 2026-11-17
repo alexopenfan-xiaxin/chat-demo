@@ -42,9 +42,8 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
   if (row?.enc && secretEnv.KEY_ENC_SECRET) {
     upstreamKey = (await decryptSecret(row.enc, secretEnv.KEY_ENC_SECRET)) ?? ''
   }
-  // 老账号还没绑 key 时继续用环境里那把（面板 id 16），新用户都走自己的 key
-  if (!upstreamKey) {
-    upstreamKey = secretEnv.UPSTREAM_USAGE_KEY ?? ''
-  }
+  // 解不出就返回空，绝不回落到 UPSTREAM_USAGE_KEY：那把是不限额的管理员 key，
+  // 拿它当转发凭证等于给「注册成功但建 key 失败」的账号发一张无限额通行证。
+  // 空值会让 proxy 走 verifyNoKey 回 403 no_key，前端提示额度未开通。
   return json({ active: true, user: session.user, expiresAt: session.expiresAt, upstreamKey })
 }

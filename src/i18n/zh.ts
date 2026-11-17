@@ -99,6 +99,7 @@ export const zh = {
   creditsUnitUsed: '已用积分',
   creditsProgress: '已用 {used} / 共 {limit}',
   creditsUnlimited: '当前账号不限额度',
+  creditsNoKey: '这个账号还没有开通额度，请联系管理员',
   creditsUnavailable: '额度信息暂时读不到，用量统计正常',
   creditsExhausted: '额度已用完，联系管理员充值后继续使用',
   creditsToday: '今日已用 {value} token',

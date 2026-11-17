@@ -104,6 +104,7 @@ export const en = {
   creditsUnitUsed: 'credits used',
   creditsProgress: 'Used {used} of {limit}',
   creditsUnlimited: 'This account has no credit limit',
+  creditsNoKey: 'This account has no credits yet; ask an administrator',
   creditsUnavailable: 'Credit details are unavailable right now; usage stats still work',
   creditsExhausted: 'Out of credits. Ask the admin to top up to keep using the app.',
   creditsToday: 'Used {value} tokens today',

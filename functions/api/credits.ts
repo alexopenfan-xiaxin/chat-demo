@@ -198,13 +198,12 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
       unlimited = !(typeof stored.quota === 'number' && stored.quota > 0)
     }
   }
-  // 兜底：多 key 上线前就存在的老账号还没绑 key（面板 id 16 那把），继续用环境里那把，
-  // 新注册的用户一律走上面自己的 key，不会再落到这里。
+  // 没有自己的 key 就没有额度可查。这里也不能回落到 UPSTREAM_USAGE_KEY：
+  // 那是管理员那把，回落到它会让没绑 key 的账号看到别人的用量。
   if (!key) {
-    key = env.UPSTREAM_USAGE_KEY ?? ''
-  }
-  if (!key) {
-    return json({ error: '额度服务没有配置' }, 503)
+    return json({ no_key: true, unlimited: false, credits: null, tokens: null }, 200, {
+      'cache-control': 'no-store',
+    })
   }
 
   // proxy 的 introspect 读的是同一个会话表、同一种 token 形态，所以直接复用 cookie 里这张票，

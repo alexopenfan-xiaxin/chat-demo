@@ -52,7 +52,7 @@ const formatDate = (value: string | number | null) => {
   return new Date(time).toLocaleDateString()
 }
 
-type Status = 'loading' | 'ready' | 'unavailable'
+type Status = 'loading' | 'ready' | 'unavailable' | 'nokey'
 
 export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const t = useTranslate()
@@ -68,7 +68,7 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
       const next = await fetchCredits(undefined, fresh)
       setSnapshot(next)
       // 「不限额」比「积分读不到」重要：只要知道账号不限额度，页面就不该整块变成读不到
-      setStatus(next.unlimited || next.credits ? 'ready' : 'unavailable')
+      setStatus(next.noKey ? 'nokey' : next.unlimited || next.credits ? 'ready' : 'unavailable')
     } catch {
       // 网络或上游失败都落到「读不到」：页面主体照样在，只是没有数字
       setStatus((current) => (current === 'ready' ? current : 'unavailable'))
@@ -101,7 +101,11 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
 
   // 不限额时唯一有意义的数字是「用掉多少」；读不到时主数字位留一个破折号，不留空
   const mainValue =
-    status === 'loading' ? null : status === 'unavailable' ? null : unlimited ? used : remaining
+    status === 'loading' || status === 'unavailable' || status === 'nokey'
+      ? null
+      : unlimited
+        ? used
+        : remaining
   const mainText = mainValue === null ? '——' : formatCredits(mainValue)
   // 数字都没有时不留单位，只留破折号
   const mainUnit = mainValue === null ? '' : unlimited ? t('creditsUnitUsed') : t('creditsUnitRemaining')
@@ -149,7 +153,12 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
         ) : (
           <>
             <div className={styles.main}>
-              <span className={[styles.amount, status === 'unavailable' ? styles.amountMuted : ''].join(' ')}>
+              <span
+                className={[
+                  styles.amount,
+                  status === 'unavailable' || status === 'nokey' ? styles.amountMuted : '',
+                ].join(' ')}
+              >
                 {mainText}
               </span>
               <span className={styles.unit}>{status === 'unavailable' ? '' : mainUnit}</span>
@@ -174,6 +183,7 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
 
             {status === 'ready' && unlimited ? <p className={styles.meta}>{t('creditsUnlimited')}</p> : null}
             {status === 'unavailable' ? <p className={styles.meta}>{t('creditsUnavailable')}</p> : null}
+            {status === 'nokey' ? <p className={styles.meta}>{t('creditsNoKey')}</p> : null}
             {exhausted ? <p className={[styles.notice, styles.noticeWarn].join(' ')}>{t('creditsExhausted')}</p> : null}
           </>
         )}

@@ -16,6 +16,8 @@ export type CreditsSnapshot = {
   /** 上游 daily_tokens 是对象，不是数字 */
   dailyTokens: CreditSection | null
   models: string[]
+  /** 这个账号还没有自己的上游 key（注册时没建成），额度未开通 */
+  noKey: boolean
   /** 原样透出：0 = 长期有效，null = 没给 */
   expiresAt: string | number | null
   snapshotAt: string
@@ -58,6 +60,7 @@ export const fetchCredits = async (signal?: AbortSignal, fresh = false): Promise
   const body = (await response.json()) as Record<string, unknown>
   const expiresAt = body.expires_at
   return {
+    noKey: body.no_key === true,
     unlimited: body.unlimited === true,
     credits: section(body.credits),
     tokens: section(body.tokens),
