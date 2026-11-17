@@ -61,7 +61,7 @@ const upload = (attachment: DraftAttachment, apiKey: string) => {
 export const addDraftFiles = (
   sessionId: string | null,
   files: File[],
-  apiKey: string
+  apiKey = ''
 ): TranslationMessage | null => {
   if (files.length === 0) {
     return null
@@ -87,7 +87,7 @@ export const addDraftFiles = (
 export const retryDraftAttachment = (
   sessionId: string | null,
   attachmentId: string,
-  apiKey: string
+  apiKey = ''
 ) => {
   const attachment = getDraft(sessionId).attachments.find((item) => item.id === attachmentId)
   if (attachment) {

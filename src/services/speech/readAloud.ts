@@ -50,7 +50,8 @@ export const describeReadAloudError = (error: unknown): TranslationMessage | str
   }
   switch (classifyApiError(error)) {
     case 'unauthorized':
-      return { key: 'apiKeyInvalidRetry' }
+      // 401 现在是「额度未开通／会话问题」，不再让用户去换 key
+      return { key: 'replyNoCredits' }
     case 'insufficientBalance':
       return { key: 'insufficientBalance' }
     case 'rateLimited':

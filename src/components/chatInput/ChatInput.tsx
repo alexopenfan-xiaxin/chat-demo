@@ -79,7 +79,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
       return
     }
-    const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
+    const error = addDraftFiles(sessionId, files)
     if (error) {
       showToast(error)
     }
@@ -87,7 +87,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const retryFile = useCallback(
     (id: string) => {
       if (!useChatStore.getState().importingHistory && ensureApiKey()) {
-        retryDraftAttachment(sessionId, id, useSettings.getState().apiKey ?? '')
+        retryDraftAttachment(sessionId, id)
       }
     },
     [sessionId]

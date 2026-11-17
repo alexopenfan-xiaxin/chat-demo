@@ -7,7 +7,7 @@ export type Notice = {
   /** 模板答复使用正文样式；其余统一为红色错误提示。 */
   presentation?: 'response'
   /** 需要用户处理的问题附带的操作 */
-  action?: 'apiKey' | 'topUp'
+  action?: 'credits' | 'topUp'
 }
 
 const getTemplateText = (reply: AssistantMessage) =>
@@ -33,7 +33,9 @@ export const describeReply = (reply: AssistantMessage): Notice | null => {
     }
     switch (classifyStatus(status)) {
       case 'unauthorized':
-        return { text: translate('replyInvalidApiKey'), action: 'apiKey' }
+        // 401 不再是「key 失效」：key 在服务端按会话注入，用户没有可填的东西。
+        // 引导他去额度页看是不是额度没开通，或者联系管理员。
+        return { text: translate('replyNoCredits'), action: 'credits' }
       case 'insufficientBalance':
         return { text: translate('replyInsufficientBalance'), action: 'topUp' }
       case 'rateLimited':
