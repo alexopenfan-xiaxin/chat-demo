@@ -171,10 +171,12 @@ export async function* streamMessage(
   body: CreateMessageRequest,
   signal: AbortSignal
 ): AsyncGenerator<MessageStreamEvent> {
+  // key 不再由浏览器携带：proxy 按会话查出这个用户自己的 key 再注入，
+  // 这里带来的任何 Authorization 都会被它丢掉
+  void apiKey
   const response = await request(`${OPENAI_BASE_URL}/responses`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
