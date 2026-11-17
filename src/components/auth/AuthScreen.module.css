@@ -81,6 +81,15 @@
   color: var(--auth-brand);
 }
 
+/* 重置页字段多，顶部收一点，别让主按钮掉到首屏外 */
+.contentCompact .head {
+  padding-top: 56px;
+}
+
+.contentCompact .subline {
+  margin: 10px 0 16px;
+}
+
 .spacer {
   flex: 1;
   min-height: 24px;
@@ -578,7 +587,7 @@
 .sendButton {
   flex: none;
   min-width: 112px;
-  height: 40px;
+  height: 44px;
   padding: 0 14px;
   border: 1.5px solid var(--auth-ghost-border);
   border-radius: 999px;
@@ -824,7 +833,16 @@
     padding-top: 48px;
   }
 
-  .spacer {
+  /* 重置页字段多，顶部收一点，别让主按钮掉到首屏外 */
+.contentCompact .head {
+  padding-top: 56px;
+}
+
+.contentCompact .subline {
+  margin: 10px 0 16px;
+}
+
+.spacer {
     min-height: 24px;
   }
 

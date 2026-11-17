@@ -66,7 +66,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
 
   return (
     <main className={styles.page}>
-      <div className={styles.content}>
+      <div className={mode === 'reset' ? `${styles.content} ${styles.contentCompact}` : styles.content}>
         <header className={styles.head}>
           <span className={styles.brandMark} aria-hidden="true">
             <svg viewBox="0 0 20 20" width="22" height="22" fill="none">
@@ -132,7 +132,10 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
           <LoginForm
             accepted={accepted}
             termsFlash={termsFlash}
-            onAccept={setAccepted}
+            onAccept={(next) => {
+              commitEmail()
+              setAccepted(next)
+            }}
             onSwitch={() => setMode('register')}
             onForgot={() => setMode('reset')}
             onRequestEmail={requestEmail}
@@ -157,7 +160,11 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
           <ResetForm
             accepted={accepted}
             termsFlash={termsFlash}
-            onAccept={setAccepted}
+            onAccept={(next) => {
+              // 勾协议会触发重渲染，autofill 的值此时只在 DOM 里：先落回 state 再改勾选
+              commitEmail()
+              setAccepted(next)
+            }}
             readEmail={readEmail}
             commitEmail={commitEmail}
             onRequestEmail={requestEmail}
