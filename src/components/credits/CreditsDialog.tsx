@@ -66,7 +66,8 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
       // 服务端配了统一 key 就用它；没配时带上用户自己在设置里填的那把，只用于查额度
       const next = await fetchCredits(useSettings.getState().apiKey ?? undefined, undefined, fresh)
       setSnapshot(next)
-      setStatus(next.credits ? 'ready' : 'unavailable')
+      // 「不限额」比「积分读不到」重要：只要知道账号不限额度，页面就不该整块变成读不到
+      setStatus(next.unlimited || next.credits ? 'ready' : 'unavailable')
     } catch {
       // 网络或上游失败都落到「读不到」：页面主体照样在，只是没有数字
       setStatus((current) => (current === 'ready' ? current : 'unavailable'))
@@ -101,7 +102,8 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const mainValue =
     status === 'loading' ? null : status === 'unavailable' ? null : unlimited ? used : remaining
   const mainText = mainValue === null ? '——' : formatCredits(mainValue)
-  const mainUnit = unlimited ? t('creditsUnitUsed') : t('creditsUnitRemaining')
+  // 数字都没有时不留单位，只留破折号
+  const mainUnit = mainValue === null ? '' : unlimited ? t('creditsUnitUsed') : t('creditsUnitRemaining')
 
   // 上游没给 daily_tokens（或段内没有 used）时不能拿累计值冒充「今日」，换标签
   const todayTokens = snapshot?.dailyTokens?.used ?? null

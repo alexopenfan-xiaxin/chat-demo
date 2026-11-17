@@ -1,4 +1,5 @@
 import { SESSION_COOKIE, currentUser, guarded, json, readCookie, type Env } from '../../server/auth-core'
+import { listPanelKeys, pickPanelKey } from '../../server/panel'
 
 /**
  * GET /api/credits：当前用户的额度。
@@ -43,6 +44,10 @@ type CreditEnv = Env & {
   UPSTREAM_USAGE_KEY?: string
   /** 这把 key 是否不限额（quota 0 的账号），由部署时配置 */
   UPSTREAM_KEY_UNLIMITED?: string
+  /** 面板管理口，只在 /v1/usage 的 credits 段坏掉时用来补一次真实积分 */
+  PANEL_ADMIN_USER?: string
+  PANEL_ADMIN_PASSWORD?: string
+  PANEL_KEY_NAME?: string
 }
 
 type UsageSection = { used?: number | null; limit?: number | null; remaining?: number | null }
@@ -199,10 +204,30 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
   const raw = (await response.json()) as UpstreamUsage
   const snapshot = parseUsage(raw, env.UPSTREAM_KEY_UNLIMITED === '1')
 
+  // /v1/usage 的 credits 段没接 quota_credit（issue #450），判为不可信时去面板
+  // /api/keys 按 key 名补一次真实 used_credit；面板也读不到就照旧显示「读不到」，不编数。
+  let credits = snapshot.credits
+  let creditsSource: 'upstream' | 'panel' | null = credits ? 'upstream' : null
+  if (!snapshot.creditsReliable) {
+    const panelKey = pickPanelKey(await listPanelKeys(env, cookieToken), env)
+    if (panelKey?.usedCredit !== null && panelKey?.usedCredit !== undefined) {
+      const quota = panelKey.quotaCredit
+      // quota 0 在面板里是「不限额」，不是零额度
+      const capped = typeof quota === 'number' && quota > 0
+      credits = {
+        used: panelKey.usedCredit,
+        limit: capped ? quota : null,
+        remaining: capped ? Math.max(0, quota - panelKey.usedCredit) : null,
+      }
+      creditsSource = 'panel'
+    }
+  }
+
   const payload = {
     unlimited: snapshot.unlimited,
-    credits: snapshot.credits,
-    credits_reliable: snapshot.creditsReliable,
+    credits,
+    credits_reliable: creditsSource === 'panel' ? true : snapshot.creditsReliable,
+    credits_source: creditsSource,
     tokens: snapshot.tokens,
     daily_tokens: snapshot.dailyTokens,
     models: snapshot.models,
