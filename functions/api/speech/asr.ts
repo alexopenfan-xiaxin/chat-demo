@@ -45,7 +45,8 @@ export const onRequestPost = guarded(async (context: { request: Request; env: Sp
   }
   let result: { text?: string }
   try {
-    result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio })
+    // 模型 schema 接受 array 或 binary；这里直接给 ArrayBuffer，避免大数组被降级成字符串
+    result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio: buffer })
   } catch (error) {
     return json({ error: 'asr failed', detail: String(error).slice(0, 300) }, 500)
   }
