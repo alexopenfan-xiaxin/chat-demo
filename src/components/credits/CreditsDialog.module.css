@@ -228,3 +228,95 @@
     transform: rotate(360deg);
   }
 }
+
+/* ---------- 使用详情（本机 IndexedDB，会话级口径） ---------- */
+
+.usageBlock {
+  margin-top: 18px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.usageBlock > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.usageBlock > summary::-webkit-details-marker {
+  display: none;
+}
+
+.usageBlock > summary svg,
+.usageRow svg {
+  transition: transform 160ms var(--ds-ease-in-out);
+}
+
+.usageBlock[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.usageList {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.usageItem + .usageItem {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.usageRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.usageRow::-webkit-details-marker {
+  display: none;
+}
+
+.usageTitle {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.usageMeta {
+  font-variant-numeric: tabular-nums;
+}
+
+.roundList {
+  margin: 0 0 8px;
+  padding: 0 0 0 2px;
+  list-style: none;
+}
+
+.roundRow {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.roundIndex {
+  flex: none;
+  width: 28px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.usageHint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+}

@@ -197,14 +197,12 @@ const replyStatus = ({ status, stopReason }: AssistantMessage): ChatMessageStatu
   }
 }
 
-/** 最近一次请求的输入（含缓存）与输出之和，即这一条结束时的上下文 token。 */
+/**
+ * 最近一次请求的输入与输出之和，即这一条结束时的上下文 token。
+ * input_tokens 已经包含缓存部分，加 cache_read_input_tokens 会把同一批 token 算两遍。
+ */
 const contextTokens = ({ usage }: AssistantMessage) =>
-  usage
-    ? usage.input_tokens +
-      usage.cache_creation_input_tokens +
-      usage.cache_read_input_tokens +
-      usage.output_tokens
-    : 0
+  usage ? usage.input_tokens + usage.output_tokens : 0
 
 /** 消息按父节点优先重新编号为 1…n，保证 parent_id 小于 id。 */
 const numberMessages = (messages: Message[]) => {

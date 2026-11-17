@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { fetchCredits, type CreditsSnapshot } from '../../services/api/credits.js'
+import { loadConversationUsage, type ConversationUsage } from '../../services/credits/usageStats.js'
 import { useSettings } from '../../services/settings.js'
 import { Modal } from '../base/Modal.js'
 import { IconChevronDownOutline14, IconRefreshOutline16 } from '../base/icons.js'
@@ -54,6 +55,7 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const [status, setStatus] = useState<Status>('loading')
   const [snapshot, setSnapshot] = useState<CreditsSnapshot | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [usage, setUsage] = useState<ConversationUsage[]>([])
   const [now, setNow] = useState(() => Date.now())
 
   const load = useCallback(async () => {
@@ -73,6 +75,10 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => {
     void load()
+    // 使用详情全在本机算，不经过后端
+    void loadConversationUsage()
+      .then(setUsage)
+      .catch(() => setUsage([]))
   }, [load])
 
   useEffect(() => {
@@ -159,6 +165,52 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
           <div className={styles.todayRow}>
             <p className={styles.todayLine}>{t('creditsToday', { value: formatTokens(todayTokens) })}</p>
           </div>
+        ) : null}
+
+        {usage.length > 0 ? (
+          <details className={styles.usageBlock}>
+            <summary>
+              {t('creditsUsageTitle')}
+              <IconChevronDownOutline14 />
+            </summary>
+            <ul className={styles.usageList}>
+              {usage.map((conversation) => (
+                <li key={conversation.id} className={styles.usageItem}>
+                  <details>
+                    <summary className={styles.usageRow}>
+                      <span className={styles.usageTitle} title={conversation.title}>
+                        {conversation.title}
+                      </span>
+                      <span className={styles.usageMeta}>
+                        {t('creditsUsageRounds', { count: conversation.rounds.length })} ·{' '}
+                        {formatTokens(conversation.totalTokens)} token ·{' '}
+                        {conversation.hitRate === null
+                          ? t('creditsHitNA')
+                          : t('creditsHit', { percent: Math.round(conversation.hitRate * 100) })}
+                      </span>
+                    </summary>
+                    <ul className={styles.roundList}>
+                      {conversation.rounds.map((round, index) => (
+                        <li key={round.id} className={styles.roundRow}>
+                          <span className={styles.roundIndex}>
+                            {t('creditsRoundIndex', { index: index + 1 })}
+                          </span>
+                          <span>
+                            {t('creditsRoundDetail', {
+                              input: formatTokens(round.inputTokens),
+                              cached: formatTokens(round.cachedTokens),
+                              output: formatTokens(round.outputTokens),
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </li>
+              ))}
+            </ul>
+            <p className={styles.usageHint}>{t('creditsUsageHint')}</p>
+          </details>
         ) : null}
 
         {snapshot ? (

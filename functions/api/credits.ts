@@ -1,4 +1,4 @@
-import { currentUser, guarded, json, type Env } from '../../server/auth-core'
+import { SESSION_COOKIE, currentUser, guarded, json, readCookie, type Env } from '../../server/auth-core'
 
 /**
  * GET /api/credits：当前用户的额度。
@@ -59,7 +59,8 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
   if (!(await currentUser(request, env.DB))) {
     return json({ error: '请先登录' }, 401)
   }
-  const base = (env.UPSTREAM_BASE ?? 'http://43.226.46.73:7864').replace(/\/+$/, '')
+  // 走隧道域名，不碰裸 IP：Worker 直接 fetch 43.226.46.73 会被 Cloudflare 挡成 1003
+  const base = (env.UPSTREAM_BASE ?? 'https://api-ds-chat.openfan.dpdns.org').replace(/\/+$/, '')
   // 优先用服务端配置的 key（多 key 方案落地后就是查 D1）；
   // 还没配置时退回到「用户自己在设置里填的那把」，只用于查额度，不留存、不写日志
   const key = env.UPSTREAM_USAGE_KEY ?? request.headers.get('x-usage-key') ?? ''
@@ -67,22 +68,20 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
     return json({ error: '额度服务没有配置' }, 503)
   }
 
-  let response: Response
-  try {
-    response = await fetch(`${base}/v1/usage`, {
-      headers: { authorization: `Bearer ${key}`, 'cache-control': 'no-store' },
-    })
-  } catch (error) {
-    // 临时诊断：确认是「Cloudflare 到不了上游」还是别的
-    return json({ error: '额度暂时读不到', detail: `fetch: ${String(error).slice(0, 160)}` }, 503)
-  }
+  // proxy 的 introspect 读的是同一个会话表、同一种 token 形态，所以直接复用 cookie 里这张票，
+  // 不用另签会话（那会每开一次额度页就往 sessions 表插一条垃圾行）
+  const cookieToken = readCookie(request, SESSION_COOKIE) ?? ''
+  const response = await fetch(`${base}/v1/usage`, {
+    headers: {
+      authorization: `Bearer ${key}`,
+      'x-ds-chat-auth': cookieToken,
+      'cache-control': 'no-store',
+    },
+  })
   if (!response.ok) {
     // 用 503 而不是 502：Pages Functions 返回 502 时 Cloudflare 会用自家的错误页
     // 覆盖 body，前端就拿不到我们写的 JSON 了
-    return json(
-      { error: '额度暂时读不到', detail: `upstream ${response.status}: ${(await response.text()).slice(0, 120)}` },
-      response.status === 429 ? 429 : 503
-    )
+    return json({ error: '额度暂时读不到' }, response.status === 429 ? 429 : 503)
   }
   const raw = (await response.json()) as UpstreamUsage
   const tokens = section(raw.tokens)
