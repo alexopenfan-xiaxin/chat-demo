@@ -10,6 +10,8 @@ export type Env = {
   MAIL_RELAY_TOKEN: string
   /** 可选：覆盖建哈希用的 PBKDF2 迭代次数，Workers 的 CPU 限额各档不同 */
   PBKDF2_ITERATIONS?: string
+  /** proxy 调 introspect 时带的共享密钥，没配就一律拒绝 */
+  INTERNAL_API_SECRET?: string
 }
 
 /** Cloudflare 的 D1 类型只做最小声明，避免引入额外依赖 */
@@ -31,6 +33,10 @@ export type D1Database = {
  */
 export const SESSION_COOKIE = '__Host-ds_chat_session'
 export const SESSION_TTL = 30 * 24 * 3600
+/** 内存里的 Bearer 会话短一些：刷新页面就用 cookie 换新的 */
+export const ACCESS_TTL = 12 * 3600
+/** proxy 调 introspect 的共享头，避免这个接口变成公开的会话探测点 */
+export const INTERNAL_HEADER = 'x-ds-chat-internal'
 export const CODE_TTL = 10 * 60
 export const MAX_CODE_ATTEMPTS = 5
 
@@ -70,7 +76,7 @@ export const randomToken = (bytes = 32): string => {
  * 默认 210000 是 OWASP 对 PBKDF2-SHA256 的下限；付费档 CPU 够，需要再调就用
  * 环境变量 PBKDF2_ITERATIONS。校验一律读哈希里存的迭代次数，老记录不受影响。
  */
-const DEFAULT_PBKDF2_ITERATIONS = 210000
+const DEFAULT_PBKDF2_ITERATIONS = 100000
 const MIN_PBKDF2_ITERATIONS = 50000
 const MAX_PBKDF2_ITERATIONS = 1000000
 
@@ -261,6 +267,54 @@ export const readCookie = (request: Request, name: string): string | null => {
 }
 
 export type SessionUser = { id: string; email: string }
+
+/** 建一条会话并返回明文 token；cookie 与 Bearer 用的是同一种记录 */
+export const startSession = async (
+  db: D1Database,
+  userId: string,
+  request: Request,
+  ttl = SESSION_TTL
+): Promise<string> => {
+  const token = randomToken()
+  const now = Math.floor(Date.now() / 1000)
+  await db
+    .prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ua, ip) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(await sha256Hex(token), userId, now, now + ttl, request.headers.get('user-agent') ?? '', clientIp(request))
+    .run()
+  return token
+}
+
+/** 按明文 token 查会话；过期即删，返回 null */
+export const findSession = async (
+  db: D1Database,
+  token: string
+): Promise<{ user: SessionUser; expiresAt: number } | null> => {
+  const tokenHash = await sha256Hex(token)
+  const row = await db
+    .prepare(
+      'SELECT s.expires_at AS expires_at, u.id AS id, u.email AS email FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?'
+    )
+    .bind(tokenHash)
+    .first<{ expires_at: number; id: string; email: string }>()
+  if (!row) {
+    return null
+  }
+  if (row.expires_at <= Math.floor(Date.now() / 1000)) {
+    await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run()
+    return null
+  }
+  return { user: { id: row.id, email: row.email }, expiresAt: row.expires_at }
+}
+
+/** 从 Authorization 头取 Bearer 明文，格式不对返回 null */
+export const bearerToken = (request: Request): string | null => {
+  const header = request.headers.get('authorization')
+  if (!header) {
+    return null
+  }
+  const match = /^Bearer\s+(\S+)$/i.exec(header.trim())
+  return match ? match[1] : null
+}
 
 /** 校验会话并返回用户；失效时同时清掉记录 */
 export const currentUser = async (

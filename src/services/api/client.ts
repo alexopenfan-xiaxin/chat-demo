@@ -1,4 +1,5 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
+import { ensureAccessToken, notifySessionExpired } from '../auth.js'
 import { readServerSentEvents } from './sse.js'
 import {
   itemKind,
@@ -33,6 +34,8 @@ export type ApiErrorKind =
   | 'interrupted'
   /** 响应不符合协议（如非 SSE 响应） */
   | 'protocol'
+  /** ds-chat 自己的会话过期（proxy 拒了 Bearer），和上游 API Key 失效是两回事 */
+  | 'session'
 
 export class ApiError extends Error {
   readonly localMessage?: TranslationMessage
@@ -75,10 +78,31 @@ const readErrorResponse = async (
   return new ApiError(kind, message, response.status)
 }
 
+/** proxy 的 401 判定：优先读 WWW-Authenticate，读不到再看 body 里的 code */
+const isSessionExpired = async (response: Response): Promise<boolean> => {
+  if ((response.headers.get('www-authenticate') ?? '').includes('realm="ds-chat"')) {
+    return true
+  }
+  try {
+    const body = (await response.json()) as { error?: { code?: unknown } }
+    return body.error?.code === 'session_expired'
+  } catch {
+    return false
+  }
+}
+
 export const request = async (url: string, init: RequestInit): Promise<Response> => {
   let response: Response
   try {
-    response = await fetch(url, init)
+    const headers = new Headers(init.headers)
+    if (API_ORIGIN !== '') {
+      // 同源部署直接靠 cookie；独立域名必须带票，proxy 只认这个头
+      const token = await ensureAccessToken()
+      if (token !== null) {
+        headers.set('X-DS-Chat-Auth', token)
+      }
+    }
+    response = await fetch(url, { ...init, headers })
   } catch (error) {
     if (init.signal?.aborted) {
       throw error
@@ -86,6 +110,10 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
     throw new ApiError('network', error instanceof Error ? error.message : String(error))
   }
   if (!response.ok) {
+    if (response.status === 401 && API_ORIGIN !== '' && (await isSessionExpired(response.clone()))) {
+      notifySessionExpired()
+      throw new ApiError('session', '登录已过期，重新登录', 401)
+    }
     throw await readErrorResponse(response)
   }
   return response

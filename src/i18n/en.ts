@@ -213,4 +213,9 @@ export const en = {
   authNetwork: 'The network seems flaky, try again',
   authOtpDigit: 'Code digit {index}',
   authGoLoginLink: 'Sign in',
+  authSessionExpired: 'Your session expired. Sign in again to send and receive messages',
+  authSessionExpiredAction: 'Sign in again',
+  authSessionExpiredReload: 'Your session expired. Refresh the page',
+  authSessionExpiredReloadAction: 'Refresh',
+  authSessionExpiredSend: 'Session expired, cannot send right now',
 } satisfies Record<keyof typeof zh, string>

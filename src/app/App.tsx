@@ -25,7 +25,14 @@ import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import { closeMobileSider } from '../components/sider/mobileSiderState.js'
 import { MobileSider, Sider } from '../components/sider/Sider.js'
 import { AuthScreen } from '../components/auth/AuthScreen.js'
-import { fetchMe, logout as logoutRequest, type AuthUser } from '../services/auth.js'
+import {
+  ensureAccessToken,
+  fetchMe,
+  logout as logoutRequest,
+  onSessionExpired,
+  type AuthUser,
+} from '../services/auth.js'
+import { setSessionExpired, useSessionState } from '../services/sessionState.js'
 import authStyles from '../components/auth/AuthScreen.module.css'
 import styles from './App.module.css'
 
@@ -33,6 +40,7 @@ export const App = () => {
   const t = useTranslate()
   // undefined = 还在问 /api/auth/me，null = 未登录
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined)
+  const sessionExpired = useSessionState((state) => state.expired)
   const isMobile = useIsMobile()
   const locale = useSettings((state) => state.locale)
   // 移动端侧边栏以独立抽屉管理开合状态
@@ -72,8 +80,18 @@ export const App = () => {
   // 移动端选中会话、切换布局后收起抽屉
   useEffect(closeMobileSider, [activeId, isMobile])
 
+  useEffect(() => onSessionExpired(() => setSessionExpired(true)), [])
+
+  // 认人 + 换票都落定才算加载完：否则会先渲染已登录、再翻成过期横幅
   useEffect(() => {
-    void fetchMe().then(setUser)
+    void (async () => {
+      const me = await fetchMe()
+      if (!me) {
+        setUser(null)
+        return
+      }
+      setUser((await ensureAccessToken()) ? me : null)
+    })()
   }, [])
 
   // 登录之后才碰聊天数据：未登录时不该读本地会话，也不该弹 API Key 设置
@@ -89,6 +107,7 @@ export const App = () => {
   const onLogout = useCallback(async () => {
     try {
       await logoutRequest()
+      setSessionExpired(false)
       setUser(null)
       showToast({ key: 'authLoggedOut' })
     } catch {
@@ -101,7 +120,19 @@ export const App = () => {
   }
 
   if (user === null) {
-    return <AuthScreen onAuthenticated={setUser} />
+    return (
+      <AuthScreen
+        onAuthenticated={(next) => {
+          setSessionExpired(false)
+          setUser(next)
+        }}
+      />
+    )
+  }
+
+  const relogin = () => {
+    setSessionExpired(false)
+    setUser(null)
   }
 
   return (
@@ -113,6 +144,14 @@ export const App = () => {
           <Sider user={user} onLogout={onLogout} />
         )}
         <main className={styles.main}>
+          {sessionExpired ? (
+            <div className={styles.sessionExpired} role="status">
+              <span>{t('authSessionExpired')}</span>
+              <Button variant="outlined" size="s" onClick={relogin}>
+                {t('authSessionExpiredAction')}
+              </Button>
+            </div>
+          ) : null}
           {saveError ? (
             <div className={styles.saveError} role="alert">
               <span>{t('sessionSaveFailed')}</span>

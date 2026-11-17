@@ -10,6 +10,7 @@ import {
 import { setSearch, setThinking, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
+import { useSessionState } from '../../services/sessionState.js'
 import {
   addDraftFiles,
   EMPTY_DRAFT,
@@ -128,9 +129,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
 
   // 移动端录音时用频谱替代输入框内容
   const recording = voice.status === 'recording'
+  const sessionExpired = useSessionState((state) => state.expired)
 
   // 排队、上传中或上传失败的附件都留在输入框，全部上传成功后才能发送
-  const canSend = !importingHistory && !streaming && voice.status === 'idle' && draftReady
+  // 会话过期时只拦发送：草稿、附件、输入框都保持原样
+  const canSend =
+    !importingHistory && !streaming && voice.status === 'idle' && draftReady && !sessionExpired
 
   const send = () => {
     if (
@@ -276,7 +280,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             <button
               type="button"
               className={clsx(styles.sendButton, !canSend && styles.disabled)}
-              aria-label={t('send')}
+              aria-label={sessionExpired ? t('authSessionExpiredSend') : t('send')}
+              title={sessionExpired ? t('authSessionExpiredSend') : undefined}
               aria-disabled={!canSend}
               onClick={send}
             >

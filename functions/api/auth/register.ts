@@ -1,7 +1,6 @@
 import {
-  MAX_CODE_ATTEMPTS, SESSION_TTL, bad, clientIp, hashPassword, json, normalizeEmail,
-  passwordProblem, pbkdf2Iterations, randomToken, safeEqual, sessionCookie, sha256Hex,
-  takeRateLimit, type Env,
+  MAX_CODE_ATTEMPTS, bad, clientIp, hashPassword, json, normalizeEmail, passwordProblem,
+  pbkdf2Iterations, safeEqual, sessionCookie, sha256Hex, startSession, takeRateLimit, type Env,
 } from '../../../server/auth-core'
 
 /** POST /api/auth/register：用邮箱验证码 + 密码建号，直接登录 */
@@ -82,11 +81,6 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
     }
     throw error
   }
-  const token = randomToken()
-  await env.DB.prepare(
-    'INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ua, ip) VALUES (?, ?, ?, ?, ?, ?)'
-  )
-    .bind(await sha256Hex(token), id, now, now + SESSION_TTL, request.headers.get('user-agent') ?? '', clientIp(request))
-    .run()
-  return json({ user: { id, email } }, 200, { 'set-cookie': sessionCookie(token) })
+  const token = await startSession(env.DB, id, request)
+  return json({ user: { id, email }, token }, 200, { 'set-cookie': sessionCookie(token) })
 }

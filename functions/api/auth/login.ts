@@ -1,6 +1,6 @@
 import {
-  MAX_PASSWORD, bad, clientIp, json, normalizeEmail, randomToken, sessionCookie, sha256Hex,
-  SESSION_TTL, takeRateLimit, verifyPassword, type Env,
+  MAX_PASSWORD, bad, clientIp, json, normalizeEmail, sessionCookie, startSession,
+  takeRateLimit, verifyPassword, type Env,
 } from '../../../server/auth-core'
 
 /** 账号级失败次数上限与锁定时长（秒） */
@@ -64,11 +64,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
     return bad('密码错太多次，账号锁定中，过一会儿再试', 429)
   }
   await env.DB.prepare('UPDATE users SET failed_attempts = 0, locked_until = 0 WHERE id = ?').bind(user.id).run()
-  const token = randomToken()
-  await env.DB.prepare(
-    'INSERT INTO sessions (token_hash, user_id, created_at, expires_at, ua, ip) VALUES (?, ?, ?, ?, ?, ?)'
-  )
-    .bind(await sha256Hex(token), user.id, now, now + SESSION_TTL, request.headers.get('user-agent') ?? '', ip)
-    .run()
-  return json({ user: { id: user.id, email: user.email } }, 200, { 'set-cookie': sessionCookie(token) })
+  const token = await startSession(env.DB, user.id, request)
+  // 明文 token 只在这一次响应里出现：前端放内存，给 api-ds-chat 的 proxy 验签用
+  return json({ user: { id: user.id, email: user.email }, token }, 200, { 'set-cookie': sessionCookie(token) })
 }

@@ -204,4 +204,9 @@ export const zh = {
   authNetwork: '网络好像不太顺，再试一次',
   authOtpDigit: '验证码第 {index} 位',
   authGoLoginLink: '去登录',
+  authSessionExpired: '登录已过期，请重新登录后再收发消息',
+  authSessionExpiredAction: '重新登录',
+  authSessionExpiredReload: '登录已过期，请刷新页面',
+  authSessionExpiredReloadAction: '刷新页面',
+  authSessionExpiredSend: '登录已过期，暂时不能发送',
 } as const
