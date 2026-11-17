@@ -125,3 +125,18 @@ export const logout = async (): Promise<void> => {
 export const requestCode = async (email: string, turnstileToken: string): Promise<void> => {
   await post('code', { email, turnstileToken })
 }
+
+/** 请求重置密码的验证码；和注册用的是同一个端点，靠 purpose 区分 */
+export const requestResetCode = async (email: string, turnstileToken: string): Promise<void> => {
+  await post('code', { email, turnstileToken, purpose: 'reset' })
+}
+
+/** 用邮箱验证码重置密码；成功后要重新登录，接口不会直接发会话 */
+export const resetPassword = async (email: string, code: string, password: string): Promise<void> => {
+  await post('reset', { email, code, password })
+}
+
+/** 已登录状态下改密码；成功后会吊销其它设备上的会话 */
+export const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+  await post('password', { currentPassword, newPassword })
+}
