@@ -121,9 +121,13 @@ export const logout = async (): Promise<void> => {
   }
 }
 
-/** 请求注册验证码，turnstileToken 必须来自人机验证 */
-export const requestCode = async (email: string, turnstileToken: string): Promise<void> => {
-  await post('code', { email, turnstileToken })
+/** 请求验证码，turnstileToken 必须来自人机验证；purpose=reset 用于忘记密码 */
+export const requestCode = async (
+  email: string,
+  turnstileToken: string,
+  purpose: 'register' | 'reset' = 'register'
+): Promise<void> => {
+  await post('code', { email, turnstileToken, purpose })
 }
 
 /** 请求重置密码的验证码；和注册用的是同一个端点，靠 purpose 区分 */

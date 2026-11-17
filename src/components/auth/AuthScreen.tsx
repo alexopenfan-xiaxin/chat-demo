@@ -4,6 +4,8 @@ import type { AuthUser } from '../../services/auth.js'
 import styles from './AuthScreen.module.css'
 import { LoginForm } from './LoginForm.js'
 import { RegisterForm } from './RegisterForm.js'
+import { ResetForm } from './ResetForm.js'
+import { showToast } from '../base/toastState.js'
 import { TextField } from './TextField.js'
 
 type AuthScreenProps = {
@@ -18,7 +20,7 @@ const emailLooksValid = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(
  */
 export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
   const t = useTranslate()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login')
   const [email, setEmail] = useState('')
   const [editingEmail, setEditingEmail] = useState(true)
   const [accepted, setAccepted] = useState(false)
@@ -118,7 +120,13 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
           )}
         </div>
 
-        <p className={styles.subline}>{mode === 'login' ? t('authSublineLogin') : t('authSublineRegister')}</p>
+        <p className={styles.subline}>
+          {mode === 'login'
+            ? t('authSublineLogin')
+            : mode === 'register'
+              ? t('authSublineRegister')
+              : t('authResetSubline')}
+        </p>
 
         {mode === 'login' ? (
           <LoginForm
@@ -126,13 +134,14 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
             termsFlash={termsFlash}
             onAccept={setAccepted}
             onSwitch={() => setMode('register')}
+            onForgot={() => setMode('reset')}
             onRequestEmail={requestEmail}
             readEmail={readEmail}
             commitEmail={commitEmail}
             onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
             onAuthenticated={onAuthenticated}
           />
-        ) : (
+        ) : mode === 'register' ? (
           <RegisterForm
             accepted={accepted}
             termsFlash={termsFlash}
@@ -143,6 +152,25 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
             commitEmail={commitEmail}
             onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
             onAuthenticated={onAuthenticated}
+          />
+        ) : (
+          <ResetForm
+            accepted={accepted}
+            termsFlash={termsFlash}
+            onAccept={setAccepted}
+            readEmail={readEmail}
+            commitEmail={commitEmail}
+            onRequestEmail={requestEmail}
+            onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
+            onSwitch={() => setMode('login')}
+            onDone={(value) => {
+              // 重置已吊销全部会话：回登录页并预填邮箱，不假装还登录着
+              setEmail(value)
+              setEditingEmail(false)
+              setAccepted(false)
+              setMode('login')
+              showToast({ key: 'authResetDone' })
+            }}
           />
         )}
       </div>

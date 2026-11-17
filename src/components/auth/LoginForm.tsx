@@ -12,6 +12,7 @@ type LoginFormProps = {
   termsFlash: number
   onAccept: (accepted: boolean) => void
   onSwitch: () => void
+  onForgot: () => void
   onRequestEmail: () => void
   /** 提交时以 DOM 值为准，兜住 autofill 不触发 onChange 的情况 */
   readEmail: () => string
@@ -27,6 +28,7 @@ export const LoginForm = ({
   termsFlash,
   onAccept,
   onSwitch,
+  onForgot,
   onRequestEmail,
   readEmail,
   commitEmail,
@@ -116,7 +118,11 @@ export const LoginForm = ({
         {t('authGoRegister')}
       </button>
 
-      <TermsRow accepted={accepted} onChange={onAccept} flashToken={termsFlash} />
+      <button type="button" className={styles.forgot} onClick={onForgot}>
+        {t('authForgot')}
+      </button>
+
+      <TermsRow accepted={accepted} onChange={onAccept} flashToken={termsFlash} compact />
       {!accepted && termsFlash > 0 ? (
         <span className={styles.termsHint}>{t('authTermsRequired')}</span>
       ) : null}

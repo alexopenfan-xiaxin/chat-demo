@@ -6,16 +6,24 @@ type TermsRowProps = {
   onChange: (accepted: boolean) => void
   /** 每次点击被协议拦下的主按钮就加一，用来闪一下这行 */
   flashToken: number
+  /** 上方有「忘记密码？」链接时，间距收窄到 12px */
+  compact?: boolean
 }
 
 /** 协议行：圆 + 文字整行可点，协议名打开新标签 */
-export const TermsRow = ({ accepted, onChange, flashToken }: TermsRowProps) => {
+export const TermsRow = ({ accepted, onChange, flashToken, compact }: TermsRowProps) => {
   const t = useTranslate()
   return (
     <div
       // 只靠 flashToken 触发一次性动画，关掉重开同一行不会累加
       key={flashToken}
-      className={flashToken > 0 ? `${styles.terms} ${styles.termsFlash}` : styles.terms}
+      className={[
+        styles.terms,
+        compact ? styles.termsCompact : '',
+        flashToken > 0 ? styles.termsFlash : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <button
         type="button"
