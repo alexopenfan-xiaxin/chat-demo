@@ -22,9 +22,16 @@
   flex-shrink: 0;
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .appName {
   min-width: 0;
-  padding-left: 4px;
+  padding-left: 0;
   overflow: hidden;
   font-size: 20px;
   line-height: 22px;

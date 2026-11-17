@@ -92,6 +92,8 @@ export const createConfig = ({
         type: 'javascript/auto',
       },
       { test: /\.(woff2?|ttf)$/, type: 'asset/resource' },
+      // 图标：走 asset/resource，文件名带 hash，CSS 里 url() 也能拿到
+      { test: /\.(png|jpe?g|webp)$/, type: 'asset/resource' },
     ],
   },
   plugins: [
