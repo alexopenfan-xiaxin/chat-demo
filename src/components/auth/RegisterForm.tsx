@@ -1,9 +1,11 @@
+import clsx from 'clsx'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { AuthError, register, requestCode, type AuthUser } from '../../services/auth.js'
 import styles from './AuthScreen.module.css'
 import { OtpInput } from './OtpInput.js'
+import { TermsRow } from './TermsRow.js'
 import { Turnstile } from './Turnstile.js'
 import { PasswordToggle, TextField } from './TextField.js'
 
@@ -12,23 +14,29 @@ const CODE_LENGTH = 6
 const RESEND_SECONDS = 60
 const CODE_TTL_MINUTES = 10
 
-const emailLooksValid = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim())
-
 const emptyCode = () => Array.from({ length: CODE_LENGTH }, () => '')
 
 type RegisterFormProps = {
   email: string
-  onEmailChange: (value: string) => void
-  onAuthenticated: (user: AuthUser) => void
+  accepted: boolean
+  termsFlash: number
+  onAccept: (accepted: boolean) => void
   onSwitch: () => void
+  onRequestEmail: () => void
+  onBlockedByTerms: () => void
+  onAuthenticated: (user: AuthUser) => void
 }
 
-/** 单卡片四段：邮箱 → 人机验证 → 验证码 → 密码；不刷新、不丢状态 */
+/** 注册：邮箱（在外层身份行）→ 人机验证 → 验证码 → 设密码 */
 export const RegisterForm = ({
   email,
-  onEmailChange,
-  onAuthenticated,
+  accepted,
+  termsFlash,
+  onAccept,
   onSwitch,
+  onRequestEmail,
+  onBlockedByTerms,
+  onAuthenticated,
 }: RegisterFormProps) => {
   const t = useTranslate()
   const [code, setCode] = useState<string[]>(emptyCode)
@@ -43,14 +51,12 @@ export const RegisterForm = ({
   const [cooldownUntil, setCooldownUntil] = useState(0)
   const [expiresAt, setExpiresAt] = useState(0)
   const [now, setNow] = useState(() => Date.now())
-  const [emailError, setEmailError] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [otpError, setOtpError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const emailRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
   const submitRef = useRef<HTMLButtonElement>(null)
 
@@ -73,21 +79,6 @@ export const RegisterForm = ({
   const remaining = Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
   const ttlSeconds = Math.max(0, Math.ceil((expiresAt - now) / 1000))
   const codeReady = code.every((digit) => digit !== '')
-  const passwordLongEnough = password.length >= 8
-  const unlocked = codeReady
-
-  /** 换邮箱等于换验证码：倒计时和已输入的码都作废 */
-  const changeEmail = (value: string) => {
-    if (sent && value.trim().toLowerCase() !== email.trim().toLowerCase()) {
-      setSent(false)
-      setCooldownUntil(0)
-      setExpiresAt(0)
-      setCode(emptyCode())
-      setOtpError(null)
-      setSendError(null)
-    }
-    onEmailChange(value)
-  }
 
   const resetTurnstile = () => {
     setTurnstileToken(null)
@@ -98,12 +89,10 @@ export const RegisterForm = ({
     if (sending || remaining > 0) {
       return
     }
-    setEmailError(null)
     setSendError(null)
     setFormError(null)
-    if (!emailLooksValid(email)) {
-      setEmailError('邮箱格式不对')
-      emailRef.current?.focus()
+    if (!email) {
+      onRequestEmail()
       return
     }
     if (!turnstileToken) {
@@ -118,13 +107,7 @@ export const RegisterForm = ({
       setExpiresAt(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
       setOtpError(null)
     } catch (err) {
-      const message = err instanceof AuthError ? err.message : t('authNetwork')
-      if (err instanceof AuthError && err.status === 403) {
-        // 人机验证没过：错误落在验证区，并把 widget 换掉拿新令牌
-        setSendError(message)
-      } else {
-        setSendError(message)
-      }
+      setSendError(err instanceof AuthError ? err.message : t('authNetwork'))
     } finally {
       // 令牌一次性：无论成功失败，下一次发送都要新的
       resetTurnstile()
@@ -132,9 +115,16 @@ export const RegisterForm = ({
     }
   }
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
+  const submit = async () => {
     if (submitting) {
+      return
+    }
+    if (!email) {
+      onRequestEmail()
+      return
+    }
+    if (!accepted) {
+      onBlockedByTerms()
       return
     }
     setFormError(null)
@@ -142,16 +132,16 @@ export const RegisterForm = ({
     setPasswordError(null)
     setConfirmError(null)
     if (!codeReady) {
-      setOtpError('验证码是 6 位数字')
+      setOtpError(t('authCodeIncomplete'))
       return
     }
-    if (!passwordLongEnough) {
-      setPasswordError('密码至少 8 位')
+    if (password.length < 8) {
+      setPasswordError(t('authPasswordTooShort'))
       passwordRef.current?.focus()
       return
     }
     if (password.length > 200) {
-      setPasswordError('密码最多 200 位')
+      setPasswordError(t('authPasswordTooLong'))
       passwordRef.current?.focus()
       return
     }
@@ -174,7 +164,7 @@ export const RegisterForm = ({
       } else if (message.includes('密码')) {
         setPasswordError(message)
       } else if (message.includes('邮箱')) {
-        setEmailError(message)
+        setFormError(message)
       } else {
         setFormError(message)
       }
@@ -190,20 +180,13 @@ export const RegisterForm = ({
       : t('authCodeSent', { minutes: CODE_TTL_MINUTES })
 
   return (
-    <form className={styles.form} onSubmit={submit} noValidate>
-      <TextField
-        label={t('authEmail')}
-        type="email"
-        inputMode="email"
-        autoComplete="email"
-        placeholder={t('authEmailPlaceholder')}
-        value={email}
-        onChange={(event) => changeEmail(event.target.value)}
-        inputRef={emailRef}
-        state={emailError ? 'error' : 'default'}
-        message={emailError}
-      />
-
+    <form
+      onSubmit={(event: FormEvent) => {
+        event.preventDefault()
+        void submit()
+      }}
+      noValidate
+    >
       <div className={styles.sendRow}>
         <span
           className={
@@ -215,7 +198,7 @@ export const RegisterForm = ({
         <button
           type="button"
           className={styles.sendButton}
-          disabled={sending || remaining > 0 || !emailLooksValid(email)}
+          disabled={sending || remaining > 0}
           onClick={() => void send()}
         >
           {remaining > 0
@@ -246,52 +229,41 @@ export const RegisterForm = ({
             <span className={styles.error} role="alert">
               {otpError}
             </span>
-          ) : codeReady ? (
-            <span className={styles.hint}>{t('authCodeFilled')}</span>
           ) : null}
         </div>
-        <span className={styles.srOnly} aria-live="polite">
-          {codeReady ? t('authCodeFilled') : ''}
-        </span>
       </div>
 
-      {unlocked ? (
-        <div className={styles.stage}>
-          <TextField
-            label={t('authPassword')}
-            type={shown ? 'text' : 'password'}
-            autoComplete="new-password"
-            placeholder={t('authPasswordPlaceholder')}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            inputRef={passwordRef}
-            state={passwordError ? 'error' : 'default'}
-            message={passwordError}
-            trailing={<PasswordToggle shown={shown} onToggle={() => setShown((value) => !value)} />}
-          />
-          <span className={passwordLongEnough ? styles.ruleOk : styles.ruleRow}>
-            {passwordLongEnough ? '✓ ' : ''}
-            {t('authPasswordRule')}
-          </span>
-          <TextField
-            label={t('authPasswordConfirm')}
-            type={shown ? 'text' : 'password'}
-            autoComplete="new-password"
-            placeholder={t('authPasswordPlaceholder')}
-            value={confirm}
-            onChange={(event) => setConfirm(event.target.value)}
-            onBlur={() => {
-              if (confirm !== '' && confirm !== password) {
-                setConfirmError(t('authPasswordMismatch'))
-              } else {
-                setConfirmError(null)
-              }
-            }}
-            state={confirmError ? 'error' : 'default'}
-            message={confirmError}
-          />
-        </div>
-      ) : null}
+      <div className={styles.passwordStage}>
+        <TextField
+          label={t('authPassword')}
+          type={shown ? 'text' : 'password'}
+          autoComplete="new-password"
+          placeholder={t('authPasswordPlaceholder')}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          inputRef={passwordRef}
+          state={passwordError ? 'error' : 'default'}
+          message={passwordError}
+          trailing={<PasswordToggle shown={shown} onToggle={() => setShown((value) => !value)} />}
+        />
+        <TextField
+          label={t('authPasswordConfirm')}
+          type={shown ? 'text' : 'password'}
+          autoComplete="new-password"
+          placeholder={t('authPasswordPlaceholder')}
+          value={confirm}
+          onChange={(event) => setConfirm(event.target.value)}
+          onBlur={() => {
+            if (confirm !== '' && confirm !== password) {
+              setConfirmError(t('authPasswordMismatch'))
+            } else {
+              setConfirmError(null)
+            }
+          }}
+          state={confirmError ? 'error' : 'default'}
+          message={confirmError}
+        />
+      </div>
 
       {formError ? (
         <div className={styles.msgRow} role="alert" aria-live="assertive">
@@ -302,20 +274,20 @@ export const RegisterForm = ({
       <button
         ref={submitRef}
         type="submit"
-        className={styles.submit}
-        disabled={submitting || !unlocked}
+        className={clsx(styles.cta, (!accepted || submitting) && styles.ctaDisabled)}
+        aria-disabled={!accepted || submitting}
         aria-busy={submitting ? true : undefined}
       >
         {submitting ? <span className={styles.spinner} aria-hidden="true" /> : null}
-        {t('authRegisterSubmit')}
+        {submitting ? t('authRegistering') : t('authRegisterSubmit')}
       </button>
 
-      <div className={styles.switchRow}>
-        <span>{t('authHaveAccount')}</span>
-        <button type="button" className={styles.switchLink} onClick={onSwitch}>
-          {t('authGoLogin')}
-        </button>
-      </div>
+      <button type="button" className={styles.ghost} onClick={onSwitch}>
+        {t('authGoLogin')}
+      </button>
+
+      <TermsRow accepted={accepted} onChange={onAccept} flashToken={termsFlash} />
+      {!accepted ? <span className={styles.termsHint}>{t('authTermsRequired')}</span> : null}
     </form>
   )
 }

@@ -1,26 +1,57 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import type { AuthUser } from '../../services/auth.js'
 import styles from './AuthScreen.module.css'
 import { LoginForm } from './LoginForm.js'
 import { RegisterForm } from './RegisterForm.js'
+import { TextField } from './TextField.js'
 
 type AuthScreenProps = {
   onAuthenticated: (user: AuthUser) => void
 }
 
-/** 登录 / 注册的容器：居中卡片 + 两条流程切换，邮箱在两者之间保留 */
+const emailLooksValid = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim())
+
+/**
+ * 版式见 ds-chat-auth-design-v2.md：没有卡片，logo 在上、身份在中、
+ * 两个胶囊按钮在下，中间的余量全交给 spacer。
+ */
 export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
   const t = useTranslate()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
+  const [editingEmail, setEditingEmail] = useState(true)
+  const [accepted, setAccepted] = useState(false)
+  const [termsFlash, setTermsFlash] = useState(0)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
+
+  const commitEmail = () => {
+    const value = email.trim()
+    if (!value) {
+      return
+    }
+    if (!emailLooksValid(value)) {
+      setEmailError(t('authEmailInvalid'))
+      emailRef.current?.focus()
+      return
+    }
+    setEmail(value)
+    setEmailError(null)
+    setEditingEmail(false)
+  }
+
+  const requestEmail = () => {
+    setEditingEmail(true)
+    window.requestAnimationFrame(() => emailRef.current?.focus())
+  }
 
   return (
     <main className={styles.page}>
-      <section className={styles.card} aria-labelledby="auth-title">
-        <div className={styles.brandRow}>
+      <div className={styles.content}>
+        <header className={styles.head}>
           <span className={styles.brandMark} aria-hidden="true">
-            <svg viewBox="0 0 20 20" width="18" height="18" fill="none">
+            <svg viewBox="0 0 20 20" width="22" height="22" fill="none">
               <path
                 d="M4 5.5h12v7.2a1.8 1.8 0 0 1-1.8 1.8H8.2L5 17v-2.5H5.8A1.8 1.8 0 0 1 4 12.7Z"
                 fill="currentColor"
@@ -32,32 +63,70 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
               <path d="M7.2 8.4h5.6M7.2 11h3.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
           </span>
-          <span className={styles.subtitle}>ds-chat</span>
+          <h1 className={styles.wordmark}>{t('appName')}</h1>
+        </header>
+
+        <div className={styles.spacer} />
+
+        <div className={styles.identity}>
+          {editingEmail ? (
+            <TextField
+              label={t('authEmail')}
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder={t('authEmailPlaceholder')}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              onBlur={commitEmail}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  commitEmail()
+                }
+              }}
+              inputRef={emailRef}
+              state={emailError ? 'error' : 'default'}
+              message={emailError}
+            />
+          ) : (
+            <>
+              <p className={styles.identityEmail} title={email}>
+                {email}
+              </p>
+              <button type="button" className={styles.changePill} onClick={requestEmail}>
+                <span className={styles.changePillLabel}>{t('authChange')}</span>
+              </button>
+            </>
+          )}
         </div>
 
-        <h1 id="auth-title" className={styles.title}>
-          {mode === 'login' ? t('authLoginTitle') : t('authRegisterTitle')}
-        </h1>
-        <p className={styles.subtitle}>
-          {mode === 'login' ? t('authLoginSubtitle') : t('authRegisterSubtitle')}
-        </p>
+        <p className={styles.subline}>{mode === 'login' ? t('authSublineLogin') : t('authSublineRegister')}</p>
 
         {mode === 'login' ? (
           <LoginForm
             email={email}
-            onEmailChange={setEmail}
-            onAuthenticated={onAuthenticated}
+            accepted={accepted}
+            termsFlash={termsFlash}
+            onAccept={setAccepted}
             onSwitch={() => setMode('register')}
+            onRequestEmail={requestEmail}
+            onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
+            onAuthenticated={onAuthenticated}
           />
         ) : (
           <RegisterForm
             email={email}
-            onEmailChange={setEmail}
-            onAuthenticated={onAuthenticated}
+            accepted={accepted}
+            termsFlash={termsFlash}
+            onAccept={setAccepted}
             onSwitch={() => setMode('login')}
+            onRequestEmail={requestEmail}
+            onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
+            onAuthenticated={onAuthenticated}
           />
         )}
-      </section>
+      </div>
     </main>
   )
 }
