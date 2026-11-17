@@ -37,6 +37,10 @@ export const classifyApiError = (error: unknown): ApiErrorCondition => {
   if (!(error instanceof ApiError)) {
     return 'other'
   }
+  // 会话校验服务不可用（proxy 503）已经有自己的横幅，别再落进服务繁忙那套文案里
+  if (error.kind === 'unavailable') {
+    return 'other'
+  }
   if (error.status === undefined) {
     return error.kind === 'network' ? 'network' : 'other'
   }

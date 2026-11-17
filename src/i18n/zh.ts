@@ -205,6 +205,7 @@ export const zh = {
   authOtpDigit: '验证码第 {index} 位',
   authGoLoginLink: '去登录',
   authWordmark: 'ds-chat',
+  authDismiss: '关闭',
   authServiceUnavailable: '服务暂时不可用，请稍后重试',
   authServiceRetry: '重试',
   authChange: '更换',

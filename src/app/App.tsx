@@ -165,7 +165,7 @@ export const App = () => {
             <div className={styles.serviceUnavailable} role="status">
               <span>{t('authServiceUnavailable')}</span>
               <Button variant="outlined" size="s" onClick={() => setServiceUnavailable(false)}>
-                {t('authServiceRetry')}
+                {t('authDismiss')}
               </Button>
             </div>
           ) : null}

@@ -121,12 +121,12 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
         | null
       if (body?.error?.code === 'service_unavailable') {
         setServiceUnavailable(true)
-        throw new ApiError('unavailable', '服务暂时不可用，请稍后重试', 503)
+        throw new ApiError('unavailable', translate('authServiceUnavailable'), 503)
       }
     }
     if (response.status === 401 && API_ORIGIN !== '' && (await isSessionExpired(response.clone()))) {
       notifySessionExpired()
-      throw new ApiError('session', '登录已过期，重新登录', 401)
+      throw new ApiError('session', translate('authSessionExpired'), 401)
     }
     throw await readErrorResponse(response)
   }
