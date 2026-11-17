@@ -16,11 +16,16 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
   if (!safeEqual(request.headers.get(INTERNAL_HEADER) ?? '', secret)) {
     return bad('forbidden', 403)
   }
-  // 共享头是唯一的准入凭据，再叠一条高频上限，免得有人拿它当预言机刷会话
-  if (!(await takeRateLimit(env.DB, `introspect:ip:${clientIp(request)}`, 3000, 60))) {
+  const token = bearerToken(request)
+  // 限流键按 token 算，不按来源 IP：调用方是本机 proxy，cf-connecting-ip 永远是同一个，
+  // 按 IP 限会退化成全站共享配额，一个人刷就能让所有人掉线。
+  if (!(await takeRateLimit(env.DB, `introspect:tok:${await sha256Hex(token ?? '')}`, 120, 60))) {
     return bad('too many', 429)
   }
-  const token = bearerToken(request)
+  // 兜底：整体被打爆时仍然要挡，但阈值放到正常流量远远碰不到的量级
+  if (!(await takeRateLimit(env.DB, 'introspect:all', 20000, 60))) {
+    return bad('too many', 429)
+  }
   if (!token) {
     return json({ active: false }, 401)
   }

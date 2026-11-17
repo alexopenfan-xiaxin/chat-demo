@@ -204,6 +204,7 @@ export const zh = {
   authNetwork: '网络好像不太顺，再试一次',
   authOtpDigit: '验证码第 {index} 位',
   authGoLoginLink: '去登录',
+  authWordmark: 'ds-chat',
   authChange: '更换',
   authSublineLogin: '用邮箱和密码登录',
   authSublineRegister: '邮箱验证码将发送到该地址',

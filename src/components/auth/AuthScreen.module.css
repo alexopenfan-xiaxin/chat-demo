@@ -44,7 +44,7 @@
   flex-direction: column;
   flex: 1;
   width: 100%;
-  max-width: 420px;
+  max-width: 350px;
   margin-inline: auto;
   padding-bottom: calc(39px + env(safe-area-inset-bottom));
 }
@@ -143,6 +143,13 @@
   outline: 2px solid var(--auth-brand);
   outline-offset: 2px;
   border-radius: 12px;
+}
+
+/* 身份行里的输入框要撑满：.field 是 flex 子项，不给 flex:1 就退化成内容宽（type=email 的默认宽度） */
+.identity > .field {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 .subline {
@@ -750,7 +757,14 @@
     min-height: 24px;
   }
 
-  .subline {
+  /* 身份行里的输入框要撑满：.field 是 flex 子项，不给 flex:1 就退化成内容宽（type=email 的默认宽度） */
+.identity > .field {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.subline {
     margin-bottom: 24px;
   }
 

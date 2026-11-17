@@ -111,7 +111,9 @@ export const LoginForm = ({
       </button>
 
       <TermsRow accepted={accepted} onChange={onAccept} flashToken={termsFlash} />
-      {!accepted ? <span className={styles.termsHint}>{t('authTermsRequired')}</span> : null}
+      {!accepted && termsFlash > 0 ? (
+        <span className={styles.termsHint}>{t('authTermsRequired')}</span>
+      ) : null}
       {step === 'password' ? (
         <button type="button" className={styles.switchLink} onClick={onRequestEmail}>
           {t('authUseOtherEmail')}

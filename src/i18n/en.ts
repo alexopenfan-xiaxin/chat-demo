@@ -213,6 +213,7 @@ export const en = {
   authNetwork: 'The network seems flaky, try again',
   authOtpDigit: 'Code digit {index}',
   authGoLoginLink: 'Sign in',
+  authWordmark: 'ds-chat',
   authChange: 'Change',
   authSublineLogin: 'Sign in with your email and password',
   authSublineRegister: 'We will send a code to this address',

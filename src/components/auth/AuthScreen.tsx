@@ -63,7 +63,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
               <path d="M7.2 8.4h5.6M7.2 11h3.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
           </span>
-          <h1 className={styles.wordmark}>{t('appName')}</h1>
+          <h1 className={styles.wordmark}>{t('authWordmark')}</h1>
         </header>
 
         <div className={styles.spacer} />

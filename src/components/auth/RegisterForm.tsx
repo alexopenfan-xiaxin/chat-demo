@@ -287,7 +287,9 @@ export const RegisterForm = ({
       </button>
 
       <TermsRow accepted={accepted} onChange={onAccept} flashToken={termsFlash} />
-      {!accepted ? <span className={styles.termsHint}>{t('authTermsRequired')}</span> : null}
+      {!accepted && termsFlash > 0 ? (
+        <span className={styles.termsHint}>{t('authTermsRequired')}</span>
+      ) : null}
     </form>
   )
 }
