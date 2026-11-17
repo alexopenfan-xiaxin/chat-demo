@@ -1,0 +1,184 @@
+import { useCallback, useEffect, useState } from 'react'
+import { useTranslate } from '../../i18n/index.js'
+import { fetchCredits, type CreditsSnapshot } from '../../services/api/credits.js'
+import { useSettings } from '../../services/settings.js'
+import { Modal } from '../base/Modal.js'
+import { IconRefreshOutline16 } from '../base/icons.js'
+import styles from './CreditsDialog.module.css'
+
+/** 一位小数（积分口径），整数时不留 .0 */
+const formatCredits = (value: number) => {
+  const rounded = Math.round(value * 10) / 10
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+}
+
+/** token 数：过万用「万」，保留一位小数 */
+const formatTokens = (value: number) => {
+  if (value >= 10000) {
+    return `${(Math.round(value / 1000) / 10).toFixed(1)} 万`
+  }
+  return String(Math.round(value))
+}
+
+/** 相对时间：一分钟内「刚刚」，一小时内按分钟，之后给绝对时间 */
+const relativeTime = (iso: string, now: number) => {
+  const time = Date.parse(iso)
+  if (!Number.isFinite(time)) {
+    return ''
+  }
+  const diff = Math.max(0, now - time)
+  if (diff < 60_000) {
+    return 'relJustNow'
+  }
+  if (diff < 3_600_000) {
+    return `${Math.floor(diff / 60_000)}m`
+  }
+  return new Date(time).toLocaleString()
+}
+
+const formatDate = (iso: string | null) => {
+  if (!iso) {
+    return null
+  }
+  const time = Date.parse(iso)
+  if (!Number.isFinite(time)) {
+    return iso
+  }
+  return new Date(time).toLocaleDateString()
+}
+
+type Status = 'loading' | 'ready' | 'unavailable'
+
+export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
+  const t = useTranslate()
+  const [status, setStatus] = useState<Status>('loading')
+  const [snapshot, setSnapshot] = useState<CreditsSnapshot | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+
+  const load = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      // 服务端配了统一 key 就用它；没配时带上用户自己在设置里填的那把，只用于查额度
+      const next = await fetchCredits(useSettings.getState().apiKey ?? undefined)
+      setSnapshot(next)
+      setStatus(next.credits ? 'ready' : 'unavailable')
+    } catch {
+      // 网络或上游失败都落到「读不到」：页面主体照样在，只是没有数字
+      setStatus((current) => (current === 'ready' ? current : 'unavailable'))
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const credits = snapshot?.credits ?? null
+  const unlimited = snapshot?.unlimited === true
+  const remaining = credits?.remaining ?? null
+  const used = credits?.used ?? null
+  const limit = credits?.limit ?? null
+
+  const exhausted = !unlimited && remaining !== null && remaining <= 0
+  const ratio = limit && limit > 0 && used !== null ? Math.min(1, used / limit) : null
+
+  // 不限额时唯一有意义的数字是「用掉多少」；读不到时主数字位留一个破折号，不留空
+  const mainValue =
+    status === 'loading' ? null : status === 'unavailable' ? null : unlimited ? used : remaining
+  const mainText = mainValue === null ? '——' : formatCredits(mainValue)
+  const mainUnit = unlimited ? t('creditsUnitUsed') : t('creditsUnitRemaining')
+
+  const todayTokens = snapshot?.dailyTokens ?? snapshot?.tokens?.used ?? null
+  const expires = formatDate(snapshot?.expiresAt ?? null)
+  const snapshotText = snapshot ? relativeTime(snapshot.snapshotAt, now) : ''
+  const snapshotLabel = snapshotText === 'relJustNow' ? t('creditsJustNow') : snapshotText
+
+  return (
+    <Modal title={t('creditsTitle')} closable onClose={onClose}>
+      <div className={styles.panel}>
+        <div className={styles.head}>
+          <span className={styles.snapshot}>{snapshotLabel}</span>
+          <button
+            type="button"
+            className={styles.refresh}
+            onClick={() => void load()}
+            aria-label={t('creditsRefresh')}
+            disabled={refreshing}
+          >
+            <span className={refreshing ? styles.refreshSpin : undefined}>
+              <IconRefreshOutline16 />
+            </span>
+          </button>
+        </div>
+
+        {status === 'loading' ? (
+          <>
+            <div className={styles.skeletonAmount} />
+            <div className={styles.skeletonTrack} />
+          </>
+        ) : (
+          <>
+            <div className={styles.main}>
+              <span className={[styles.amount, status === 'unavailable' ? styles.amountMuted : ''].join(' ')}>
+                {mainText}
+              </span>
+              <span className={styles.unit}>{status === 'unavailable' ? '' : mainUnit}</span>
+            </div>
+
+            {status === 'ready' && !unlimited && ratio !== null ? (
+              <>
+                <div className={styles.track}>
+                  <div
+                    className={[styles.fill, exhausted ? styles.fillWarn : ''].join(' ')}
+                    style={{ width: `${Math.round(ratio * 100)}%` }}
+                  />
+                </div>
+                <p className={styles.meta}>
+                  {t('creditsProgress', {
+                    used: used === null ? '—' : formatCredits(used),
+                    limit: limit === null ? '—' : formatCredits(limit),
+                  })}
+                </p>
+              </>
+            ) : null}
+
+            {status === 'ready' && unlimited ? <p className={styles.meta}>{t('creditsUnlimited')}</p> : null}
+            {status === 'unavailable' ? <p className={styles.meta}>{t('creditsUnavailable')}</p> : null}
+            {exhausted ? <p className={[styles.notice, styles.noticeWarn].join(' ')}>{t('creditsExhausted')}</p> : null}
+          </>
+        )}
+
+        {todayTokens !== null ? (
+          <div className={styles.todayRow}>
+            <p className={styles.todayLine}>{t('creditsToday', { value: formatTokens(todayTokens) })}</p>
+          </div>
+        ) : null}
+
+        {snapshot ? (
+          <details className={styles.details}>
+            <summary>{t('creditsDetails')}</summary>
+            {snapshot.models.length > 0 ? (
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>{t('creditsModels')}</span>
+                <span className={styles.detailValue}>{snapshot.models.join('、')}</span>
+              </div>
+            ) : null}
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>{t('creditsExpires')}</span>
+              <span className={styles.detailValue}>
+                {expires ? t('creditsExpiresAt', { date: expires }) : t('creditsForever')}
+              </span>
+            </div>
+          </details>
+        ) : null}
+      </div>
+    </Modal>
+  )
+}

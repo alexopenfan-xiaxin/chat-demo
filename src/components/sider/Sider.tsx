@@ -1,8 +1,9 @@
 import clsx from 'clsx'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { IconPanelLeftOutline16, IconSettingsOutline16, NewChatIcon } from '../base/icons.js'
+import { IconPanelLeftOutline16, IconSettingsOutline16, IconWallet16, NewChatIcon } from '../base/icons.js'
 import { BrandIcon } from '../base/BrandIcon.js'
+import { CreditsDialog } from '../credits/CreditsDialog.js'
 import { setSiderCollapsed } from '../../services/settings.js'
 import { groupSessions } from '../../services/chat/sessionGroups.js'
 import { newChat, removeSession, useChatStore } from '../../services/chat/store.js'
@@ -45,6 +46,7 @@ export const Sider = ({
   const [now, setNow] = useState(Date.now)
   const groups = useMemo(() => groupSessions(sessions, now, t), [sessions, now, t])
   const [deleting, setDeleting] = useState<SessionSummary | null>(null)
+  const [creditsOpen, setCreditsOpen] = useState(false)
   const [deletePending, setDeletePending] = useState(false)
 
   useEffect(() => {
@@ -128,6 +130,12 @@ export const Sider = ({
         </button>
       </div>
       <div className={styles.bottom}>
+        <button type="button" className={styles.settings} onClick={() => setCreditsOpen(true)}>
+          <span className={styles.settingsIcon}>
+            <IconWallet16 />
+          </span>
+          <span className={styles.settingsLabel}>{t('creditsMenu')}</span>
+        </button>
         <button type="button" className={styles.settings} onClick={() => openSettings('general')}>
           <span className={styles.settingsIcon}>
             <IconSettingsOutline16 />
@@ -135,6 +143,7 @@ export const Sider = ({
           <span className={styles.settingsLabel}>{t('settings')}</span>
         </button>
       </div>
+      {creditsOpen ? <CreditsDialog onClose={() => setCreditsOpen(false)} /> : null}
       {deleting ? (
         <Modal
           title={t('deleteSessionModalContentTitle')}

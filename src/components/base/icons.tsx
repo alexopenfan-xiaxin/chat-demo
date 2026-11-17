@@ -523,3 +523,15 @@ export const IconToastError16 = () => (
     />
   </svg>
 )
+
+export const IconWallet16 = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+    <path
+      d="M2.5 5.2c0-.66.54-1.2 1.2-1.2h8.6c.66 0 1.2.54 1.2 1.2v5.6c0 .66-.54 1.2-1.2 1.2H3.7c-.66 0-1.2-.54-1.2-1.2V5.2Z"
+      stroke="currentColor"
+      strokeWidth="1.3"
+    />
+    <path d="M2.5 6.4h11" stroke="currentColor" strokeWidth="1.3" />
+    <circle cx="10.6" cy="9.6" r="1" fill="currentColor" />
+  </svg>
+)
