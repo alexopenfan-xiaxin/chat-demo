@@ -111,22 +111,31 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const snapshotLabel = snapshotText === 'relJustNow' ? t('creditsJustNow') : snapshotText
 
   return (
-    <Modal title={t('creditsTitle')} closable onClose={onClose}>
+    <Modal
+      title={
+        <span className={styles.titleRow}>
+          <span>{t('creditsTitle')}</span>
+          {/* 快照时间和刷新贴着标题右缘同一行，别在标题下再撑出一个空块 */}
+          <span className={styles.titleMeta}>
+            <span className={styles.snapshot}>{snapshotLabel}</span>
+            <button
+              type="button"
+              className={styles.refresh}
+              onClick={() => void load()}
+              aria-label={t('creditsRefresh')}
+              disabled={refreshing}
+            >
+              <span className={refreshing ? styles.refreshSpin : undefined}>
+                <IconRefreshOutline16 />
+              </span>
+            </button>
+          </span>
+        </span>
+      }
+      closable
+      onClose={onClose}
+    >
       <div className={styles.panel}>
-        <div className={styles.head}>
-          <span className={styles.snapshot}>{snapshotLabel}</span>
-          <button
-            type="button"
-            className={styles.refresh}
-            onClick={() => void load()}
-            aria-label={t('creditsRefresh')}
-            disabled={refreshing}
-          >
-            <span className={refreshing ? styles.refreshSpin : undefined}>
-              <IconRefreshOutline16 />
-            </span>
-          </button>
-        </div>
 
         {status === 'loading' ? (
           <>

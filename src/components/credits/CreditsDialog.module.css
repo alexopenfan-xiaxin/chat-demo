@@ -16,14 +16,20 @@
   --credit-warn: #f5c26b;
 }
 
-.head {
+/* 标题行：标题在左，快照时间 + 刷新贴右，同一行内完成 */
+.titleRow {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.titleMeta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  /* 收紧成一行，别在标题下再撑出一个空块 */
-  min-height: 20px;
-  margin-top: -10px;
+  gap: 2px;
+  margin-left: auto;
 }
 
 .snapshot {
@@ -67,7 +73,7 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-top: 20px;
+  margin-top: 12px;
   min-height: 56px;
 }
 
