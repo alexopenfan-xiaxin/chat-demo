@@ -1,5 +1,5 @@
 import {
-INTERNAL_HEADER, bad, bearerToken, clientIp, findSession, json, safeEqual, takeRateLimit,
+INTERNAL_HEADER, bad, bearerToken, findSession, json, safeEqual, sha256Hex, takeRateLimit,
   type Env,
 } from '../../../server/auth-core'
 
