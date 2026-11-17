@@ -214,10 +214,12 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
       const quota = panelKey.quotaCredit
       // quota 0 在面板里是「不限额」，不是零额度
       const capped = typeof quota === 'number' && quota > 0
+      // 面板按两位小数记账，浮点减法会留下 0.4600000000000001 这种尾巴
+      const round2 = (value: number) => Math.round(value * 100) / 100
       credits = {
-        used: panelKey.usedCredit,
-        limit: capped ? quota : null,
-        remaining: capped ? Math.max(0, quota - panelKey.usedCredit) : null,
+        used: round2(panelKey.usedCredit),
+        limit: capped ? round2(quota as number) : null,
+        remaining: capped ? round2(Math.max(0, (quota as number) - panelKey.usedCredit)) : null,
       }
       creditsSource = 'panel'
     }

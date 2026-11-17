@@ -7,10 +7,13 @@ import { Modal } from '../base/Modal.js'
 import { IconChevronDownOutline14, IconRefreshOutline16 } from '../base/icons.js'
 import styles from './CreditsDialog.module.css'
 
-/** 一位小数（积分口径），整数时不留 .0 */
+/** 积分口径：整数不留小数；一位够用就一位（12.7），不够就给两位（0.46） */
 const formatCredits = (value: number) => {
-  const rounded = Math.round(value * 10) / 10
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
+  const two = Math.round(value * 100) / 100
+  if (Number.isInteger(two)) {
+    return String(two)
+  }
+  return Number.isInteger(two * 10) ? two.toFixed(1) : two.toFixed(2)
 }
 
 /** token 数：过万用「万」，保留一位小数 */
