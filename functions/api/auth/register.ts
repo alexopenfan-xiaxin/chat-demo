@@ -1,10 +1,10 @@
 import {
-  MAX_CODE_ATTEMPTS, bad, clientIp, hashPassword, json, normalizeEmail, passwordProblem,
+  guarded, MAX_CODE_ATTEMPTS, bad, clientIp, hashPassword, json, normalizeEmail, passwordProblem,
   pbkdf2Iterations, safeEqual, sessionCookie, sha256Hex, startSession, takeRateLimit, type Env,
 } from '../../../server/auth-core'
 
 /** POST /api/auth/register：用邮箱验证码 + 密码建号，直接登录 */
-export const onRequestPost = async (context: { request: Request; env: Env }) => {
+export const onRequestPost = guarded(async (context: { request: Request; env: Env }) => {
   const { request, env } = context
   let body: { email?: unknown; code?: unknown; password?: unknown }
   try {
@@ -83,4 +83,4 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
   }
   const token = await startSession(env.DB, id, request)
   return json({ user: { id, email }, token }, 200, { 'set-cookie': sessionCookie(token) })
-}
+})

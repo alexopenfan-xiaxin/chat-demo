@@ -71,14 +71,15 @@ export const randomToken = (bytes = 32): string => {
 }
 
 /**
- * 新哈希的迭代次数。本机实测 PBKDF2-SHA256：100k≈19ms、210k≈36ms、600k≈110ms，
- * 所以 Workers 免费档（10ms CPU）无论取哪个都会 1102——这套认证前提是付费档。
- * 默认 210000 是 OWASP 对 PBKDF2-SHA256 的下限；付费档 CPU 够，需要再调就用
- * 环境变量 PBKDF2_ITERATIONS。校验一律读哈希里存的迭代次数，老记录不受影响。
+ * 新哈希的迭代次数。**workerd 硬上限是 100000**：超过就抛
+ * NotSupportedError("Pbkdf2 failed: iteration counts above 100000 are not supported")，
+ * 所以 210000 在这套运行时里根本跑不起来（实测 100k≈19ms CPU）。默认取上限，
+ * 校验一律读哈希里存的次数，老记录不受影响。
  */
 const DEFAULT_PBKDF2_ITERATIONS = 100000
 const MIN_PBKDF2_ITERATIONS = 50000
-const MAX_PBKDF2_ITERATIONS = 1000000
+/** 运行时上限，不能更大 */
+const MAX_PBKDF2_ITERATIONS = 100000
 
 export const pbkdf2Iterations = (env: Env): number => {
   const value = Number(env.PBKDF2_ITERATIONS)
@@ -125,13 +126,18 @@ export const verifyPassword = async (password: string, stored: string): Promise<
   if (salt.length === 0 || expected.length === 0) {
     return false
   }
-  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
-    key,
-    256
-  )
-  return safeEqual(b64(bits), expected)
+  try {
+    const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits'])
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+      key,
+      256
+    )
+    return safeEqual(b64(bits), expected)
+  } catch {
+    // 超上限、参数损坏之类：当作验证不通过，别让登录 500
+    return false
+  }
 }
 
 /** 定长比较，避免时间侧信道；长度不同也走一遍循环再返回 */
@@ -340,4 +346,21 @@ export const currentUser = async (
     return null
   }
   return { user: { id: row.id, email: row.email }, tokenHash }
+}
+
+/**
+ * 兜底：没人想看到 Cloudflare 的 1101 裸奔。未预期异常记一条日志，回一个通用 500，
+ * 调用方拿到的是人话，日志里拿到的是栈。
+ */
+export const guarded = (
+  handler: (context: { request: Request; env: Env }) => Promise<Response>
+) => async (context: { request: Request; env: Env }): Promise<Response> => {
+  try {
+    return await handler(context)
+  } catch (error) {
+    // Workers 的日志只能走 console；这条是运维需要的，不是调试残留
+    // eslint-disable-next-line no-console
+    console.error('auth handler failed', context.request.url, error)
+    return json({ error: '服务器出了点问题，稍后再试' }, 500)
+  }
 }

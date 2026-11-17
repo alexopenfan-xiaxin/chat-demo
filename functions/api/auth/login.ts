@@ -1,5 +1,5 @@
 import {
-  MAX_PASSWORD, bad, clientIp, json, normalizeEmail, sessionCookie, startSession,
+  guarded, MAX_PASSWORD, bad, clientIp, json, normalizeEmail, sessionCookie, startSession,
   takeRateLimit, verifyPassword, type Env,
 } from '../../../server/auth-core'
 
@@ -8,16 +8,7 @@ const MAX_FAILURES = 5
 const LOCK_SECONDS = 900
 
 /** POST /api/auth/login：邮箱 + 密码登录，带失败次数锁定 */
-export const onRequestPost = async (context: { request: Request; env: Env }) => {
-  try {
-    return await handle(context)
-  } catch (error) {
-    // 临时诊断：把真实异常带出来
-    return new Response(JSON.stringify({ debug: String(error), stack: (error as Error)?.stack?.split('\n').slice(0, 4) }), { status: 500, headers: { 'content-type': 'application/json' } })
-  }
-}
-
-const handle = async (context: { request: Request; env: Env }) => {
+export const onRequestPost = guarded(async (context: { request: Request; env: Env }) => {
   const { request, env } = context
   const ip = clientIp(request)
   let body: { email?: unknown; password?: unknown }
@@ -76,4 +67,4 @@ const handle = async (context: { request: Request; env: Env }) => {
   const token = await startSession(env.DB, user.id, request)
   // 明文 token 只在这一次响应里出现：前端放内存，给 api-ds-chat 的 proxy 验签用
   return json({ user: { id: user.id, email: user.email }, token }, 200, { 'set-cookie': sessionCookie(token) })
-}
+})

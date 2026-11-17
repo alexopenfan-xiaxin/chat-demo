@@ -1,10 +1,10 @@
 import {
-  CODE_TTL, bad, clientIp, json, normalizeEmail, sendMail, sha256Hex, takeRateLimit,
+  guarded, CODE_TTL, bad, clientIp, json, normalizeEmail, sendMail, sha256Hex, takeRateLimit,
   verifyTurnstile, type Env,
 } from '../../../server/auth-core'
 
 /** POST /api/auth/code：校验人机验证后，把注册验证码发到邮箱 */
-export const onRequestPost = async (context: { request: Request; env: Env }) => {
+export const onRequestPost = guarded(async (context: { request: Request; env: Env }) => {
   const { request, env } = context
   const ip = clientIp(request)
   let body: { email?: unknown; turnstileToken?: unknown }
@@ -76,4 +76,4 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
     return bad('验证码发出去了但邮件没送到，稍后重试', 502)
   }
   return json({ ok: true, ttl: CODE_TTL })
-}
+})
