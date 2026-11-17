@@ -6,6 +6,7 @@ import { setSiderCollapsed } from '../../services/settings.js'
 import { groupSessions } from '../../services/chat/sessionGroups.js'
 import { newChat, removeSession, useChatStore } from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
+import type { AuthUser } from '../../services/auth.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
 import { Modal } from '../base/Modal.js'
@@ -15,8 +16,28 @@ import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
 import styles from './Sider.module.css'
 
-/** 展开的侧边栏：名称与收起按钮、开启新对话、按时间分组的会话列表、底部设置；移动端放在抽屉里，收起按钮关闭抽屉 */
-export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
+const IconSignOut16 = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+    <path
+      d="M9.5 2.5H4.2c-.66 0-1.2.54-1.2 1.2v8.6c0 .66.54 1.2 1.2 1.2h5.3"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+    />
+    <path d="M7.5 8h6M11 5.6 13.4 8 11 10.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+/** 展开的侧边栏：名称与收起按钮、开启新对话、按时间分组的会话列表、底部账号与设置；移动端放在抽屉里，收起按钮关闭抽屉 */
+export const Sider = ({
+  mobile = false,
+  user,
+  onLogout,
+}: {
+  mobile?: boolean
+  user: AuthUser
+  onLogout: () => void
+}) => {
   const t = useTranslate()
   const sessions = useChatStore((state) => state.sessions)
   const activeId = useChatStore((state) => state.activeId)
@@ -91,6 +112,17 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
           ))}
         </div>
       </div>
+      <div className={styles.account}>
+        <span className={styles.accountEmail} title={user.email}>
+          {user.email}
+        </span>
+        <button type="button" className={styles.logout} onClick={onLogout}>
+          <span className={styles.logoutIcon}>
+            <IconSignOut16 />
+          </span>
+          <span className={styles.logoutLabel}>{t('authLogout')}</span>
+        </button>
+      </div>
       <div className={styles.bottom}>
         <button type="button" className={styles.settings} onClick={() => openSettings('general')}>
           <span className={styles.settingsIcon}>
@@ -141,7 +173,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
 }
 
 /** 移动端抽屉：浮在页面上方，点空白区域关闭。 */
-export const MobileSider = () => {
+export const MobileSider = ({ user, onLogout }: { user: AuthUser; onLogout: () => void }) => {
   const open = useMobileSider((state) => state.open)
   if (!open) {
     return null
@@ -150,7 +182,7 @@ export const MobileSider = () => {
     <>
       <div className={styles.drawerMask} onClick={closeMobileSider} />
       <div className={styles.drawer}>
-        <Sider mobile />
+        <Sider mobile user={user} onLogout={onLogout} />
       </div>
     </>
   )

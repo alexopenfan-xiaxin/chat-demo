@@ -12,6 +12,11 @@ declare const styles: {
   readonly "settings": string;
   readonly "settingsIcon": string;
   readonly "settingsLabel": string;
+  readonly "account": string;
+  readonly "accountEmail": string;
+  readonly "logout": string;
+  readonly "logoutIcon": string;
+  readonly "logoutLabel": string;
   readonly "collapsed": string;
   readonly "collapsedGroup": string;
   readonly "drawer": string;

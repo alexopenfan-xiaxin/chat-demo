@@ -1,0 +1,321 @@
+import { useEffect, useRef, useState } from 'react'
+import type { FormEvent } from 'react'
+import { useTranslate } from '../../i18n/index.js'
+import { AuthError, register, requestCode, type AuthUser } from '../../services/auth.js'
+import styles from './AuthScreen.module.css'
+import { OtpInput } from './OtpInput.js'
+import { Turnstile } from './Turnstile.js'
+import { PasswordToggle, TextField } from './TextField.js'
+
+/** 与 server/auth-core.ts 的常量对齐，前端不自己编数字 */
+const CODE_LENGTH = 6
+const RESEND_SECONDS = 60
+const CODE_TTL_MINUTES = 10
+
+const emailLooksValid = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim())
+
+const emptyCode = () => Array.from({ length: CODE_LENGTH }, () => '')
+
+type RegisterFormProps = {
+  email: string
+  onEmailChange: (value: string) => void
+  onAuthenticated: (user: AuthUser) => void
+  onSwitch: () => void
+}
+
+/** 单卡片四段：邮箱 → 人机验证 → 验证码 → 密码；不刷新、不丢状态 */
+export const RegisterForm = ({
+  email,
+  onEmailChange,
+  onAuthenticated,
+  onSwitch,
+}: RegisterFormProps) => {
+  const t = useTranslate()
+  const [code, setCode] = useState<string[]>(emptyCode)
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [shown, setShown] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileSignal, setTurnstileSignal] = useState(0)
+  const [sending, setSending] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [cooldownUntil, setCooldownUntil] = useState(0)
+  const [expiresAt, setExpiresAt] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const [otpError, setOtpError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
+  const submitRef = useRef<HTMLButtonElement>(null)
+
+  // 每秒对齐一次；切后台回来立刻按时间戳重算，不靠 tick 累加
+  useEffect(() => {
+    const tick = () => setNow(Date.now())
+    const timer = window.setInterval(tick, 1000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        tick()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
+
+  const remaining = Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
+  const ttlSeconds = Math.max(0, Math.ceil((expiresAt - now) / 1000))
+  const codeReady = code.every((digit) => digit !== '')
+  const passwordLongEnough = password.length >= 8
+  const unlocked = codeReady
+
+  /** 换邮箱等于换验证码：倒计时和已输入的码都作废 */
+  const changeEmail = (value: string) => {
+    if (sent && value.trim().toLowerCase() !== email.trim().toLowerCase()) {
+      setSent(false)
+      setCooldownUntil(0)
+      setExpiresAt(0)
+      setCode(emptyCode())
+      setOtpError(null)
+      setSendError(null)
+    }
+    onEmailChange(value)
+  }
+
+  const resetTurnstile = () => {
+    setTurnstileToken(null)
+    setTurnstileSignal((value) => value + 1)
+  }
+
+  const send = async () => {
+    if (sending || remaining > 0) {
+      return
+    }
+    setEmailError(null)
+    setSendError(null)
+    setFormError(null)
+    if (!emailLooksValid(email)) {
+      setEmailError('邮箱格式不对')
+      emailRef.current?.focus()
+      return
+    }
+    if (!turnstileToken) {
+      setSendError(t('authTurnstileRequired'))
+      return
+    }
+    setSending(true)
+    try {
+      await requestCode(email.trim(), turnstileToken)
+      setSent(true)
+      setCooldownUntil(Date.now() + RESEND_SECONDS * 1000)
+      setExpiresAt(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
+      setOtpError(null)
+    } catch (err) {
+      const message = err instanceof AuthError ? err.message : t('authNetwork')
+      if (err instanceof AuthError && err.status === 403) {
+        // 人机验证没过：错误落在验证区，并把 widget 换掉拿新令牌
+        setSendError(message)
+      } else {
+        setSendError(message)
+      }
+    } finally {
+      // 令牌一次性：无论成功失败，下一次发送都要新的
+      resetTurnstile()
+      setSending(false)
+    }
+  }
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (submitting) {
+      return
+    }
+    setFormError(null)
+    setOtpError(null)
+    setPasswordError(null)
+    setConfirmError(null)
+    if (!codeReady) {
+      setOtpError('验证码是 6 位数字')
+      return
+    }
+    if (!passwordLongEnough) {
+      setPasswordError('密码至少 8 位')
+      passwordRef.current?.focus()
+      return
+    }
+    if (password.length > 200) {
+      setPasswordError('密码最多 200 位')
+      passwordRef.current?.focus()
+      return
+    }
+    if (password !== confirm) {
+      setConfirmError(t('authPasswordMismatch'))
+      return
+    }
+    setSubmitting(true)
+    try {
+      onAuthenticated(await register(email.trim(), code.join(''), password))
+    } catch (err) {
+      const message = err instanceof AuthError ? err.message : t('authNetwork')
+      if (message.includes('验证码')) {
+        // 错误次数超限时后端已允许重新获取：清空重填，并让「重新发送」立刻可点
+        setOtpError(message)
+        setCode(emptyCode())
+        if (err instanceof AuthError && err.status === 429) {
+          setCooldownUntil(0)
+        }
+      } else if (message.includes('密码')) {
+        setPasswordError(message)
+      } else if (message.includes('邮箱')) {
+        setEmailError(message)
+      } else {
+        setFormError(message)
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const codeHint = !sent
+    ? null
+    : ttlSeconds > 0 && ttlSeconds <= 60
+      ? t('authCodeExpiring')
+      : t('authCodeSent', { minutes: CODE_TTL_MINUTES })
+
+  return (
+    <form className={styles.form} onSubmit={submit} noValidate>
+      <TextField
+        label={t('authEmail')}
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        placeholder={t('authEmailPlaceholder')}
+        value={email}
+        onChange={(event) => changeEmail(event.target.value)}
+        inputRef={emailRef}
+        state={emailError ? 'error' : 'default'}
+        message={emailError}
+      />
+
+      <div className={styles.sendRow}>
+        <span
+          className={
+            sendError ? styles.error : ttlSeconds > 0 && ttlSeconds <= 60 ? styles.hintWarn : styles.hint
+          }
+        >
+          {sendError ?? codeHint ?? ''}
+        </span>
+        <button
+          type="button"
+          className={styles.sendButton}
+          disabled={sending || remaining > 0 || !emailLooksValid(email)}
+          onClick={() => void send()}
+        >
+          {remaining > 0
+            ? t('authResendIn', { seconds: remaining })
+            : sent
+              ? t('authResend')
+              : t('authSendCode')}
+        </button>
+      </div>
+
+      <Turnstile
+        resetSignal={turnstileSignal}
+        onToken={setTurnstileToken}
+        onError={() => setSendError(t('authTurnstileFailed'))}
+      />
+
+      <div className={styles.stage}>
+        <span className={styles.label}>{t('authCodeLabel')}</span>
+        <OtpInput
+          value={code}
+          onChange={setCode}
+          onComplete={() => submitRef.current?.focus()}
+          invalid={Boolean(otpError)}
+          success={codeReady && !otpError}
+        />
+        <div className={styles.msgRow}>
+          {otpError ? (
+            <span className={styles.error} role="alert">
+              {otpError}
+            </span>
+          ) : codeReady ? (
+            <span className={styles.hint}>{t('authCodeFilled')}</span>
+          ) : null}
+        </div>
+        <span className={styles.srOnly} aria-live="polite">
+          {codeReady ? t('authCodeFilled') : ''}
+        </span>
+      </div>
+
+      {unlocked ? (
+        <div className={styles.stage}>
+          <TextField
+            label={t('authPassword')}
+            type={shown ? 'text' : 'password'}
+            autoComplete="new-password"
+            placeholder={t('authPasswordPlaceholder')}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            inputRef={passwordRef}
+            state={passwordError ? 'error' : 'default'}
+            message={passwordError}
+            trailing={<PasswordToggle shown={shown} onToggle={() => setShown((value) => !value)} />}
+          />
+          <span className={passwordLongEnough ? styles.ruleOk : styles.ruleRow}>
+            {passwordLongEnough ? '✓ ' : ''}
+            {t('authPasswordRule')}
+          </span>
+          <TextField
+            label={t('authPasswordConfirm')}
+            type={shown ? 'text' : 'password'}
+            autoComplete="new-password"
+            placeholder={t('authPasswordPlaceholder')}
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+            onBlur={() => {
+              if (confirm !== '' && confirm !== password) {
+                setConfirmError(t('authPasswordMismatch'))
+              } else {
+                setConfirmError(null)
+              }
+            }}
+            state={confirmError ? 'error' : 'default'}
+            message={confirmError}
+          />
+        </div>
+      ) : null}
+
+      {formError ? (
+        <div className={styles.msgRow} role="alert" aria-live="assertive">
+          <span className={styles.error}>{formError}</span>
+        </div>
+      ) : null}
+
+      <button
+        ref={submitRef}
+        type="submit"
+        className={styles.submit}
+        disabled={submitting || !unlocked}
+        aria-busy={submitting ? true : undefined}
+      >
+        {submitting ? <span className={styles.spinner} aria-hidden="true" /> : null}
+        {t('authRegisterSubmit')}
+      </button>
+
+      <div className={styles.switchRow}>
+        <span>{t('authHaveAccount')}</span>
+        <button type="button" className={styles.switchLink} onClick={onSwitch}>
+          {t('authGoLogin')}
+        </button>
+      </div>
+    </form>
+  )
+}

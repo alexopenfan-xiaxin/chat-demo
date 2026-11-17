@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
@@ -24,10 +24,15 @@ import { stopReadAloud } from '../services/speech/readAloud.js'
 import { CollapsedSider } from '../components/sider/CollapsedSider.js'
 import { closeMobileSider } from '../components/sider/mobileSiderState.js'
 import { MobileSider, Sider } from '../components/sider/Sider.js'
+import { AuthScreen } from '../components/auth/AuthScreen.js'
+import { fetchMe, logout as logoutRequest, type AuthUser } from '../services/auth.js'
+import authStyles from '../components/auth/AuthScreen.module.css'
 import styles from './App.module.css'
 
 export const App = () => {
   const t = useTranslate()
+  // undefined = 还在问 /api/auth/me，null = 未登录
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined)
   const isMobile = useIsMobile()
   const locale = useSettings((state) => state.locale)
   // 移动端侧边栏以独立抽屉管理开合状态
@@ -68,15 +73,45 @@ export const App = () => {
   useEffect(closeMobileSider, [activeId, isMobile])
 
   useEffect(() => {
+    void fetchMe().then(setUser)
+  }, [])
+
+  // 登录之后才碰聊天数据：未登录时不该读本地会话，也不该弹 API Key 设置
+  useEffect(() => {
+    if (!user) {
+      return
+    }
     void initChat()
     // 首次打开先在设置里输入 API Key
     ensureApiKey()
+  }, [user])
+
+  const onLogout = useCallback(async () => {
+    try {
+      await logoutRequest()
+      setUser(null)
+      showToast({ key: 'authLoggedOut' })
+    } catch {
+      showToast({ key: 'authNetwork', type: 'error' })
+    }
   }, [])
+
+  if (user === undefined) {
+    return <div className={authStyles.gateLoading}>正在检查登录状态…</div>
+  }
+
+  if (user === null) {
+    return <AuthScreen onAuthenticated={setUser} />
+  }
 
   return (
     <>
       <div ref={frameRef} className={styles.frame}>
-        {isMobile ? <MobileSider /> : siderCollapsed ? null : <Sider />}
+        {isMobile ? (
+          <MobileSider user={user} onLogout={onLogout} />
+        ) : siderCollapsed ? null : (
+          <Sider user={user} onLogout={onLogout} />
+        )}
         <main className={styles.main}>
           {saveError ? (
             <div className={styles.saveError} role="alert">
@@ -92,7 +127,7 @@ export const App = () => {
             </div>
           ) : null}
           <div className={styles.content}>
-            {siderCollapsed ? <CollapsedSider /> : null}
+            {siderCollapsed ? <CollapsedSider onLogout={onLogout} /> : null}
             {!ready || (activeId !== null && !session) ? (
               <div className={styles.loadingView}>
                 {isMobile ? <MobileHeader /> : null}

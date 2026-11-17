@@ -8,6 +8,9 @@ declare module '*.css' {}
 /** 公开 API 的地址，见 rspack.config.ts 的 createConfig */
 declare const __API_ORIGIN__: string
 
+/** Turnstile 的公开 sitekey，构建时由 rspack DefinePlugin 注入 */
+declare const __TURNSTILE_SITE_KEY__: string
+
 /** Prism 语言包通过副作用注册到全局 Prism */
 declare module 'prismjs/components/*' {}
 
