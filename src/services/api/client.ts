@@ -1,6 +1,14 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
-import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
+import {
+  itemKind,
+  readDelta,
+  readFailure,
+  readResponseMeta,
+  readStopReason,
+  readUsage,
+  toResponsesBody,
+} from './responses.js'
 import type {
   ApiErrorBody,
   CreateMessageRequest,
@@ -9,12 +17,10 @@ import type {
   MessageStreamEvent,
 } from './types.js'
 
-/** 构建期 API 地址，默认 https://api.deepseek.com；本地开发支持开发服务器代理 */
+/** 构建期 API 地址，默认 https://api.deepseek.com；传空串表示与页面同源（走 Pages Functions 转发） */
 export const API_ORIGIN = __API_ORIGIN__
-/** Anthropic 兼容接口的前缀 */
-const ANTHROPIC_BASE_URL = `${API_ORIGIN}/anthropic/v1`
-/** 引用 Files API 上传的图片、调用 Anthropic 兼容 Files API 时必须携带 */
-const FILES_BETA = 'files-api-2025-04-14'
+/** OpenAI 兼容接口的前缀 */
+const OPENAI_BASE_URL = `${API_ORIGIN}/v1`
 
 export type ApiErrorKind =
   /** 非 2xx 响应 */
@@ -41,6 +47,9 @@ export class ApiError extends Error {
     this.localMessage = typeof message === 'string' ? undefined : message
   }
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
 
 const isErrorBody = (value: unknown): value is ApiErrorBody =>
   typeof value === 'object' &&
@@ -82,106 +91,155 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
   return response
 }
 
-const anthropicHeaders = (apiKey: string, beta: boolean): Record<string, string> => ({
-  // DeepSeek 兼容接口的鉴权方式，也可使用 Authorization: Bearer。
-  'x-api-key': apiKey,
-  // Files API 和通过 file_id 引用图片时必传；纯文本聊天无需携带。
-  ...(beta ? { 'anthropic-beta': FILES_BETA } : {}),
-})
-
-/** 用 GET /models 校验 API Key（不产生费用） */
+/** 用 GET /v1/models 校验 API Key（不产生费用） */
 export const verifyApiKey = async (apiKey: string, signal?: AbortSignal): Promise<void> => {
-  await request(`${API_ORIGIN}/models`, {
+  await request(`${OPENAI_BASE_URL}/models`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${apiKey}` },
     signal,
   })
 }
 
-/**
- * POST /anthropic/v1/files 上传附件（不设过期时间，会话里的历史附件一直可用）。
- * purpose 为 null 时不传该字段（图片）；purpose 必须排在 file 之前。
- */
+/** 当前接口没有 Files API，附件上传直接失败并说明原因，不发出注定 404 的请求 */
 export const uploadFile = async (
   apiKey: string,
   file: File,
   purpose: FilePurpose | null,
   signal?: AbortSignal
 ): Promise<FileObject> => {
-  const form = new FormData()
-  if (purpose) {
-    form.append('purpose', purpose)
-  }
-  form.append('file', file)
-  const response = await request(`${ANTHROPIC_BASE_URL}/files`, {
-    method: 'POST',
-    headers: anthropicHeaders(apiKey, true),
-    body: form,
-    signal,
-  })
-  return (await response.json()) as FileObject
+  // 参数与完整实现保持一致，方便接上支持 Files API 的服务端时替换函数体
+  void apiKey
+  void purpose
+  void signal
+  throw new ApiError('http', `当前接口不支持上传附件：${file.name}`)
 }
 
-/** DELETE /anthropic/v1/files/{file_id} */
+/** 没有上传成功的文件，删除无需请求服务端 */
 export const deleteFile = async (apiKey: string, fileId: string): Promise<void> => {
-  await request(`${ANTHROPIC_BASE_URL}/files/${encodeURIComponent(fileId)}`, {
-    method: 'DELETE',
-    headers: anthropicHeaders(apiKey, true),
-  })
+  void apiKey
+  void fileId
 }
-
-const hasFile = (body: CreateMessageRequest) =>
-  body.messages.some(
-    (message) =>
-      typeof message.content !== 'string' &&
-      message.content.some((block) => block.type === 'image' || block.type === 'document')
-  )
 
 /**
- * POST /anthropic/v1/messages（stream: true），逐个产出流式事件，收到 message_stop 时结束。
- * ping、保活注释与无法解析的内容不产出；中止请求时抛出 signal 的 AbortError。
+ * POST /v1/responses（stream: true），握手 Responses 流并翻译成本地事件。
+ * 思考档位由请求体的 thinking 决定，关闭时不产出思考块；收到 completed / incomplete 结束。
  */
 export async function* streamMessage(
   apiKey: string,
   body: CreateMessageRequest,
   signal: AbortSignal
 ): AsyncGenerator<MessageStreamEvent> {
-  const response = await request(`${ANTHROPIC_BASE_URL}/messages`, {
+  const response = await request(`${OPENAI_BASE_URL}/responses`, {
     method: 'POST',
     headers: {
-      ...anthropicHeaders(apiKey, hasFile(body)),
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
-    body: JSON.stringify({ ...body, stream: true }),
+    body: JSON.stringify(toResponsesBody(body)),
     signal,
   })
   const contentType = response.headers.get('Content-Type') ?? ''
   if (!response.body || !contentType.includes('text/event-stream')) {
     throw await readErrorResponse(response, 'protocol', '')
   }
-  for await (const { event: eventName, data } of readServerSentEvents(response.body, signal)) {
+  /** 是否展示思考，关闭时不产出思考块，只保留正文 */
+  const showThinking = body.thinking.type === 'enabled'
+  /** 本地事件模型的块号，按输出项出现的顺序递增 */
+  let nextIndex = 0
+  let thinkingIndex: number | null = null
+  let textIndex: number | null = null
+
+  for await (const { data } of readServerSentEvents(response.body, signal)) {
     let payload: unknown
     try {
       payload = JSON.parse(data)
     } catch {
-      if (eventName !== 'error') {
-        continue
-      }
+      continue
     }
     if (isErrorBody(payload)) {
       throw new ApiError('stream', payload.error.message)
     }
-    if (eventName === 'error') {
-      throw new ApiError('stream', data)
-    }
-    const event = readMessageEvent(payload)
-    if (!event) {
+    if (!isRecord(payload) || typeof payload.type !== 'string') {
       continue
     }
-    yield event
-    if (event.type === 'message_stop') {
-      return
+    switch (payload.type) {
+      case 'response.created': {
+        const meta = readResponseMeta(payload)
+        yield { type: 'message_start', message: { id: meta.id, model: meta.model } }
+        break
+      }
+      case 'response.output_item.added': {
+        const kind = itemKind(payload.item)
+        if (kind === 'reasoning' && showThinking) {
+          thinkingIndex = nextIndex++
+          yield {
+            type: 'content_block_start',
+            index: thinkingIndex,
+            content_block: { type: 'thinking', thinking: '', signature: '' },
+          }
+        } else if (kind === 'message') {
+          textIndex = nextIndex++
+          yield {
+            type: 'content_block_start',
+            index: textIndex,
+            content_block: { type: 'text', text: '' },
+          }
+        }
+        break
+      }
+      case 'response.reasoning_summary_text.delta':
+      case 'response.reasoning_text.delta': {
+        const delta = readDelta(payload)
+        if (thinkingIndex === null || delta === null) {
+          break
+        }
+        yield {
+          type: 'content_block_delta',
+          index: thinkingIndex,
+          delta: { type: 'thinking_delta', thinking: delta },
+        }
+        break
+      }
+      case 'response.output_text.delta': {
+        const delta = readDelta(payload)
+        if (textIndex === null || delta === null) {
+          break
+        }
+        yield {
+          type: 'content_block_delta',
+          index: textIndex,
+          delta: { type: 'text_delta', text: delta },
+        }
+        break
+      }
+      case 'response.output_item.done': {
+        const kind = itemKind(payload.item)
+        if (kind === 'reasoning' && thinkingIndex !== null) {
+          yield { type: 'content_block_stop', index: thinkingIndex }
+          thinkingIndex = null
+        } else if (kind === 'message' && textIndex !== null) {
+          yield { type: 'content_block_stop', index: textIndex }
+          textIndex = null
+        }
+        break
+      }
+      case 'response.completed':
+      case 'response.incomplete': {
+        yield {
+          type: 'message_delta',
+          delta: { stop_reason: readStopReason(payload), stop_sequence: null },
+          usage: readUsage(payload),
+        }
+        yield { type: 'message_stop' }
+        return
+      }
+      case 'response.failed':
+      case 'error': {
+        throw new ApiError('stream', readFailure(payload, '生成失败'))
+      }
+      default:
+        break
     }
   }
   // 服务端没有提供错误内容时保持为空，不推测断流原因。

@@ -23,9 +23,27 @@ type ConfigOptions = {
   devServer?: Configuration['devServer']
 }
 
+/** 官方接口地址；构建时可用 CHAT_API_ORIGIN 覆盖 */
+const DEFAULT_API_ORIGIN = 'https://api.deepseek.com'
+
+/**
+ * 读取构建期的接口地址：
+ * - 未设置时用官方地址；
+ * - 传 same-origin（或空串）时走 `${空}/v1/...` 的相对路径，交给同源的转发函数；
+ * - 其余情况当成完整地址使用。
+ */
+const resolveApiOrigin = (): string => {
+  const raw = process.env.CHAT_API_ORIGIN
+  if (raw === undefined) {
+    return DEFAULT_API_ORIGIN
+  }
+  const trimmed = raw.trim()
+  return trimmed === '' || trimmed === 'same-origin' ? '' : trimmed.replace(/\/+$/, '')
+}
+
 /** 创建构建配置，支持自定义 API 地址和开发服务器选项 */
 export const createConfig = ({
-  apiOrigin = 'https://api.deepseek.com',
+  apiOrigin = resolveApiOrigin(),
   devServer,
 }: ConfigOptions = {}): Configuration => ({
   mode: dev ? 'development' : 'production',
