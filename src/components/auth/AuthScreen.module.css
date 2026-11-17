@@ -542,10 +542,18 @@
   color: #151517;
 }
 
+[data-ds-dark-theme] .terms {
+  /* 深色下白字在黑底上会"涨粗"（光晕效应），正文压一档，
+     让「与」和协议名之间的对比回到重量而不是颜色上 */
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .termsText {
   flex: 1;
   min-width: 0;
   text-align: left;
+  /* 只有协议名加粗：整段显式 400，不靠继承，也不给字形合成留空间 */
+  font-weight: 400;
 }
 
 .termsLink {
