@@ -79,7 +79,10 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
   if (!response.ok) {
     // 用 503 而不是 502：Pages Functions 返回 502 时 Cloudflare 会用自家的错误页
     // 覆盖 body，前端就拿不到我们写的 JSON 了
-    return json({ error: '额度暂时读不到' }, response.status === 429 ? 429 : 503)
+    return json(
+      { error: '额度暂时读不到', detail: `upstream ${response.status}: ${(await response.text()).slice(0, 120)}` },
+      response.status === 429 ? 429 : 503
+    )
   }
   const raw = (await response.json()) as UpstreamUsage
   const tokens = section(raw.tokens)
