@@ -26,6 +26,16 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
   const [emailError, setEmailError] = useState<string | null>(null)
   const emailRef = useRef<HTMLInputElement>(null)
 
+  /** 提交时以 DOM 为准：Safari 和部分密码管理器不会派发动画事件 */
+  const readEmail = () => (emailRef.current?.value ?? email).trim()
+
+  const syncFromAutofill = (event: { animationName?: string; currentTarget: HTMLInputElement }) => {
+    if (event.animationName === 'onAutoFillStart') {
+      setEmail(event.currentTarget.value)
+      setEmailError(null)
+    }
+  }
+
   const commitEmail = () => {
     const value = email.trim()
     if (!value) {
@@ -79,6 +89,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               onBlur={commitEmail}
+              onAnimationStart={syncFromAutofill}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault()
@@ -105,23 +116,23 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
 
         {mode === 'login' ? (
           <LoginForm
-            email={email}
             accepted={accepted}
             termsFlash={termsFlash}
             onAccept={setAccepted}
             onSwitch={() => setMode('register')}
             onRequestEmail={requestEmail}
+            readEmail={readEmail}
             onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
             onAuthenticated={onAuthenticated}
           />
         ) : (
           <RegisterForm
-            email={email}
             accepted={accepted}
             termsFlash={termsFlash}
             onAccept={setAccepted}
             onSwitch={() => setMode('login')}
             onRequestEmail={requestEmail}
+            readEmail={readEmail}
             onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
             onAuthenticated={onAuthenticated}
           />

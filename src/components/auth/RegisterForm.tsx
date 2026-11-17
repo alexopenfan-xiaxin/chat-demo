@@ -17,24 +17,25 @@ const CODE_TTL_MINUTES = 10
 const emptyCode = () => Array.from({ length: CODE_LENGTH }, () => '')
 
 type RegisterFormProps = {
-  email: string
   accepted: boolean
   termsFlash: number
   onAccept: (accepted: boolean) => void
   onSwitch: () => void
   onRequestEmail: () => void
+  /** 提交时以 DOM 值为准，兜住 autofill 不触发 onChange 的情况 */
+  readEmail: () => string
   onBlockedByTerms: () => void
   onAuthenticated: (user: AuthUser) => void
 }
 
 /** 注册：邮箱（在外层身份行）→ 人机验证 → 验证码 → 设密码 */
 export const RegisterForm = ({
-  email,
   accepted,
   termsFlash,
   onAccept,
   onSwitch,
   onRequestEmail,
+  readEmail,
   onBlockedByTerms,
   onAuthenticated,
 }: RegisterFormProps) => {
@@ -91,7 +92,8 @@ export const RegisterForm = ({
     }
     setSendError(null)
     setFormError(null)
-    if (!email) {
+    const emailValue = readEmail()
+    if (!emailValue) {
       onRequestEmail()
       return
     }
@@ -101,7 +103,7 @@ export const RegisterForm = ({
     }
     setSending(true)
     try {
-      await requestCode(email.trim(), turnstileToken)
+      await requestCode(emailValue, turnstileToken)
       setSent(true)
       setCooldownUntil(Date.now() + RESEND_SECONDS * 1000)
       setExpiresAt(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
@@ -119,7 +121,8 @@ export const RegisterForm = ({
     if (submitting) {
       return
     }
-    if (!email) {
+    const emailValue = readEmail()
+    if (!emailValue) {
       onRequestEmail()
       return
     }
@@ -151,7 +154,7 @@ export const RegisterForm = ({
     }
     setSubmitting(true)
     try {
-      onAuthenticated(await register(email.trim(), code.join(''), password))
+      onAuthenticated(await register(emailValue, code.join(''), password))
     } catch (err) {
       const message = err instanceof AuthError ? err.message : t('authNetwork')
       if (message.includes('验证码')) {

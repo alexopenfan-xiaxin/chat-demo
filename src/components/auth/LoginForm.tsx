@@ -8,24 +8,25 @@ import { TermsRow } from './TermsRow.js'
 import { PasswordToggle, TextField } from './TextField.js'
 
 type LoginFormProps = {
-  email: string
   accepted: boolean
   termsFlash: number
   onAccept: (accepted: boolean) => void
   onSwitch: () => void
   onRequestEmail: () => void
+  /** 提交时以 DOM 值为准，兜住 autofill 不触发 onChange 的情况 */
+  readEmail: () => string
   onBlockedByTerms: () => void
   onAuthenticated: (user: AuthUser) => void
 }
 
 /** 两段式：先确认身份，点「登录」后密码框从按钮位置展开 */
 export const LoginForm = ({
-  email,
   accepted,
   termsFlash,
   onAccept,
   onSwitch,
   onRequestEmail,
+  readEmail,
   onBlockedByTerms,
   onAuthenticated,
 }: LoginFormProps) => {
@@ -41,7 +42,8 @@ export const LoginForm = ({
     if (submitting) {
       return
     }
-    if (!email) {
+    const emailValue = readEmail()
+    if (!emailValue) {
       onRequestEmail()
       return
     }
@@ -62,7 +64,7 @@ export const LoginForm = ({
     }
     setSubmitting(true)
     try {
-      onAuthenticated(await login(email.trim(), password))
+      onAuthenticated(await login(emailValue, password))
     } catch (err) {
       // 后端把「账号不存在」和「密码错」合并成同一句，这里原样展示
       setError(err instanceof AuthError ? err.message : t('authNetwork'))
