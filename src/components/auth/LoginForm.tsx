@@ -114,22 +114,18 @@ export const LoginForm = ({
         {submitting ? t('authLoggingIn') : t('authLoginSubmit')}
       </button>
 
-      <button type="button" className={styles.ghost} onClick={onSwitch}>
-        {t('authGoRegister')}
-      </button>
-
+      {/* 忘记密码贴着主按钮：它跟「登录」是同一件事的两个分支，不该飘到协议行旁边 */}
       <button type="button" className={styles.forgot} onClick={onForgot}>
         {t('authForgot')}
+      </button>
+
+      <button type="button" className={styles.ghost} onClick={onSwitch}>
+        {t('authGoRegister')}
       </button>
 
       <TermsRow accepted={accepted} onChange={onAccept} flashToken={termsFlash} compact />
       {!accepted && termsFlash > 0 ? (
         <span className={styles.termsHint}>{t('authTermsRequired')}</span>
-      ) : null}
-      {step === 'password' ? (
-        <button type="button" className={styles.switchLink} onClick={onRequestEmail}>
-          {t('authUseOtherEmail')}
-        </button>
       ) : null}
     </form>
   )

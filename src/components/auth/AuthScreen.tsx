@@ -59,6 +59,20 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
     return true
   }
 
+  /**
+   * 失焦只把 DOM 值同步回 state，不折叠输入框。
+   * 之前 onBlur 直接 commitEmail()（会折叠成身份行）：用户输完邮箱去点协议圆圈，
+   * mousedown 时 blur 触发、元素在 mouseup 之前上移 48px，那一次点击就落在别处，
+   * 表现为「勾了协议没反应」。折叠只留给显式提交（Enter / 主按钮 / 勾协议之后）。
+   */
+  const syncEmail = () => {
+    const value = readEmail()
+    if (value && emailLooksValid(value)) {
+      setEmail(value)
+      setEmailError(null)
+    }
+  }
+
   const requestEmail = () => {
     setEditingEmail(true)
     window.requestAnimationFrame(() => emailRef.current?.focus())
@@ -66,7 +80,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
 
   return (
     <main className={styles.page}>
-      <div className={mode === 'reset' ? `${styles.content} ${styles.contentCompact}` : styles.content}>
+      <div className={mode === 'login' ? styles.content : `${styles.content} ${styles.contentCompact}`}>
         <header className={styles.head}>
           <span className={styles.brandMark} aria-hidden="true">
             <svg viewBox="0 0 20 20" width="22" height="22" fill="none">
@@ -84,8 +98,6 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
           <h1 className={styles.wordmark}>{t('authWordmark')}</h1>
         </header>
 
-        <div className={styles.spacer} />
-
         <div className={styles.identity}>
           {editingEmail ? (
             <TextField
@@ -96,7 +108,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
               placeholder={t('authEmailPlaceholder')}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              onBlur={() => commitEmail()}
+              onBlur={syncEmail}
               onAnimationStart={syncFromAutofill}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -120,20 +132,19 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
           )}
         </div>
 
-        <p className={styles.subline}>
-          {mode === 'login'
-            ? t('authSublineLogin')
-            : mode === 'register'
-              ? t('authSublineRegister')
-              : t('authResetSubline')}
-        </p>
+        {mode === 'login' ? null : (
+          <p className={styles.subline}>
+            {mode === 'register' ? t('authSublineRegister') : t('authResetSubline')}
+          </p>
+        )}
 
         {mode === 'login' ? (
           <LoginForm
             accepted={accepted}
             termsFlash={termsFlash}
             onAccept={(next) => {
-              commitEmail()
+              // 只同步值、不折叠：勾协议时折叠会让协议圆圈在 mousedown 与 mouseup 之间挪 48px
+              syncEmail()
               setAccepted(next)
             }}
             onSwitch={() => setMode('register')}
@@ -149,8 +160,8 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
             accepted={accepted}
             termsFlash={termsFlash}
             onAccept={(next) => {
-              // 注册表单重渲染更频繁，autofill 的值同样要先从 DOM 落回 state
-              commitEmail()
+              // 注册表单重渲染更频繁，autofill 的值同样要先从 DOM 落回 state（不折叠）
+              syncEmail()
               setAccepted(next)
             }}
             onSwitch={() => setMode('login')}
@@ -165,8 +176,8 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
             accepted={accepted}
             termsFlash={termsFlash}
             onAccept={(next) => {
-              // 勾协议会触发重渲染，autofill 的值此时只在 DOM 里：先落回 state 再改勾选
-              commitEmail()
+              // 勾协议会触发重渲染，autofill 的值此时只在 DOM 里：先落回 state 再改勾选（不折叠）
+              syncEmail()
               setAccepted(next)
             }}
             readEmail={readEmail}

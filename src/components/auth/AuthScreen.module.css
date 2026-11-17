@@ -18,7 +18,13 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  /* 应用外壳是 overflow:hidden，登录页必须自己当滚动容器：
+     固定视口高度 + 纵向滚动，否则重置那四步撑过一屏后下半截既看不见也滚不动。 */
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   padding: 0 35px;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
@@ -42,7 +48,8 @@
 .content {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  /* 不许被压缩：内容高于视口时要撑开让人滚，而不是把主按钮挤到看不见 */
+  flex: 1 0 auto;
   width: 100%;
   max-width: 350px;
   margin-inline: auto;
@@ -56,7 +63,9 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding-top: 96px;
+  /* 顶部锚定 + 固定间距：整块从顶部往下排，撑高时 logo 不会跟着上下窜 */
+  padding-top: clamp(40px, 10vh, 112px);
+  margin-bottom: clamp(28px, 5vh, 56px);
   animation: rise-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
@@ -83,16 +92,27 @@
 
 /* 重置页字段多，顶部收一点，别让主按钮掉到首屏外 */
 .contentCompact .head {
-  padding-top: 56px;
+  padding-top: clamp(28px, 5vh, 56px);
+  margin-bottom: 28px;
 }
 
 .contentCompact .subline {
-  margin: 10px 0 16px;
+  margin: 8px 0 14px;
 }
 
+/* 长表单（注册 / 重置）字段间距收紧，把主按钮往首屏里拉 */
+.contentCompact .field {
+  margin-bottom: 12px;
+}
+
+.contentCompact .stage {
+  gap: 12px;
+}
+
+/* 旧的「把表单推到页面底部」撑高块已废弃：它正是 Step1 中间那个空洞 */
 .spacer {
-  flex: 1;
-  min-height: 24px;
+  flex: none;
+  min-height: 0;
 }
 
 /* ---------- 下半区 ---------- */
@@ -100,7 +120,7 @@
 .identity {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
   min-height: 44px;
   animation: rise-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) 40ms both;
 }
@@ -109,12 +129,12 @@
   flex: 1;
   min-width: 0;
   margin: 0;
-  overflow: hidden;
-  font-size: 30px;
+  /* 全页最大的字；随视口收缩，保证 alex.openfan@gmail.com 这类常见邮箱一行放得下。
+     真的超长（+tag 之类）才折行——折行也比省略域名好。 */
+  font-size: clamp(16px, 4.2vw, 19px);
   font-weight: 600;
-  line-height: 40px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -197,7 +217,7 @@
   padding: 0 14px;
   border: none;
   border-radius: 14px;
-  background: var(--dsw-specific-login-input);
+  background: #f3f4f6;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 15px;
@@ -296,6 +316,8 @@
 
 /* 密码两段式：不 lock 滚动，用 max-height + 位移展开 */
 .passwordStage {
+  /* 展开后密码标签紧贴身份行，给一点呼吸 */
+  margin-top: 14px;
   overflow: hidden;
   animation: password-in 190ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -345,8 +367,8 @@
 }
 
 /* 协议未勾选时按钮保持可点（点它要高亮协议行），所以用 aria-disabled + 这个类 */
+/* 未勾协议时按钮不许看起来像坏的：保持满饱和，只换 cursor，点击靠协议行闪烁提示 */
 .ctaDisabled {
-  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -410,12 +432,14 @@
 
 .forgot {
   display: block;
-  margin: 16px auto 0;
-  padding: 4px 8px;
+  width: 100%;
+  margin: 12px auto 0;
+  padding: 6px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: none;
-  color: var(--dsw-alias-label-secondary);
+  text-align: center;
+  color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 13px;
   line-height: 20px;
@@ -438,7 +462,8 @@
 
 .terms {
   display: flex;
-  align-items: flex-start;
+  /* 勾选圆和 13px 文字的基线对齐，圆不再偏上 */
+  align-items: center;
   gap: 8px;
   margin-top: 29px;
   padding: 12px 0;
@@ -450,12 +475,14 @@
 
 [data-ds-dark-theme] .forgot {
   display: block;
-  margin: 16px auto 0;
-  padding: 4px 8px;
+  width: 100%;
+  margin: 12px auto 0;
+  padding: 6px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: none;
-  color: var(--dsw-alias-label-secondary);
+  text-align: center;
+  color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 13px;
   line-height: 20px;
@@ -586,9 +613,10 @@
 
 .sendButton {
   flex: none;
-  min-width: 112px;
-  height: 44px;
-  padding: 0 14px;
+  min-width: 0;
+  height: 40px;
+  margin-left: auto;
+  padding: 0 16px;
   border: 1.5px solid var(--auth-ghost-border);
   border-radius: 999px;
   background: none;
@@ -657,18 +685,20 @@
 
 .otpRow {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   gap: 8px;
 }
 
 .otpCell {
   box-sizing: border-box;
-  width: 44px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 48px;
   height: 48px;
   padding: 0;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 12px;
-  background: var(--dsw-specific-login-input);
+  background: #f3f4f6;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 20px;
@@ -733,6 +763,11 @@
   font-size: 13px;
 }
 
+[data-ds-dark-theme] .input,
+[data-ds-dark-theme] .otpCell {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 /* 浏览器 autofill 不触发 React 的 onChange：靠这条动画让组件收到一次事件，把 DOM 值同步回 state */
 @keyframes onAutoFillStart {
   from {
@@ -793,10 +828,6 @@
 /* ---------- 响应式 ---------- */
 
 @media (min-width: 600px) and (max-width: 1100px) {
-  .head {
-    padding-top: 140px;
-  }
-
   .content {
     padding-bottom: calc(56px + env(safe-area-inset-bottom));
   }
@@ -804,13 +835,9 @@
 
 @media (max-width: 599px) {
   .head {
-    padding-top: 12vh;
+    margin-bottom: 28px;
   }
 
-  .identityEmail {
-    font-size: 26px;
-    line-height: 36px;
-  }
 }
 
 @media (max-width: 359px) {
@@ -830,7 +857,8 @@
 
 @media (max-height: 640px) {
   .head {
-    padding-top: 48px;
+    padding-top: 32px;
+    margin-bottom: 24px;
   }
 
   /* 重置页字段多，顶部收一点，别让主按钮掉到首屏外 */
