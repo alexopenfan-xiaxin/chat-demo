@@ -30,10 +30,22 @@ export const onRequestPost = guarded(async (context: { request: Request; env: Sp
     return json({ error: '录音太长了' }, 413)
   }
 
-  const bytes = new Int8Array(await file.arrayBuffer())
+  const buffer = await file.arrayBuffer()
+  const bytes = new Int8Array(buffer)
+  const audio = Array.from(bytes)
+  if (new URL(request.url).searchParams.has('probe')) {
+    return json({
+      size: file.size,
+      bufferType: Object.prototype.toString.call(buffer),
+      audioIsArray: Array.isArray(audio),
+      audioType: typeof audio,
+      length: audio.length,
+      head: audio.slice(0, 3),
+    })
+  }
   let result: { text?: string }
   try {
-    result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio: Array.from(bytes) })
+    result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio })
   } catch (error) {
     return json({ error: 'asr failed', detail: String(error).slice(0, 300) }, 500)
   }
