@@ -64,5 +64,6 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
   await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?')
     .bind(session.user.id, session.tokenHash)
     .run()
-  return json({ ok: true })
+  // 生效时间必须由服务端给：前端 new Date() 在别的时区会显示成另一个时间
+  return json({ ok: true, updatedAt: new Date().toISOString() })
 })

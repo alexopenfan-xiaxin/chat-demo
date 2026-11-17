@@ -668,6 +668,21 @@
   font-size: 13px;
 }
 
+/* 浏览器 autofill 不触发 React 的 onChange：靠这条动画让组件收到一次事件，把 DOM 值同步回 state */
+@keyframes onAutoFillStart {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.input:-webkit-autofill {
+  animation-name: onAutoFillStart;
+  animation-duration: 1ms;
+}
+
 /* ---------- 动效 ---------- */
 
 @keyframes spin {
@@ -796,4 +811,96 @@
     border-top-color: transparent;
     opacity: 0.7;
   }
+}
+
+/* ---- 改密码 / 重置密码表单（§14）----
+   放在弹窗里，所以不沿用登录页那套 60px 高的 .cta，改成 44px */
+
+.passwordForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.passwordSubmit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 4096px;
+  background: var(--auth-brand);
+  color: var(--auth-cta-fg);
+  font: 500 14px/20px var(--dsw-font-family);
+  cursor: pointer;
+  transition: background 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.passwordSubmit:hover {
+  background: var(--auth-brand-hover);
+}
+
+.passwordSubmit:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--auth-brand) 28%, transparent);
+}
+
+.passwordSubmit[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.passwordFormError {
+  color: var(--dsw-alias-state-error-primary);
+  font: 400 13px/20px var(--dsw-font-family);
+}
+
+/* 深色下 state-error-primary 压底色只有 4.24:1，正文提亮（与输入框错误同一条规矩） */
+:global([data-ds-dark-theme]) .passwordFormError {
+  color: rgb(255, 120, 120);
+}
+
+/* 成功态停在原地，不自动跳走：这是不可撤销的操作，用户要能确认结果 */
+.passwordSuccess {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 8px;
+  text-align: center;
+}
+
+.passwordSuccessIcon {
+  color: var(--dsw-static-green-500);
+}
+
+.passwordSuccessTitle {
+  color: var(--dsw-alias-label-primary);
+  font: 600 16px/24px var(--dsw-font-family);
+}
+
+.passwordSuccessTime {
+  color: var(--dsw-alias-label-tertiary);
+  font: 400 13px/20px var(--dsw-font-family);
+}
+
+.passwordDone {
+  margin-top: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--auth-ghost-border);
+  border-radius: 4096px;
+  background: transparent;
+  color: var(--auth-ghost-text);
+  font: 500 13px/20px var(--dsw-font-family);
+  cursor: pointer;
+}
+
+.passwordDone:hover {
+  border-color: var(--auth-ghost-border-hover);
+  background: var(--auth-ghost-fill-hover);
 }

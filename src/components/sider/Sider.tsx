@@ -6,7 +6,8 @@ import { setSiderCollapsed } from '../../services/settings.js'
 import { groupSessions } from '../../services/chat/sessionGroups.js'
 import { newChat, removeSession, useChatStore } from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
-import type { AuthUser } from '../../services/auth.js'
+import { changePassword, type AuthUser } from '../../services/auth.js'
+import { PasswordForm } from '../auth/PasswordForm.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
 import { Modal } from '../base/Modal.js'
@@ -15,6 +16,13 @@ import { openSettings } from '../settings/settingsDialogState.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
 import styles from './Sider.module.css'
+
+const IconKey16 = () => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+    <circle cx="5.6" cy="10.4" r="2.6" stroke="currentColor" strokeWidth="1.3" />
+    <path d="m7.5 8.5 5-5M10.4 3.6l1.6 1.6M12.1 1.9l1.6 1.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+)
 
 const IconSignOut16 = () => (
   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
@@ -44,6 +52,7 @@ export const Sider = ({
   const [now, setNow] = useState(Date.now)
   const groups = useMemo(() => groupSessions(sessions, now, t), [sessions, now, t])
   const [deleting, setDeleting] = useState<SessionSummary | null>(null)
+  const [changingPassword, setChangingPassword] = useState(false)
   const [deletePending, setDeletePending] = useState(false)
 
   useEffect(() => {
@@ -116,6 +125,12 @@ export const Sider = ({
         <span className={styles.accountEmail} title={user.email}>
           {user.email}
         </span>
+        <button type="button" className={styles.passwordEntry} onClick={() => setChangingPassword(true)}>
+          <span className={styles.logoutIcon}>
+            <IconKey16 />
+          </span>
+          <span className={styles.logoutLabel}>{t('authPasswordMenu')}</span>
+        </button>
         <button type="button" className={styles.logout} onClick={onLogout}>
           <span className={styles.logoutIcon}>
             <IconSignOut16 />
@@ -131,6 +146,17 @@ export const Sider = ({
           <span className={styles.settingsLabel}>{t('settings')}</span>
         </button>
       </div>
+      {changingPassword ? (
+        <Modal title={t('authPasswordMenu')} closable onClose={() => setChangingPassword(false)}>
+          <PasswordForm
+            fields={['current', 'password', 'confirm']}
+            submitLabel={t('authPasswordSubmit')}
+            onSubmit={(values) => changePassword(values.current ?? '', values.password)}
+            doneActionLabel={t('authPasswordDone')}
+            onDoneAction={() => setChangingPassword(false)}
+          />
+        </Modal>
+      ) : null}
       {deleting ? (
         <Modal
           title={t('deleteSessionModalContentTitle')}

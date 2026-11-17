@@ -77,5 +77,5 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
     .bind(passwordHash, user.id)
     .run()
   await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run()
-  return json({ ok: true })
+  return json({ ok: true, updatedAt: new Date().toISOString() })
 })

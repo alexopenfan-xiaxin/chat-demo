@@ -132,11 +132,14 @@ export const requestResetCode = async (email: string, turnstileToken: string): P
 }
 
 /** 用邮箱验证码重置密码；成功后要重新登录，接口不会直接发会话 */
-export const resetPassword = async (email: string, code: string, password: string): Promise<void> => {
-  await post('reset', { email, code, password })
-}
+export const resetPassword = async (
+  email: string,
+  code: string,
+  password: string
+): Promise<{ updatedAt: string }> => post('reset', { email, code, password })
 
 /** 已登录状态下改密码；成功后会吊销其它设备上的会话 */
-export const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
-  await post('password', { currentPassword, newPassword })
-}
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<{ updatedAt: string }> => post('password', { currentPassword, newPassword })

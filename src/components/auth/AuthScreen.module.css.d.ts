@@ -48,5 +48,13 @@ declare const styles: {
   readonly "turnstileFailed": string;
   readonly "turnstileSkeleton": string;
   readonly "wordmark": string;
+  readonly "passwordForm": string;
+  readonly "passwordSubmit": string;
+  readonly "passwordFormError": string;
+  readonly "passwordSuccess": string;
+  readonly "passwordSuccessIcon": string;
+  readonly "passwordSuccessTitle": string;
+  readonly "passwordSuccessTime": string;
+  readonly "passwordDone": string;
 }
 export = styles;
