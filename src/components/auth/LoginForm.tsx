@@ -15,6 +15,8 @@ type LoginFormProps = {
   onRequestEmail: () => void
   /** 提交时以 DOM 值为准，兜住 autofill 不触发 onChange 的情况 */
   readEmail: () => string
+  /** 把 DOM 里读到的邮箱写回 state，避免重渲染丢值 */
+  commitEmail: (value?: string) => boolean
   onBlockedByTerms: () => void
   onAuthenticated: (user: AuthUser) => void
 }
@@ -27,6 +29,7 @@ export const LoginForm = ({
   onSwitch,
   onRequestEmail,
   readEmail,
+  commitEmail,
   onBlockedByTerms,
   onAuthenticated,
 }: LoginFormProps) => {
@@ -47,6 +50,7 @@ export const LoginForm = ({
       onRequestEmail()
       return
     }
+    commitEmail(emailValue)
     if (!accepted) {
       onBlockedByTerms()
       return

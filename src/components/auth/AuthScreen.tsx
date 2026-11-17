@@ -36,19 +36,25 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
     }
   }
 
-  const commitEmail = () => {
-    const value = email.trim()
+  /**
+   * 把当前邮箱落到 state。必须优先读 DOM：autofill 只写 DOM，state 还是空串；
+   * 而用户点勾选协议时 input 会 blur，那一刻 DOM 里的值还在，读它能补上 state，
+   * 后续重渲染才不会把 autofill 的值冲掉。
+   */
+  const commitEmail = (override?: string) => {
+    const value = (override ?? readEmail()).trim()
     if (!value) {
-      return
+      return false
     }
     if (!emailLooksValid(value)) {
       setEmailError(t('authEmailInvalid'))
       emailRef.current?.focus()
-      return
+      return false
     }
     setEmail(value)
     setEmailError(null)
     setEditingEmail(false)
+    return true
   }
 
   const requestEmail = () => {
@@ -88,7 +94,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
               placeholder={t('authEmailPlaceholder')}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              onBlur={commitEmail}
+              onBlur={() => commitEmail()}
               onAnimationStart={syncFromAutofill}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -122,6 +128,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
             onSwitch={() => setMode('register')}
             onRequestEmail={requestEmail}
             readEmail={readEmail}
+            commitEmail={commitEmail}
             onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
             onAuthenticated={onAuthenticated}
           />
@@ -133,6 +140,7 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
             onSwitch={() => setMode('login')}
             onRequestEmail={requestEmail}
             readEmail={readEmail}
+            commitEmail={commitEmail}
             onBlockedByTerms={() => setTermsFlash((value) => value + 1)}
             onAuthenticated={onAuthenticated}
           />
