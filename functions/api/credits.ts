@@ -10,6 +10,16 @@ import { currentUser, guarded, json, type Env } from '../../server/auth-core'
  * 关键点：`limit: null` 同时表示「不限额」和「上游 credits 段坏了」（issue #450），
  * 前端猜不出来，所以由这里显式给 `unlimited`，取值来自这把 key 的配置而不是 null 推断。
  */
+/*
+ * ⚠️ 单用户假设（TODO：第二个用户注册前必须改掉）
+ *
+ * 现在所有用户共用同一把上游 key，`unlimited` 也来自全局配置 UPSTREAM_KEY_UNLIMITED。
+ * 这只有在「全站只有一个用户」时才成立：第二个用户注册后，他会看到第一个用户的用量，
+ * 而 unlimited 也会把所有人的账号都说成不限额。
+ *
+ * 多 key 落地时要换掉两处：下面取 key 的地方改成查 D1 里该用户自己的 key，
+ * unlimited 改成读那把 key 的 quota_credit 是否为 0。响应形状不用动。
+ */
 type CreditEnv = Env & {
   /** 上游网关地址，默认与聊天链路同一个 */
   UPSTREAM_BASE?: string
