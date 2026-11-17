@@ -1,4 +1,4 @@
-import { guarded, json, type Env } from '../../../server/auth-core'
+import { currentUser, guarded, json, type Env } from '../../../server/auth-core'
 
 /** POST /api/speech/asr：multipart 上传录音，直接调 Cloudflare 的 whisper */
 type SpeechEnv = Env & {
@@ -10,6 +10,9 @@ const MAX_BYTES = 8 * 1024 * 1024
 
 export const onRequestPost = guarded(async (context: { request: Request; env: SpeechEnv }) => {
   const { request, env } = context
+  if (!(await currentUser(request, env.DB))) {
+    return json({ error: '请先登录' }, 401)
+  }
   if (!env.AI) {
     return json({ error: '语音识别没有配置' }, 503)
   }

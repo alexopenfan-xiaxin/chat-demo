@@ -1,4 +1,4 @@
-import { guarded, json, type Env } from '../../../server/auth-core'
+import { currentUser, guarded, json, type Env } from '../../../server/auth-core'
 
 /**
  * POST /api/speech/tts
@@ -21,6 +21,10 @@ const MAX_TEXT = 5000
 
 export const onRequestPost = guarded(async (context: { request: Request; env: SpeechEnv }) => {
   const { request, env } = context
+  // 会话校验也在 guarded 里做：middleware 里抛异常会变成 Cloudflare 的裸 502
+  if (!(await currentUser(request, env.DB))) {
+    return json({ error: '请先登录' }, 401)
+  }
   if (!env.SPEECH_TTS_URL || !env.SPEECH_KEY) {
     return json({ error: '语音服务没有配置' }, 503)
   }
@@ -40,23 +44,25 @@ export const onRequestPost = guarded(async (context: { request: Request; env: Sp
   const voiceKey = typeof body.voice === 'string' ? body.voice.toLowerCase() : 'xiaoxiao'
   const upstream = VOICES[voiceKey] ?? VOICES.xiaoxiao
 
-  const response = await fetch(`${env.SPEECH_TTS_URL}/v1/audio/speech`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-ds-chat-speech': env.SPEECH_KEY,
-    },
-    body: JSON.stringify({ input: text, voice: upstream, response_format: 'mp3' }),
-  })
+  // 微软侧的 WebSocket 握手偶尔会失败，重试一次再放弃
+  const callUpstream = () =>
+    fetch(`${env.SPEECH_TTS_URL}/v1/audio/speech`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-ds-chat-speech': env.SPEECH_KEY as string,
+      },
+      body: JSON.stringify({ input: text, voice: upstream }),
+    })
 
-  if (!response.ok) {
-    // 上游的报错体可能很长，只记录状态码，别把内侧信息透给前端
-    return json({ error: '语音合成失败了' }, response.status === 429 ? 429 : 502)
-  }
-
-  const audio = await response.arrayBuffer()
+  let response = await callUpstream()
+  let audio = response.ok ? await response.arrayBuffer() : new ArrayBuffer(0)
   if (audio.byteLength === 0) {
-    return json({ error: '语音合成失败了' }, 502)
+    response = await callUpstream()
+    audio = response.ok ? await response.arrayBuffer() : new ArrayBuffer(0)
+  }
+  if (audio.byteLength === 0) {
+    return json({ error: '语音合成失败了，稍后再试' }, 503)
   }
   return new Response(audio, {
     status: 200,
