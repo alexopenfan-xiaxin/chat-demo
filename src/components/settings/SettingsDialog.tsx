@@ -291,7 +291,7 @@ const LocaleSetting = () => {
   )
 }
 
-/** 朗读音色：stella（海星，女声）/ tide（暗潮，男声） */
+/** 朗读音色：Edge TTS 的四个中文音色，男女各两个 */
 const TtsVoiceSetting = () => {
   const t = useTranslate()
   const ttsVoice = useSettings((state) => state.ttsVoice)
@@ -304,8 +304,10 @@ const TtsVoiceSetting = () => {
           ariaLabel={t('settingsTtsVoice')}
           value={ttsVoice}
           options={[
-            { value: 'stella', label: t('settingsTtsVoiceStella') },
-            { value: 'tide', label: t('settingsTtsVoiceTide') },
+            { value: 'xiaoxiao', label: t('settingsTtsVoiceXiaoxiao') },
+            { value: 'yunxi', label: t('settingsTtsVoiceYunxi') },
+            { value: 'xiaoyi', label: t('settingsTtsVoiceXiaoyi') },
+            { value: 'yunyang', label: t('settingsTtsVoiceYunyang') },
           ]}
           onChange={setTtsVoice}
         />

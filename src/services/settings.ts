@@ -90,8 +90,20 @@ const initialThemePreference = (): ThemePreference => {
   return saved === 'light' || saved === 'dark' ? saved : 'system'
 }
 
-/** 未保存过时使用服务端默认音色 stella（海星） */
-const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
+/** 老版本存的是 stella / tide，映射到 Edge TTS 的晓晓 / 云希，别让设置变空值 */
+const LEGACY_VOICES: Record<string, TtsVoice> = {
+  stella: 'xiaoxiao',
+  tide: 'yunxi',
+}
+
+const VOICE_IDS: TtsVoice[] = ['xiaoxiao', 'yunxi', 'xiaoyi', 'yunyang']
+
+/** 未保存过时用晓晓：语速断句最稳，长文朗读耐听 */
+const initialTtsVoice = (): TtsVoice => {
+  const saved = read(KEYS.ttsVoice) ?? ''
+  const migrated = LEGACY_VOICES[saved] ?? saved
+  return VOICE_IDS.includes(migrated as TtsVoice) ? (migrated as TtsVoice) : 'xiaoxiao'
+}
 
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
