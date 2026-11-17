@@ -75,7 +75,7 @@ export const Sider = ({
     <div className={clsx(styles.sider, mobile && styles.mobile)}>
       <div className={styles.top}>
         <div className={styles.titleRow}>
-          <BrandIcon size={24} />
+          <BrandIcon size={24} source="small" />
           <div className={styles.appName}>{t('appName')}</div>
         </div>
         <IconButton
