@@ -10,11 +10,14 @@ export type CreditSection = {
 export type CreditsSnapshot = {
   /** 不限额度：由后端判定，前端不靠 limit 是否为 null 去猜 */
   unlimited: boolean
+  /** null = 读不到或不可信（上游 credits 段坏掉时后端会清空），主数字显示 —— */
   credits: CreditSection | null
   tokens: CreditSection | null
-  dailyTokens: number | null
+  /** 上游 daily_tokens 是对象，不是数字 */
+  dailyTokens: CreditSection | null
   models: string[]
-  expiresAt: string | null
+  /** 原样透出：0 = 长期有效，null = 没给 */
+  expiresAt: string | number | null
   snapshotAt: string
 }
 
@@ -22,6 +25,10 @@ const num = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null
 
 const section = (value: unknown): CreditSection | null => {
+  const plain = num(value)
+  if (plain !== null) {
+    return { used: plain, limit: null, remaining: null }
+  }
   if (typeof value !== 'object' || value === null) {
     return null
   }
@@ -44,13 +51,14 @@ export const fetchCredits = async (apiKey?: string, signal?: AbortSignal): Promi
     throw new ApiError(response.status === 401 ? 'session' : 'http', `credits ${response.status}`, response.status)
   }
   const body = (await response.json()) as Record<string, unknown>
+  const expiresAt = body.expires_at
   return {
     unlimited: body.unlimited === true,
     credits: section(body.credits),
     tokens: section(body.tokens),
-    dailyTokens: num(body.daily_tokens),
+    dailyTokens: section(body.daily_tokens),
     models: Array.isArray(body.models) ? body.models.filter((m): m is string => typeof m === 'string') : [],
-    expiresAt: typeof body.expires_at === 'string' ? body.expires_at : null,
+    expiresAt: typeof expiresAt === 'number' || typeof expiresAt === 'string' ? expiresAt : null,
     snapshotAt: typeof body.snapshot_at === 'string' ? body.snapshot_at : new Date().toISOString(),
   }
 }

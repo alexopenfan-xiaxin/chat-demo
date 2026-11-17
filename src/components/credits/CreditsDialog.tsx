@@ -37,13 +37,15 @@ const relativeTime = (iso: string, now: number) => {
   return new Date(time).toLocaleString()
 }
 
-const formatDate = (iso: string | null) => {
-  if (!iso) {
+/** 到期时间：0 与 null 都算「长期有效」，数字按 unix 秒/毫秒区分 */
+const formatDate = (value: string | number | null) => {
+  if (value === null || value === 0 || value === '') {
     return null
   }
-  const time = Date.parse(iso)
+  const time =
+    typeof value === 'number' ? (value < 1e12 ? value * 1000 : value) : Date.parse(value)
   if (!Number.isFinite(time)) {
-    return iso
+    return null
   }
   return new Date(time).toLocaleDateString()
 }
@@ -101,8 +103,8 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const mainText = mainValue === null ? '——' : formatCredits(mainValue)
   const mainUnit = unlimited ? t('creditsUnitUsed') : t('creditsUnitRemaining')
 
-  // 上游没给 daily_tokens 时不能拿累计值冒充「今日」，换标签
-  const todayTokens = snapshot?.dailyTokens ?? null
+  // 上游没给 daily_tokens（或段内没有 used）时不能拿累计值冒充「今日」，换标签
+  const todayTokens = snapshot?.dailyTokens?.used ?? null
   const totalTokens = snapshot?.tokens?.used ?? null
   const expires = formatDate(snapshot?.expiresAt ?? null)
   const snapshotText = snapshot ? relativeTime(snapshot.snapshotAt, now) : ''
