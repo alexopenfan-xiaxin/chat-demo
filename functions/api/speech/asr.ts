@@ -31,7 +31,12 @@ export const onRequestPost = guarded(async (context: { request: Request; env: Sp
   }
 
   const bytes = new Int8Array(await file.arrayBuffer())
-  const result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio: Array.from(bytes) })
+  let result: { text?: string }
+  try {
+    result = await env.AI.run('@cf/openai/whisper-large-v3-turbo', { audio: Array.from(bytes) })
+  } catch (error) {
+    return json({ error: 'asr failed', detail: String(error).slice(0, 300) }, 500)
+  }
   const text = typeof result?.text === 'string' ? result.text.trim() : ''
   return json({ text })
 })
