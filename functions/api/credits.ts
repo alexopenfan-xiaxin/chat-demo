@@ -1,4 +1,5 @@
 import { SESSION_COOKIE, currentUser, guarded, json, readCookie, type Env } from '../../server/auth-core'
+import { decryptSecret } from '../../server/keybox'
 import { listPanelKeys, pickPanelKey } from '../../server/panel'
 
 /**
@@ -48,6 +49,8 @@ type CreditEnv = Env & {
   PANEL_ADMIN_USER?: string
   PANEL_ADMIN_PASSWORD?: string
   PANEL_KEY_NAME?: string
+  /** 用户 key 的 AES-GCM 主密钥 */
+  KEY_ENC_SECRET?: string
 }
 
 type UsageSection = { used?: number | null; limit?: number | null; remaining?: number | null }
@@ -178,9 +181,28 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
 
   // 走隧道域名，不碰裸 IP：Worker 直接 fetch 43.226.46.73 会被 Cloudflare 挡成 1003
   const base = (env.UPSTREAM_BASE ?? 'https://api-ds-chat.openfan.dpdns.org').replace(/\/+$/, '')
-  // 优先用服务端配置的 key（多 key 方案落地后就是查 D1）；
-  // 还没配置时退回到「用户自己在设置里填的那把」，只用于查额度，不留存、不写日志
-  const key = env.UPSTREAM_USAGE_KEY ?? request.headers.get('x-usage-key') ?? ''
+
+  // 每个用户查自己的那把 key。key 只在服务端解密，浏览器全程接触不到。
+  const stored = await env.DB.prepare(
+    'SELECT upstream_key_enc AS enc, upstream_key_quota AS quota FROM users WHERE id = ?'
+  )
+    .bind(user.user.id)
+    .first<{ enc: string | null; quota: number | null }>()
+  let key = ''
+  // quota_credit 为 0（或没记）就是面板语义里的「不限额」
+  let unlimited = env.UPSTREAM_KEY_UNLIMITED === '1'
+  if (stored?.enc && env.KEY_ENC_SECRET) {
+    const plain = await decryptSecret(stored.enc, env.KEY_ENC_SECRET)
+    if (plain) {
+      key = plain
+      unlimited = !(typeof stored.quota === 'number' && stored.quota > 0)
+    }
+  }
+  // 兜底：多 key 上线前就存在的老账号还没绑 key（面板 id 16 那把），继续用环境里那把，
+  // 新注册的用户一律走上面自己的 key，不会再落到这里。
+  if (!key) {
+    key = env.UPSTREAM_USAGE_KEY ?? ''
+  }
   if (!key) {
     return json({ error: '额度服务没有配置' }, 503)
   }
@@ -202,7 +224,7 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
   }
 
   const raw = (await response.json()) as UpstreamUsage
-  const snapshot = parseUsage(raw, env.UPSTREAM_KEY_UNLIMITED === '1')
+  const snapshot = parseUsage(raw, unlimited)
 
   // /v1/usage 的 credits 段没接 quota_credit（issue #450），判为不可信时去面板
   // /api/keys 按 key 名补一次真实 used_credit；面板也读不到就照旧显示「读不到」，不编数。

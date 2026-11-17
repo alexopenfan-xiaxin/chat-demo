@@ -2,6 +2,8 @@ import {
   guarded, MAX_CODE_ATTEMPTS, bad, clientIp, hashPassword, json, normalizeEmail, passwordProblem,
   pbkdf2Iterations, safeEqual, sessionCookie, sha256Hex, startSession, takeRateLimit, type Env,
 } from '../../../server/auth-core'
+import { encryptSecret } from '../../../server/keybox'
+import { createUpstreamKey } from '../../../server/panel'
 
 /** POST /api/auth/register：用邮箱验证码 + 密码建号，直接登录 */
 export const onRequestPost = guarded(async (context: { request: Request; env: Env }) => {
@@ -66,11 +68,32 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
   }
   const id = crypto.randomUUID()
   const passwordHash = await hashPassword(password, pbkdf2Iterations(env))
+
+  // 先签会话：拿它做面板 /api/* 的门禁票。user 行还没写，但 sessions 不依赖外键。
+  const token = await startSession(env.DB, id, request)
+  const keyEnv = env as Env & {
+    UPSTREAM_BASE?: string
+    PANEL_ADMIN_USER?: string
+    PANEL_ADMIN_PASSWORD?: string
+    KEY_ENC_SECRET?: string
+  }
+  const encSecret = keyEnv.KEY_ENC_SECRET
+  if (!encSecret) {
+    await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256Hex(token)).run()
+    return bad('注册暂时不可用，稍后再试', 503)
+  }
+  // 建这把用户的 key：失败就不建号，免得出一个没有额度、聊不了天的账号
+  const created = await createUpstreamKey(keyEnv, token, email)
+  if (!created) {
+    await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256Hex(token)).run()
+    return bad('开通额度失败，稍后再试', 503)
+  }
+  const encrypted = await encryptSecret(created.key, encSecret)
   try {
     await env.DB.prepare(
-      'INSERT INTO users (id, email, password_hash, created_at, email_verified, failed_attempts, locked_until) VALUES (?, ?, ?, ?, 1, 0, 0)'
+      'INSERT INTO users (id, email, password_hash, created_at, email_verified, failed_attempts, locked_until, upstream_key_enc, upstream_key_name, upstream_key_prefix, upstream_key_quota) VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?, ?, ?)'
     )
-      .bind(id, email, passwordHash, now)
+      .bind(id, email, passwordHash, now, encrypted, created.name, created.key.slice(0, 11), created.quota)
       .run()
   } catch (error) {
     // users.email 有 UNIQUE：并发两个请求都能通过上面的存在性检查，让后到的那一个
@@ -81,6 +104,5 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
     }
     throw error
   }
-  const token = await startSession(env.DB, id, request)
   return json({ user: { id, email }, token }, 200, { 'set-cookie': sessionCookie(token) })
 })

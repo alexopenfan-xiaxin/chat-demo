@@ -2,6 +2,7 @@ import {
 INTERNAL_HEADER, bad, bearerToken, findSession, json, safeEqual, takeRateLimit,
   type Env,
 } from '../../../server/auth-core'
+import { decryptSecret } from '../../../server/keybox'
 
 /**
  * POST /api/auth/introspect：给本机 proxy 验 Bearer 用。
@@ -29,5 +30,21 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
   if (!session) {
     return json({ active: false }, 401)
   }
-  return json({ active: true, user: session.user, expiresAt: session.expiresAt })
+  // proxy 拿到这把 key 才能按用户转发聊天请求；明文只在这条带共享内部密钥的调用上下发，
+  // 不经过浏览器，也不进任何响应缓存
+  const secretEnv = env as Env & { KEY_ENC_SECRET?: string; UPSTREAM_USAGE_KEY?: string }
+  const row = await env.DB.prepare(
+    'SELECT upstream_key_enc AS enc FROM users WHERE id = ?'
+  )
+    .bind(session.user.id)
+    .first<{ enc: string | null }>()
+  let upstreamKey = ''
+  if (row?.enc && secretEnv.KEY_ENC_SECRET) {
+    upstreamKey = (await decryptSecret(row.enc, secretEnv.KEY_ENC_SECRET)) ?? ''
+  }
+  // 老账号还没绑 key 时继续用环境里那把（面板 id 16），新用户都走自己的 key
+  if (!upstreamKey) {
+    upstreamKey = secretEnv.UPSTREAM_USAGE_KEY ?? ''
+  }
+  return json({ active: true, user: session.user, expiresAt: session.expiresAt, upstreamKey })
 }

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { fetchCredits, type CreditsSnapshot } from '../../services/api/credits.js'
 import { loadConversationUsage, type ConversationUsage } from '../../services/credits/usageStats.js'
-import { useSettings } from '../../services/settings.js'
 import { Modal } from '../base/Modal.js'
 import { IconChevronDownOutline14, IconRefreshOutline16 } from '../base/icons.js'
 import styles from './CreditsDialog.module.css'
@@ -66,8 +65,7 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const load = useCallback(async (fresh = false) => {
     setRefreshing(true)
     try {
-      // 服务端配了统一 key 就用它；没配时带上用户自己在设置里填的那把，只用于查额度
-      const next = await fetchCredits(useSettings.getState().apiKey ?? undefined, undefined, fresh)
+      const next = await fetchCredits(undefined, fresh)
       setSnapshot(next)
       // 「不限额」比「积分读不到」重要：只要知道账号不限额度，页面就不该整块变成读不到
       setStatus(next.unlimited || next.credits ? 'ready' : 'unavailable')

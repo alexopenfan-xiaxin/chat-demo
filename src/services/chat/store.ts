@@ -56,8 +56,37 @@ const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
   return tools
 }
 
-/** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
-const titleRequests = new Set<AbortController>()
+/**
+ * 会话标题本地生成：上游的 `title` 事件从来没有出现过，指望它等于让侧栏永远显示「新对话」。
+ *
+ * 规则：先把换行和连续空白压成一个空格，中文按 24 字截，英文按词截到 40 字符，
+ * 截断处落在半个词或标点上就清掉。只写一次——`session.title` 有值时不再覆盖，
+ * 所以用户手动改过的名字不会在下一轮被改回去。
+ */
+const TITLE_CJK_LIMIT = 24
+const TITLE_LATIN_LIMIT = 40
+const hasCjk = (text: string) => /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(text)
+
+export const deriveTitle = (text: string): string => {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  if (!flat) {
+    return ''
+  }
+  let title: string
+  if (hasCjk(flat)) {
+    const chars = [...flat]
+    title = chars.length > TITLE_CJK_LIMIT ? `${chars.slice(0, TITLE_CJK_LIMIT).join('')}…` : flat
+  } else if (flat.length > TITLE_LATIN_LIMIT) {
+    // 英文按词截：切到最后一个完整词，别留半个单词
+    const cut = flat.slice(0, TITLE_LATIN_LIMIT)
+    const boundary = cut.lastIndexOf(' ')
+    title = `${(boundary > TITLE_LATIN_LIMIT / 2 ? cut.slice(0, boundary) : cut).trimEnd()}…`
+  } else {
+    title = flat
+  }
+  // 末尾标点（含截断前留下的逗号句号）统一清掉，再补省略号
+  return title.replace(/[\s,.;:!?，。；：！？、·\-—]+(…)?$/u, (_, dots?: string) => (dots ? '…' : ''))
+}
 
 type ChatState = {
   ready: boolean
@@ -462,7 +491,8 @@ export const renameSession = (id: string, title: string) => {
   }
   const controller = getStreamController(id)
   if (controller) {
-    titleRequests.delete(controller)
+    // 手动重命名优先级最高，本地标题本来就只在空标题时写一次
+    void controller
   }
   if (getSession(id)) {
     updateSession(id, (session) => ({ ...session, title }))
@@ -601,6 +631,8 @@ export const sendMessage = (targetSessionId: string | null) => {
   const reply = createReply()
   updateSession(sessionId, (session) => ({
     ...appendBranch(session, history.at(-1)?.id ?? null, [question, reply]),
+    // 只在还没有标题时写一次，用户改过的名字不会被覆盖
+    title: session.title || deriveTitle(text),
     updatedAt: now,
   }))
   if (files.length > 0) {
@@ -961,9 +993,6 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
  */
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
   const controller = new AbortController()
-  if (!getSession(sessionId)?.title) {
-    titleRequests.add(controller)
-  }
   set((state) => ({ streaming: { ...state.streaming, [sessionId]: controller } }))
   let reply = initial
   let frame = 0
@@ -1005,25 +1034,12 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
             safety_check: SAFETY_CHECK,
             tools: serverTools(initial.search ?? false),
-            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
           },
           controller.signal
         )
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'
-          if (
-            event.type === 'message_delta' &&
-            (event.delta.stop_reason === 'end_turn' || event.delta.stop_reason === 'max_tokens') &&
-            event.delta.title?.trim() &&
-            titleRequests.has(controller) &&
-            !controller.signal.aborted &&
-            !get().importingHistory
-          ) {
-            const title = event.delta.title.trim()
-            updateSession(sessionId, (session) => (session.title ? session : { ...session, title }))
-            titleRequests.delete(controller)
-          }
           reply = applyEvent(reply, event, Date.now(), blockIndexes)
           if (document.visibilityState === 'hidden') {
             flush()
@@ -1080,7 +1096,6 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       }
     }
   } finally {
-    titleRequests.delete(controller)
     streamFlushes.delete(sessionId)
     cancelAnimationFrame(frame)
     updateReply(sessionId, reply)

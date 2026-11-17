@@ -156,3 +156,90 @@ export const pickPanelKey = (keys: PanelKey[], env: PanelEnv): PanelKey | null =
   const candidates = keys.filter((key) => key.name.startsWith('ds-chat'))
   return candidates.length === 1 ? candidates[0] : null
 }
+
+/** 首赠额度（积分）。用户拍板 10，改这一个常量即可。 */
+export const SIGNUP_CREDIT_QUOTA = 10
+
+const KEY_MODELS = ['deepseek-v4.1-flash']
+const KEY_IP_ALLOWLIST = ['43.143.237.221']
+
+/**
+ * key 名：`ds-chat-` + 邮箱哈希的 4 位 base36。
+ * 用哈希而不是邮箱片段，是为了名字里不带个人信息，又能对同一个邮箱稳定复现。
+ */
+export const keyNameFor = async (email: string): Promise<string> => {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(email)))
+  let value = 0
+  for (const byte of digest.slice(0, 6)) {
+    value = value * 256 + byte
+  }
+  // 36^4 = 1679616，够小也够分辨
+  const suffix = (value % 1679616).toString(36).padStart(4, '0')
+  return `ds-chat-${suffix}`
+}
+
+export type CreatedKey = { name: string; key: string; quota: number }
+
+/**
+ * 注册时建一把属于这个用户的上游 key。
+ *
+ * `quota_credit` 是首赠积分；注意面板里 `quota_credit: 0` 表示**不限额**，不是零额度，
+ * 所以赠送额度绝不能是 0。`models` 只给 flash，`max_ips` 限死 1，来源 IP 固定本机出口。
+ */
+export const createUpstreamKey = async (
+  env: PanelEnv,
+  cookieToken: string,
+  email: string
+): Promise<CreatedKey | null> => {
+  const cookie = await panelCookie(env, cookieToken)
+  if (!cookie) {
+    return null
+  }
+  const name = await keyNameFor(email)
+  const body = {
+    name,
+    quota_credit: SIGNUP_CREDIT_QUOTA,
+    models: KEY_MODELS,
+    max_ips: 1,
+    ip_allowlist: KEY_IP_ALLOWLIST,
+  }
+  const post = async (session: string) =>
+    fetch(`${panelBase(env)}/api/keys`, {
+      method: 'POST',
+      headers: {
+        cookie: session,
+        'content-type': 'application/json',
+        'x-ds-chat-auth': cookieToken,
+      },
+      body: JSON.stringify(body),
+    })
+
+  let response = await post(cookie)
+  if (response.status === 401 || response.status === 403) {
+    const refreshed = await panelCookie(env, cookieToken, true)
+    if (!refreshed) {
+      return null
+    }
+    response = await post(refreshed)
+  }
+  if (!response.ok) {
+    return null
+  }
+  const payload = (await response.json()) as unknown
+  const record =
+    typeof payload === 'object' && payload !== null && typeof (payload as { key?: unknown }).key === 'object'
+      ? ((payload as { key: Record<string, unknown> }).key)
+      : (payload as Record<string, unknown>)
+  const plain =
+    typeof record?.key === 'string'
+      ? record.key
+      : typeof record?.value === 'string'
+        ? record.value
+        : typeof record?.plaintext === 'string'
+          ? record.plaintext
+          : null
+  if (!plain) {
+    return null
+  }
+  return { name: typeof record.name === 'string' ? record.name : name, key: plain, quota: SIGNUP_CREDIT_QUOTA }
+}
