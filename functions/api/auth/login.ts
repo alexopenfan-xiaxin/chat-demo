@@ -9,6 +9,15 @@ const LOCK_SECONDS = 900
 
 /** POST /api/auth/login：邮箱 + 密码登录，带失败次数锁定 */
 export const onRequestPost = async (context: { request: Request; env: Env }) => {
+  try {
+    return await handle(context)
+  } catch (error) {
+    // 临时诊断：把真实异常带出来
+    return new Response(JSON.stringify({ debug: String(error), stack: (error as Error)?.stack?.split('\n').slice(0, 4) }), { status: 500, headers: { 'content-type': 'application/json' } })
+  }
+}
+
+const handle = async (context: { request: Request; env: Env }) => {
   const { request, env } = context
   const ip = clientIp(request)
   let body: { email?: unknown; password?: unknown }
