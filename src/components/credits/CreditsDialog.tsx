@@ -3,7 +3,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { fetchCredits, type CreditsSnapshot } from '../../services/api/credits.js'
 import { useSettings } from '../../services/settings.js'
 import { Modal } from '../base/Modal.js'
-import { IconRefreshOutline16 } from '../base/icons.js'
+import { IconChevronDownOutline14, IconRefreshOutline16 } from '../base/icons.js'
 import styles from './CreditsDialog.module.css'
 
 /** 一位小数（积分口径），整数时不留 .0 */
@@ -163,7 +163,10 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
 
         {snapshot ? (
           <details className={styles.details}>
-            <summary>{t('creditsDetails')}</summary>
+            <summary>
+              {t('creditsDetails')}
+              <IconChevronDownOutline14 />
+            </summary>
             {snapshot.models.length > 0 ? (
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>{t('creditsModels')}</span>

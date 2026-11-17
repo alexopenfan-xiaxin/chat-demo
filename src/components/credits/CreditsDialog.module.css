@@ -21,7 +21,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 32px;
+  /* 收紧成一行，别在标题下再撑出一个空块 */
+  min-height: 20px;
+  margin-top: -10px;
 }
 
 .snapshot {
@@ -35,8 +37,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
   border-radius: 10px;
@@ -147,15 +149,27 @@
 
 .details {
   margin-top: 18px;
+  margin-bottom: -4px;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .details summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   cursor: pointer;
   list-style: none;
   color: var(--dsw-alias-label-secondary);
+}
+
+.details summary svg {
+  transition: transform 160ms var(--ds-ease-in-out);
+}
+
+.details[open] summary svg {
+  transform: rotate(180deg);
 }
 
 .details summary::-webkit-details-marker {

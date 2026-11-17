@@ -67,9 +67,15 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
     return json({ error: '额度服务没有配置' }, 503)
   }
 
-  const response = await fetch(`${base}/v1/usage`, {
-    headers: { authorization: `Bearer ${key}`, 'cache-control': 'no-store' },
-  })
+  let response: Response
+  try {
+    response = await fetch(`${base}/v1/usage`, {
+      headers: { authorization: `Bearer ${key}`, 'cache-control': 'no-store' },
+    })
+  } catch (error) {
+    // 临时诊断：确认是「Cloudflare 到不了上游」还是别的
+    return json({ error: '额度暂时读不到', detail: `fetch: ${String(error).slice(0, 160)}` }, 503)
+  }
   if (!response.ok) {
     // 用 503 而不是 502：Pages Functions 返回 502 时 Cloudflare 会用自家的错误页
     // 覆盖 body，前端就拿不到我们写的 JSON 了
