@@ -65,18 +65,50 @@ const login = async (
   return cookies.length > 0 ? cookies.join('; ') : null
 }
 
+/**
+ * 面板管理员会话缓存。
+ *
+ * 登录 + 拉列表是两次往返，加起来七八秒；而这是一把管理员会话，跟具体用户无关，
+ * 所以按「面板会话」缓存 5 分钟，不是按用户缓存 cookie——这里绝不能让 A 的请求
+ * 复用成 B 的身份，因为共用的一直是同一个管理员会话，谁查都在服务端这一侧。
+ *
+ * 存 isolate 内存里，不做持久化：进程换了重新登录一次，代价只是多两秒。
+ */
+let panelSession: { cookie: string; at: number } | null = null
+const PANEL_SESSION_TTL_MS = 5 * 60 * 1000
+
+const panelCookie = async (env: PanelEnv, cookieToken: string, force = false): Promise<string | null> => {
+  if (!force && panelSession && Date.now() - panelSession.at < PANEL_SESSION_TTL_MS) {
+    return panelSession.cookie
+  }
+  const cookie = await login(env, cookieToken)
+  panelSession = cookie ? { cookie, at: Date.now() } : null
+  return cookie
+}
+
 /** 面板给的 key 列表；字段名两种写法都认，认不出就当没有 */
 export const listPanelKeys = async (
   env: PanelEnv,
   cookieToken: string
 ): Promise<PanelKey[]> => {
-  const cookie = await login(env, cookieToken)
+  const fetchKeys = async (cookie: string) =>
+    fetch(`${panelBase(env)}/api/keys`, {
+      headers: { cookie, 'x-ds-chat-auth': cookieToken, 'cache-control': 'no-store' },
+    })
+
+  const cookie = await panelCookie(env, cookieToken)
   if (!cookie) {
     return []
   }
-  const response = await fetch(`${panelBase(env)}/api/keys`, {
-    headers: { cookie, 'x-ds-chat-auth': cookieToken, 'cache-control': 'no-store' },
-  })
+  let response = await fetchKeys(cookie)
+  // 会话过期就丢掉重登一次；别让一条失效 cookie 卡住 5 分钟
+  if (response.status === 401 || response.status === 403) {
+    const refreshed = await panelCookie(env, cookieToken, true)
+    if (!refreshed) {
+      return []
+    }
+    response = await fetchKeys(refreshed)
+  }
   if (!response.ok) {
     return []
   }
