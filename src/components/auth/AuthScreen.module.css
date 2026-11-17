@@ -110,13 +110,6 @@
 }
 
 /* 旧的「把表单推到页面底部」撑高块已废弃：它正是 Step1 中间那个空洞 */
-/* 表单吃满剩余高度，协议行用 margin-top:auto 贴到页面下边缘 */
-.content > form {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-}
-
 .spacer {
   flex: none;
   min-height: 0;
@@ -440,13 +433,13 @@
 .forgot {
   display: block;
   width: 100%;
-  margin: 12px auto 0;
-  padding: 6px 8px;
+  margin: 16px auto 0;
+  padding: 4px 8px;
   border: none;
   border-radius: 8px;
   background: none;
   text-align: center;
-  color: var(--dsw-alias-label-primary);
+  color: var(--auth-subline);
   font: inherit;
   font-size: 13px;
   line-height: 20px;
@@ -464,7 +457,7 @@
 }
 
 .termsCompact {
-  margin-top: auto;
+  margin-top: 32px;
 }
 
 .terms {
@@ -472,9 +465,10 @@
   /* 勾选圆和 13px 文字的基线对齐，圆不再偏上 */
   align-items: center;
   gap: 8px;
-  /* 页面下边缘要有个东西收住，否则内容太少时下半屏是空的 */
-  margin-top: auto;
-  padding: 12px 0 calc(20px + env(safe-area-inset-bottom));
+  /* 跟内容走，不贴底：Step1 只有一框两按钮，贴底会让页面裂成两块。
+     矮屏（≤720px 高）例外——那里内容本来就贴到边上，贴底反而收得干净。 */
+  margin-top: 32px;
+  padding: 12px 0 calc(24px + env(safe-area-inset-bottom));
   font-size: 13px;
   line-height: 19px;
   color: #4a4a4a;
@@ -484,8 +478,8 @@
 [data-ds-dark-theme] .forgot {
   display: block;
   width: 100%;
-  margin: 12px auto 0;
-  padding: 6px 8px;
+  margin: 16px auto 0;
+  padding: 4px 8px;
   border: none;
   border-radius: 8px;
   background: none;
@@ -857,6 +851,20 @@
   .otpCell {
     width: 40px;
     height: 44px;
+  }
+}
+
+@media (max-height: 720px) {
+  /* 矮屏才贴底：表单接住剩余高度，协议行用 auto 落到下边缘 */
+  .content > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+  }
+
+  .terms,
+  .termsCompact {
+    margin-top: auto;
   }
 }
 

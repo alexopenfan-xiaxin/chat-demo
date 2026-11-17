@@ -51,8 +51,14 @@ const write = (key: string, value: string | null) => {
 }
 
 /** 位置选择模式跟随浏览器语言，与应用内选择的界面语言无关。 */
-export const isChineseBrowser = (): boolean =>
-  (typeof navigator === 'undefined' ? 'zh' : navigator.language).toLowerCase().startsWith('zh')
+export const isChineseBrowser = (): boolean => {
+  // 取不到浏览器语言时按中文处理：这是中文产品的默认面
+  const lang = typeof navigator === 'undefined' ? '' : (navigator.language || '')
+  if (!lang) {
+    return true
+  }
+  return lang.toLowerCase().startsWith('zh')
+}
 
 const initialLocale = (): Locale => {
   const saved = read(KEYS.locale)

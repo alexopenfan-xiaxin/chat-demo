@@ -114,13 +114,13 @@ export const LoginForm = ({
         {submitting ? t('authLoggingIn') : t('authLoginSubmit')}
       </button>
 
-      {/* 忘记密码贴着主按钮：它跟「登录」是同一件事的两个分支，不该飘到协议行旁边 */}
-      <button type="button" className={styles.forgot} onClick={onForgot}>
-        {t('authForgot')}
-      </button>
-
       <button type="button" className={styles.ghost} onClick={onSwitch}>
         {t('authGoRegister')}
+      </button>
+
+      {/* 顺序：主操作 → 平级备选 → 找回密码；插在登录和注册之间会把那组平级选择劈开 */}
+      <button type="button" className={styles.forgot} onClick={onForgot}>
+        {t('authForgot')}
       </button>
 
       <TermsRow accepted={accepted} onChange={onAccept} flashToken={termsFlash} compact />
