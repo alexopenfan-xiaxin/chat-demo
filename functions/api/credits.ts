@@ -72,6 +72,15 @@ export type UsageSnapshot = {
   snapshotAt: string
 }
 
+/**
+ * 缓存时长。这条链路走 隧道 → 本机 proxy（查 D1 做会话 introspect）→ 上游，实测 7 秒，
+ * 用户每点一次额度都要盯着空白看七秒。额度本来就不需要秒级刷新，
+ * 所以命中缓存直接返回上一次结果；刷新按钮带 `fresh=1` 打真实请求。
+ *
+ * 只缓存成功响应：上游 401/503 不写缓存，否则「读不到」会被钉住 30 秒。
+ */
+const CREDITS_CACHE_SECONDS = 30
+
 const num = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null
 
@@ -137,9 +146,31 @@ export const parseUsage = (raw: UpstreamUsage, unlimited: boolean): UsageSnapsho
 
 export const onRequestGet = guarded(async (context: { request: Request; env: CreditEnv }) => {
   const { request, env } = context
-  if (!(await currentUser(request, env.DB))) {
+  const user = await currentUser(request, env.DB)
+  if (!user) {
     return json({ error: '请先登录' }, 401)
   }
+  // 缓存按用户分键：换个人登录绝不能读到别人的额度
+  const cacheKey = new Request(`https://ds-chat.internal/api/credits/${encodeURIComponent(user.user.id)}`)
+  // 类型来自 DOM lib，没有 Workers 的 caches.default，这里自己窄化
+  const cache = typeof caches === 'object' ? (caches as unknown as { default?: Cache }).default : undefined
+  const fresh = new URL(request.url).searchParams.get('fresh') === '1'
+
+  if (cache && !fresh) {
+    const hit = await cache.match(cacheKey)
+    if (hit) {
+      return new Response(await hit.text(), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          // 给浏览器的仍是 no-store，30 秒只对服务端缓存生效
+          'cache-control': 'no-store',
+          'x-credits-cache': 'hit',
+        },
+      })
+    }
+  }
+
   // 走隧道域名，不碰裸 IP：Worker 直接 fetch 43.226.46.73 会被 Cloudflare 挡成 1003
   const base = (env.UPSTREAM_BASE ?? 'https://api-ds-chat.openfan.dpdns.org').replace(/\/+$/, '')
   // 优先用服务端配置的 key（多 key 方案落地后就是查 D1）；
@@ -168,7 +199,7 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
   const raw = (await response.json()) as UpstreamUsage
   const snapshot = parseUsage(raw, env.UPSTREAM_KEY_UNLIMITED === '1')
 
-  return json({
+  const payload = {
     unlimited: snapshot.unlimited,
     credits: snapshot.credits,
     credits_reliable: snapshot.creditsReliable,
@@ -177,5 +208,23 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
     models: snapshot.models,
     expires_at: snapshot.expiresAt,
     snapshot_at: snapshot.snapshotAt,
-  })
+  }
+
+  if (cache) {
+    const stored = new Response(JSON.stringify(payload), {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': `max-age=${CREDITS_CACHE_SECONDS}`,
+      },
+    })
+    try {
+      await cache.put(cacheKey, stored)
+    } catch (error) {
+      // 缓存写失败不影响本次结果，只是下次还得等 7 秒
+      // eslint-disable-next-line no-console
+      console.warn('credits cache put failed', error)
+    }
+  }
+
+  return json(payload)
 })

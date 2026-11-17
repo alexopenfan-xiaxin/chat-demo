@@ -60,11 +60,11 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const [usage, setUsage] = useState<ConversationUsage[]>([])
   const [now, setNow] = useState(() => Date.now())
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (fresh = false) => {
     setRefreshing(true)
     try {
       // 服务端配了统一 key 就用它；没配时带上用户自己在设置里填的那把，只用于查额度
-      const next = await fetchCredits(useSettings.getState().apiKey ?? undefined)
+      const next = await fetchCredits(useSettings.getState().apiKey ?? undefined, undefined, fresh)
       setSnapshot(next)
       setStatus(next.credits ? 'ready' : 'unavailable')
     } catch {
@@ -121,7 +121,8 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
             <button
               type="button"
               className={styles.refresh}
-              onClick={() => void load()}
+              // 刷新按钮绕过 30 秒缓存，直接读上游
+              onClick={() => void load(true)}
               aria-label={t('creditsRefresh')}
               disabled={refreshing}
             >
