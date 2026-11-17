@@ -148,7 +148,11 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
           <RegisterForm
             accepted={accepted}
             termsFlash={termsFlash}
-            onAccept={setAccepted}
+            onAccept={(next) => {
+              // 注册表单重渲染更频繁，autofill 的值同样要先从 DOM 落回 state
+              commitEmail()
+              setAccepted(next)
+            }}
             onSwitch={() => setMode('login')}
             onRequestEmail={requestEmail}
             readEmail={readEmail}
