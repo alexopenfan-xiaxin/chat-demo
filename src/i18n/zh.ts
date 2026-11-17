@@ -102,6 +102,7 @@ export const zh = {
   creditsUnavailable: '额度信息暂时读不到，用量统计正常',
   creditsExhausted: '额度已用完，联系管理员充值后继续使用',
   creditsToday: '今日已用 {value} token',
+  creditsTotal: '累计已用 {value} token',
   creditsDetails: '明细',
   creditsModels: '可用模型',
   creditsExpires: '有效期',

@@ -101,7 +101,9 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const mainText = mainValue === null ? '——' : formatCredits(mainValue)
   const mainUnit = unlimited ? t('creditsUnitUsed') : t('creditsUnitRemaining')
 
-  const todayTokens = snapshot?.dailyTokens ?? snapshot?.tokens?.used ?? null
+  // 上游没给 daily_tokens 时不能拿累计值冒充「今日」，换标签
+  const todayTokens = snapshot?.dailyTokens ?? null
+  const totalTokens = snapshot?.tokens?.used ?? null
   const expires = formatDate(snapshot?.expiresAt ?? null)
   const snapshotText = snapshot ? relativeTime(snapshot.snapshotAt, now) : ''
   const snapshotLabel = snapshotText === 'relJustNow' ? t('creditsJustNow') : snapshotText
@@ -161,9 +163,13 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
           </>
         )}
 
-        {todayTokens !== null ? (
+        {todayTokens !== null || totalTokens !== null ? (
           <div className={styles.todayRow}>
-            <p className={styles.todayLine}>{t('creditsToday', { value: formatTokens(todayTokens) })}</p>
+            <p className={styles.todayLine}>
+              {todayTokens !== null
+                ? t('creditsToday', { value: formatTokens(todayTokens) })
+                : t('creditsTotal', { value: formatTokens(totalTokens ?? 0) })}
+            </p>
           </div>
         ) : null}
 

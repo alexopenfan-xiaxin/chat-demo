@@ -43,6 +43,17 @@ type UpstreamUsage = {
 const num = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null
 
+const toIso = (value: unknown): string => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // 小于 1e12 当秒，否则当毫秒
+    return new Date(value < 1e12 ? value * 1000 : value).toISOString()
+  }
+  if (typeof value === 'string' && Number.isFinite(Date.parse(value))) {
+    return new Date(value).toISOString()
+  }
+  return new Date().toISOString()
+}
+
 const section = (source: UsageSection | undefined) => {
   if (!source) {
     return null
@@ -95,7 +106,7 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
     daily_tokens: num(raw.daily_tokens),
     models: Array.isArray(raw.models) ? raw.models : [],
     expires_at: raw.expires_at ?? null,
-    // 上游快照时间缺失时用本次响应时间，前端据此显示「刚刚」
-    snapshot_at: raw.snapshot_at ?? new Date().toISOString(),
+    // 上游可能给 unix 秒，也可能给 ISO；统一成 ISO，缺失时用本次响应时间
+    snapshot_at: toIso(raw.snapshot_at),
   })
 })

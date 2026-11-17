@@ -107,6 +107,7 @@ export const en = {
   creditsUnavailable: 'Credit details are unavailable right now; usage stats still work',
   creditsExhausted: 'Out of credits. Ask the admin to top up to keep using the app.',
   creditsToday: 'Used {value} tokens today',
+  creditsTotal: '{value} tokens used in total',
   creditsDetails: 'Details',
   creditsModels: 'Models',
   creditsExpires: 'Valid until',
