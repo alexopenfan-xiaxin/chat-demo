@@ -1,5 +1,6 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
 import { ensureAccessToken, notifySessionExpired } from '../auth.js'
+import { setServiceUnavailable } from '../sessionState.js'
 import { readServerSentEvents } from './sse.js'
 import {
   itemKind,
@@ -36,6 +37,8 @@ export type ApiErrorKind =
   | 'protocol'
   /** ds-chat 自己的会话过期（proxy 拒了 Bearer），和上游 API Key 失效是两回事 */
   | 'session'
+  /** proxy 的会话校验服务暂时不可用（503）：不是登录态问题，别踢人 */
+  | 'unavailable'
 
 export class ApiError extends Error {
   readonly localMessage?: TranslationMessage
@@ -110,6 +113,17 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
     throw new ApiError('network', error instanceof Error ? error.message : String(error))
   }
   if (!response.ok) {
+    // 503 必须排在 401 之前判：introspect 一抖，proxy 就回 503，
+    // 当成会话失效会把用户踢回登录页，等于把后端的故障放大一次。
+    if (response.status === 503 && API_ORIGIN !== '') {
+      const body = (await response.clone().json().catch(() => null)) as
+        | { error?: { code?: unknown } }
+        | null
+      if (body?.error?.code === 'service_unavailable') {
+        setServiceUnavailable(true)
+        throw new ApiError('unavailable', '服务暂时不可用，请稍后重试', 503)
+      }
+    }
     if (response.status === 401 && API_ORIGIN !== '' && (await isSessionExpired(response.clone()))) {
       notifySessionExpired()
       throw new ApiError('session', '登录已过期，重新登录', 401)

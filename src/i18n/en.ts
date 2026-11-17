@@ -214,6 +214,8 @@ export const en = {
   authOtpDigit: 'Code digit {index}',
   authGoLoginLink: 'Sign in',
   authWordmark: 'ds-chat',
+  authServiceUnavailable: 'The service is temporarily unavailable, try again shortly',
+  authServiceRetry: 'Retry',
   authChange: 'Change',
   authSublineLogin: 'Sign in with your email and password',
   authSublineRegister: 'We will send a code to this address',

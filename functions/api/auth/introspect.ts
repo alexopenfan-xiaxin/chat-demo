@@ -1,5 +1,5 @@
 import {
-INTERNAL_HEADER, bad, bearerToken, findSession, json, safeEqual, sha256Hex, takeRateLimit,
+INTERNAL_HEADER, bad, bearerToken, findSession, json, safeEqual, takeRateLimit,
   type Env,
 } from '../../../server/auth-core'
 
@@ -17,13 +17,9 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
     return bad('forbidden', 403)
   }
   const token = bearerToken(request)
-  // 限流键按 token 算，不按来源 IP：调用方是本机 proxy，cf-connecting-ip 永远是同一个，
-  // 按 IP 限会退化成全站共享配额，一个人刷就能让所有人掉线。
-  if (!(await takeRateLimit(env.DB, `introspect:tok:${await sha256Hex(token ?? '')}`, 120, 60))) {
-    return bad('too many', 429)
-  }
-  // 兜底：整体被打爆时仍然要挡，但阈值放到正常流量远远碰不到的量级
-  if (!(await takeRateLimit(env.DB, 'introspect:all', 20000, 60))) {
+  // 这里的键天然是全站唯一（调用方是本机 proxy），所以只是防整体打爆的兜底闸，
+  // 不承担按用户限流；按用户的限流在 proxy 侧做（CF-Connecting-IP）。
+  if (!(await takeRateLimit(env.DB, 'introspect:global', 5000, 60))) {
     return bad('too many', 429)
   }
   if (!token) {

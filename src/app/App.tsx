@@ -32,7 +32,7 @@ import {
   onSessionExpired,
   type AuthUser,
 } from '../services/auth.js'
-import { setSessionExpired, useSessionState } from '../services/sessionState.js'
+import { setServiceUnavailable, setSessionExpired, useSessionState } from '../services/sessionState.js'
 import authStyles from '../components/auth/AuthScreen.module.css'
 import styles from './App.module.css'
 
@@ -41,6 +41,7 @@ export const App = () => {
   // undefined = 还在问 /api/auth/me，null = 未登录
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined)
   const sessionExpired = useSessionState((state) => state.expired)
+  const serviceUnavailable = useSessionState((state) => state.unavailable)
   const isMobile = useIsMobile()
   const locale = useSettings((state) => state.locale)
   // 移动端侧边栏以独立抽屉管理开合状态
@@ -81,6 +82,15 @@ export const App = () => {
   useEffect(closeMobileSider, [activeId, isMobile])
 
   useEffect(() => onSessionExpired(() => setSessionExpired(true)), [])
+
+  // 服务不可用是瞬时故障：15 秒没有新的失败就自己收起，别一直挂着吓人
+  useEffect(() => {
+    if (!serviceUnavailable) {
+      return
+    }
+    const timer = window.setTimeout(() => setServiceUnavailable(false), 15000)
+    return () => window.clearTimeout(timer)
+  }, [serviceUnavailable])
 
   // 认人 + 换票都落定才算加载完：否则会先渲染已登录、再翻成过期横幅
   useEffect(() => {
@@ -149,6 +159,13 @@ export const App = () => {
               <span>{t('authSessionExpired')}</span>
               <Button variant="outlined" size="s" onClick={relogin}>
                 {t('authSessionExpiredAction')}
+              </Button>
+            </div>
+          ) : serviceUnavailable ? (
+            <div className={styles.serviceUnavailable} role="status">
+              <span>{t('authServiceUnavailable')}</span>
+              <Button variant="outlined" size="s" onClick={() => setServiceUnavailable(false)}>
+                {t('authServiceRetry')}
               </Button>
             </div>
           ) : null}
