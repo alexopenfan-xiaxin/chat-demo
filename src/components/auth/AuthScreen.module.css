@@ -53,7 +53,7 @@
   width: 100%;
   max-width: 350px;
   margin-inline: auto;
-  padding-bottom: calc(39px + env(safe-area-inset-bottom));
+  padding-bottom: 0;
 }
 
 /* ---------- logo 区 ---------- */
@@ -64,8 +64,8 @@
   align-items: center;
   gap: 12px;
   /* 顶部锚定 + 固定间距：整块从顶部往下排，撑高时 logo 不会跟着上下窜 */
-  padding-top: clamp(40px, 10vh, 112px);
-  margin-bottom: clamp(28px, 5vh, 56px);
+  padding-top: clamp(56px, 15vh, 160px);
+  margin-bottom: clamp(40px, 7vh, 72px);
   animation: rise-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
@@ -110,6 +110,13 @@
 }
 
 /* 旧的「把表单推到页面底部」撑高块已废弃：它正是 Step1 中间那个空洞 */
+/* 表单吃满剩余高度，协议行用 margin-top:auto 贴到页面下边缘 */
+.content > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+
 .spacer {
   flex: none;
   min-height: 0;
@@ -194,7 +201,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .label {
@@ -391,7 +398,7 @@
   box-sizing: border-box;
   width: 100%;
   height: 60px;
-  margin-top: 13px;
+  margin-top: 18px;
   padding: 0 24px;
   border: 1.5px solid var(--auth-ghost-border);
   border-radius: 999px;
@@ -457,7 +464,7 @@
 }
 
 .termsCompact {
-  margin-top: 12px;
+  margin-top: auto;
 }
 
 .terms {
@@ -465,8 +472,9 @@
   /* 勾选圆和 13px 文字的基线对齐，圆不再偏上 */
   align-items: center;
   gap: 8px;
-  margin-top: 29px;
-  padding: 12px 0;
+  /* 页面下边缘要有个东西收住，否则内容太少时下半屏是空的 */
+  margin-top: auto;
+  padding: 12px 0 calc(20px + env(safe-area-inset-bottom));
   font-size: 13px;
   line-height: 19px;
   color: #4a4a4a;
@@ -499,11 +507,8 @@
   outline-offset: 2px;
 }
 
-.termsCompact {
-  margin-top: 12px;
-}
-
 .terms {
+  /* 第二份重复定义：只补颜色，间距统一由上面的规则管 */
   color: var(--dsw-alias-label-secondary);
 }
 
