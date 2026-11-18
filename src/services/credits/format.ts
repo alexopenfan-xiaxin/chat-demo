@@ -10,23 +10,52 @@ const SPENT_EPSILON = 0.005
  *
  * >= 100 整数（87）· 10–100 一位小数（12.7）· < 10 两位小数（9.98 / 0.02）
  */
-export const formatCredits = (value: number) => {
-  // 先按两位小数落定，再决定档位：9.996 舍完是 10，不能留在 <10 档写成 10.00
-  // （那会变成「已用 10.00 / 共 10 · 99%」，一句话里自己打自己）
+/**
+ * 一个数字在卡片上「最终显示成多少」——四舍五入到它自己那一档的精度。
+ *
+ * 比例必须用这个值算，不能用原始值：显示成 10 的数字除以显示成 10 的数，
+ * 结果是 100%，不能让页面出现「已用 10 / 共 10 · 99%」这种自己打自己的句子。
+ * 屏幕上看不到的精度不该参与屏幕上的判断。
+ */
+export const displayValue = (value: number) => {
   const two = Math.round(value * 100) / 100
   const abs = Math.abs(two)
   if (abs >= 100) {
-    return String(Math.round(two))
+    return Math.round(two)
   }
   if (abs >= 10) {
-    const one = two.toFixed(1)
-    return one.endsWith('.0') ? one.slice(0, -2) : one
+    return Math.round(two * 10) / 10
   }
+  return two
+}
+
+export const formatCredits = (value: number) => {
+  const shown = displayValue(value)
   // 正数被舍成 0 时不能说 0.00：那正是「假 0」本身
-  if (two === 0 && value > 0) {
+  if (shown === 0 && value > 0) {
     return '<0.01'
   }
-  return two.toFixed(2)
+  const abs = Math.abs(shown)
+  if (abs >= 100) {
+    return String(shown)
+  }
+  if (abs >= 10) {
+    const one = shown.toFixed(1)
+    return one.endsWith('.0') ? one.slice(0, -2) : one
+  }
+  return shown.toFixed(2)
+}
+
+/** 已用 / 上限，用显示值算；超额时大于 1 */
+export const displayRatio = (used: number | null, limit: number | null) => {
+  if (used === null || limit === null) {
+    return null
+  }
+  const shownLimit = displayValue(limit)
+  if (shownLimit <= 0) {
+    return null
+  }
+  return displayValue(used) / shownLimit
 }
 
 /**
@@ -51,9 +80,12 @@ export const barWidthPercent = (used: number | null, limit: number | null) => {
   if (used === null || limit === null || limit <= 0 || used <= 0) {
     return 0
   }
-  // 与百分比文案同样向下取整：条画满只应该在真的 100% 时出现，
-  // 否则 99.6% 会画出 100% 的条却写 99%，又是一处两个口径
-  return Math.min(100, Math.max(3, Math.floor(Math.min(1, used / limit) * 100)))
+  const ratio = displayRatio(used, limit)
+  if (ratio === null) {
+    return 0
+  }
+  // 与百分比文案同样向下取整：条画满只应该在真的 100% 时出现
+  return Math.min(100, Math.max(3, Math.floor(Math.min(1, ratio) * 100)))
 }
 
 export type CreditTone = 'brand' | 'warn' | 'error'

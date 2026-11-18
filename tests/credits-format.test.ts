@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { barWidthPercent, creditTone, formatCredits, formatPercent } from '../src/services/credits/format'
+import { barWidthPercent, creditTone, displayRatio, displayValue, formatCredits, formatPercent } from '../src/services/credits/format'
 
 describe('formatCredits', () => {
   it('小于 10 保留两位，0.02 不能变成 0.0', () => {
@@ -56,7 +56,7 @@ describe('barWidthPercent', () => {
 
   it('正常用量按比例走，未满 100% 不画满', () => {
     expect(barWidthPercent(5, 10)).toBe(50)
-    expect(barWidthPercent(9.96, 10)).toBe(99)
+    expect(barWidthPercent(996, 1000)).toBe(99)
     expect(barWidthPercent(10, 10)).toBe(100)
   })
 
@@ -86,5 +86,24 @@ describe('creditTone（阈值判定）', () => {
     expect(creditTone(null, 1)).toBe('brand')
     expect(creditTone(10, null)).toBe('brand')
     expect(creditTone(0, 0)).toBe('brand')
+  })
+})
+
+describe('显示值口径（同屏不能自相矛盾）', () => {
+  it('9.996 显示为 10，比例就是 100%，不会再配一句 99%', () => {
+    expect(displayValue(9.996)).toBe(10)
+    expect(displayRatio(9.996, 10)).toBe(1)
+    expect(formatPercent(displayRatio(9.996, 10) as number)).toBe('100%')
+    expect(barWidthPercent(9.996, 10)).toBe(100)
+  })
+
+  it('显示成两位小数的数字，比例也按两位算', () => {
+    expect(displayRatio(0.03, 0.0301)).toBe(1)
+    expect(displayRatio(0.02, 10)).toBe(0.002)
+  })
+
+  it('超额比例大于 1，条仍钳在 100%', () => {
+    expect(formatPercent(displayRatio(10.4, 10) as number)).toBe('104%')
+    expect(barWidthPercent(10.4, 10)).toBe(100)
   })
 })

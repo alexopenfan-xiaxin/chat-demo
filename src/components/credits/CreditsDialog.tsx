@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { fetchCredits, type CreditsSnapshot } from '../../services/api/credits.js'
-import { barWidthPercent, creditTone, formatCredits, formatPercent } from '../../services/credits/format.js'
+import {
+  barWidthPercent,
+  creditTone,
+  displayRatio,
+  formatCredits,
+  formatPercent,
+} from '../../services/credits/format.js'
 import { loadConversationUsage, type ConversationUsage } from '../../services/credits/usageStats.js'
 import { Modal } from '../base/Modal.js'
 import { IconChevronDownOutline14, IconRefreshOutline16 } from '../base/icons.js'
@@ -94,11 +100,14 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
    */
   const tone = creditTone(limit, remaining)
   const exhausted = !unlimited && tone === 'error'
-  /** 有额度信息才画条；超额时百分比按真实比例（104%），条钳在 100% 不溢出 */
-  const hasBar = limit !== null && limit > 0 && used !== null
-  const rawRatio = hasBar ? (used as number) / (limit as number) : null
+  /**
+   * 比例按「显示出来的数字」算：10 / 共 10 必须是 100%，不能是 99%。
+   * 超额时比例大于 1（文案写 104%），条本身钳在 100% 不溢出。
+   */
+  const shownRatio = displayRatio(used, limit)
+  const hasBar = shownRatio !== null
   const barWidth = barWidthPercent(used, limit)
-  const percentText = rawRatio === null || used === null || used <= 0 ? null : formatPercent(rawRatio)
+  const percentText = shownRatio === null || used === null || used <= 0 ? null : formatPercent(shownRatio)
   const barTone = tone === 'error' ? styles.fillError : tone === 'warn' ? styles.fillWarn : ''
 
   // 不限额时唯一有意义的数字是「用掉多少」；读不到时主数字位留一个破折号，不留空
