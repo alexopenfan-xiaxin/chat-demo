@@ -11,15 +11,17 @@ const SPENT_EPSILON = 0.005
  * >= 100 整数（87）· 10–100 一位小数（12.7）· < 10 两位小数（9.98 / 0.02）
  */
 export const formatCredits = (value: number) => {
-  const abs = Math.abs(value)
+  // 先按两位小数落定，再决定档位：9.996 舍完是 10，不能留在 <10 档写成 10.00
+  // （那会变成「已用 10.00 / 共 10 · 99%」，一句话里自己打自己）
+  const two = Math.round(value * 100) / 100
+  const abs = Math.abs(two)
   if (abs >= 100) {
-    return String(Math.round(value))
+    return String(Math.round(two))
   }
   if (abs >= 10) {
-    const one = value.toFixed(1)
+    const one = two.toFixed(1)
     return one.endsWith('.0') ? one.slice(0, -2) : one
   }
-  const two = Math.round(value * 100) / 100
   // 正数被舍成 0 时不能说 0.00：那正是「假 0」本身
   if (two === 0 && value > 0) {
     return '<0.01'
@@ -49,7 +51,9 @@ export const barWidthPercent = (used: number | null, limit: number | null) => {
   if (used === null || limit === null || limit <= 0 || used <= 0) {
     return 0
   }
-  return Math.round(Math.max(0.03, Math.min(1, used / limit)) * 100)
+  // 与百分比文案同样向下取整：条画满只应该在真的 100% 时出现，
+  // 否则 99.6% 会画出 100% 的条却写 99%，又是一处两个口径
+  return Math.min(100, Math.max(3, Math.floor(Math.min(1, used / limit) * 100)))
 }
 
 export type CreditTone = 'brand' | 'warn' | 'error'
@@ -60,6 +64,10 @@ export type CreditTone = 'brand' | 'warn' | 'error'
  *
  * 剩余 > 20% 品牌色 · 0–20% warn · 用完（含渲染成 <0.01 的微量）error。
  * 0 才是质变点，0–5% 不再单开一档。
+ *
+ * SPENT_EPSILON 是绝对量，不乘 limit：额度只有 0.01 的账号剩 0.004（40%）也会
+ * 落进 error 档。语义上是对的——0.004 买不起一次请求——但那种账号的提示文案
+ * 更该说「额度不足以继续」。现在限额都是 10/100，碰不到。
  */
 export const creditTone = (limit: number | null, remaining: number | null): CreditTone => {
   if (limit === null || limit <= 0 || remaining === null) {

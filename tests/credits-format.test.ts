@@ -19,6 +19,12 @@ describe('formatCredits', () => {
     expect(formatCredits(99.94)).toBe('99.9')
   })
 
+  it('<10 档舍完跨到 10 时交给上一档，不写 10.00', () => {
+    expect(formatCredits(9.996)).toBe('10')
+    expect(formatCredits(9.9998)).toBe('10')
+    expect(formatCredits(99.996)).toBe('100')
+  })
+
   it('100 以上取整', () => {
     expect(formatCredits(87)).toBe('87')
     expect(formatCredits(123.6)).toBe('124')
@@ -48,9 +54,10 @@ describe('barWidthPercent', () => {
     expect(barWidthPercent(0.02, 10)).toBe(3)
   })
 
-  it('正常用量按比例走', () => {
+  it('正常用量按比例走，未满 100% 不画满', () => {
     expect(barWidthPercent(5, 10)).toBe(50)
-    expect(barWidthPercent(9.96, 10)).toBe(100)
+    expect(barWidthPercent(9.96, 10)).toBe(99)
+    expect(barWidthPercent(10, 10)).toBe(100)
   })
 
   it('超额钳在 100%，0 用量不画', () => {
