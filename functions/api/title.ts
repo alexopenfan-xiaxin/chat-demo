@@ -17,6 +17,7 @@ import { currentUser, guarded, json, takeRateLimit, type Env } from '../../serve
 type TitleEnv = Env & {
   UPSTREAM_BASE?: string
   INTERNAL_API_SECRET?: string
+  PANEL_SECRET?: string
   TITLE_SUMMARY_KEY?: string
 }
 
@@ -92,7 +93,7 @@ export const onRequestPost = guarded(async (context: { request: Request; env: Ti
     return json({ title: '' }, 429)
   }
   const key = env.TITLE_SUMMARY_KEY
-  const internal = env.INTERNAL_API_SECRET
+  const internal = env.PANEL_SECRET ?? env.INTERNAL_API_SECRET
   if (!key || !internal) {
     // 没配就当没这个功能，前端保留本地标题
     return json({ title: '' }, 503)

@@ -315,6 +315,32 @@ export const findSession = async (
   return { user: { id: row.id, email: row.email }, expiresAt: row.expires_at }
 }
 
+/**
+ * 会话 + 该用户的 key 密文一次查完。
+ *
+ * introspect 每次请求都要这两样，拆成两次查询等于每个冷启动多付一轮 D1 往返。
+ */
+export const findSessionWithKey = async (
+  db: D1Database,
+  token: string
+): Promise<{ user: SessionUser; expiresAt: number; keyEnc: string | null } | null> => {
+  const tokenHash = await sha256Hex(token)
+  const row = await db
+    .prepare(
+      'SELECT s.expires_at AS expires_at, u.id AS id, u.email AS email, u.upstream_key_enc AS key_enc FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?'
+    )
+    .bind(tokenHash)
+    .first<{ expires_at: number; id: string; email: string; key_enc: string | null }>()
+  if (!row) {
+    return null
+  }
+  if (row.expires_at <= Math.floor(Date.now() / 1000)) {
+    await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run()
+    return null
+  }
+  return { user: { id: row.id, email: row.email }, expiresAt: row.expires_at, keyEnc: row.key_enc }
+}
+
 /** 从 Authorization 头取 Bearer 明文，格式不对返回 null */
 export const bearerToken = (request: Request): string | null => {
   const header = request.headers.get('authorization')

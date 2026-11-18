@@ -23,6 +23,8 @@ type PanelEnv = {
   PANEL_ADMIN_PASSWORD?: string
   /** proxy 的内部密钥通道，服务端调用面板时用它过门禁 */
   INTERNAL_API_SECRET?: string
+  /** 内部通道专用密钥；拆开后 introspect 那扇门用 INTERNAL_API_SECRET */
+  PANEL_SECRET?: string
   /** 建 key 时锁定的来源 IP，逗号分隔；默认本机出口 */
   PANEL_KEY_IP_ALLOWLIST?: string
 }
@@ -43,7 +45,7 @@ export const panelBase = (env: PanelEnv): string =>
 const login = async (env: PanelEnv): Promise<string | null> => {
   const user = env.PANEL_ADMIN_USER
   const password = env.PANEL_ADMIN_PASSWORD
-  const internal = env.INTERNAL_API_SECRET
+  const internal = env.PANEL_SECRET ?? env.INTERNAL_API_SECRET
   if (!user || !password || !internal) {
     return null
   }
@@ -115,7 +117,7 @@ export const deletePanelKey = async (env: PanelEnv, id: number | null): Promise<
   }
   const response = await fetch(`${panelBase(env)}/api/keys/${id}`, {
     method: 'DELETE',
-    headers: { cookie, 'x-internal-secret': env.INTERNAL_API_SECRET ?? '' },
+    headers: { cookie, 'x-internal-secret': env.PANEL_SECRET ?? env.INTERNAL_API_SECRET ?? '' },
   })
   return response.ok
 }
@@ -124,7 +126,7 @@ export const deletePanelKey = async (env: PanelEnv, id: number | null): Promise<
 export const listPanelKeys = async (env: PanelEnv): Promise<PanelKey[]> => {
   const headers = (cookie: string) => ({
     cookie,
-    'x-internal-secret': env.INTERNAL_API_SECRET ?? '',
+    'x-internal-secret': env.PANEL_SECRET ?? env.INTERNAL_API_SECRET ?? '',
     'cache-control': 'no-store',
   })
   const fetchKeys = async (cookie: string) => fetch(`${panelBase(env)}/api/keys`, { headers: headers(cookie) })
@@ -241,7 +243,7 @@ export const createUpstreamKey = async (env: PanelEnv, email: string): Promise<C
       headers: {
         cookie: session,
         'content-type': 'application/json',
-        'x-internal-secret': env.INTERNAL_API_SECRET ?? '',
+        'x-internal-secret': env.PANEL_SECRET ?? env.INTERNAL_API_SECRET ?? '',
       },
       body: JSON.stringify(body),
     })

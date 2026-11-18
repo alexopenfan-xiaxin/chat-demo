@@ -1,5 +1,5 @@
 import {
-INTERNAL_HEADER, bad, bearerToken, findSession, json, safeEqual, takeRateLimit,
+INTERNAL_HEADER, bad, bearerToken, findSessionWithKey, json, safeEqual, takeRateLimit,
   type Env,
 } from '../../../server/auth-core'
 import { decryptSecret } from '../../../server/keybox'
@@ -26,21 +26,16 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
   if (!token) {
     return json({ active: false }, 401)
   }
-  const session = await findSession(env.DB, token)
+  const session = await findSessionWithKey(env.DB, token)
   if (!session) {
     return json({ active: false }, 401)
   }
   // proxy 拿到这把 key 才能按用户转发聊天请求；明文只在这条带共享内部密钥的调用上下发，
   // 不经过浏览器，也不进任何响应缓存
   const secretEnv = env as Env & { KEY_ENC_SECRET?: string; UPSTREAM_USAGE_KEY?: string }
-  const row = await env.DB.prepare(
-    'SELECT upstream_key_enc AS enc FROM users WHERE id = ?'
-  )
-    .bind(session.user.id)
-    .first<{ enc: string | null }>()
   let upstreamKey = ''
-  if (row?.enc && secretEnv.KEY_ENC_SECRET) {
-    upstreamKey = (await decryptSecret(row.enc, secretEnv.KEY_ENC_SECRET)) ?? ''
+  if (session.keyEnc && secretEnv.KEY_ENC_SECRET) {
+    upstreamKey = (await decryptSecret(session.keyEnc, secretEnv.KEY_ENC_SECRET)) ?? ''
   }
   // 解不出就返回空，绝不回落到 UPSTREAM_USAGE_KEY：那把是不限额的管理员 key，
   // 拿它当转发凭证等于给「注册成功但建 key 失败」的账号发一张无限额通行证。
