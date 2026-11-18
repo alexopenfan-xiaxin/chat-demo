@@ -1,7 +1,7 @@
 import * as db from '../db.js'
 import { BackupError, fail } from './errors.js'
 import type { SessionIndexEntry } from './format.js'
-import { INDEX_PATH, MANIFEST_PATH, USER_PATH, parseSessionPath, sessionFilesDir } from './paths.js'
+import { INDEX_PATH, MANIFEST_PATH, USER_PATH, parseSessionPath } from './paths.js'
 import { checkManifest, readSessionFile, readSessionIndex } from './schema.js'
 import { toLocalSession } from './toLocal.js'
 import {
@@ -39,6 +39,25 @@ const imageType = (bytes: Uint8Array): string => {
     return 'image/avif'
   }
   return ''
+}
+
+/** `chat_sessions/<id>_files/<...>`：会话自己的附件条目 */
+const IMAGE_ENTRY = /^chat_sessions\/[^/]+\/_files\/.+/
+
+/**
+ * 索引与已导入会话必须一一对应：重复、多列、少列都按不完整处理。
+ * 官方 v3 导出不一定带索引，那种情况下由会话文件推导出来的索引一定自洽。
+ */
+export const indexMatchesSessions = (
+  entries: readonly { id: string }[],
+  imported: ReadonlySet<string>
+): boolean => {
+  const listed = new Set(entries.map((entry) => entry.id))
+  return (
+    listed.size === entries.length &&
+    listed.size === imported.size &&
+    [...imported].every((id) => listed.has(id))
+  )
 }
 
 const readJson = async (entry: ArchiveEntry): Promise<unknown> => {
@@ -88,7 +107,8 @@ export const importArchive = async (file: File): Promise<void> => {
   const stored = new Map<string, string>()
   let manifest = false
   let index: SessionIndexEntry[] | undefined
-  let currentSessionId: string | undefined
+  /** 没带索引时按会话文件推导出来的索引，字段与会话一致，不编造 */
+  const derived: SessionIndexEntry[] = []
 
   const saveImage = async (entry: ArchiveEntry, id: string) => {
     if (stored.has(id)) {
@@ -111,28 +131,34 @@ export const importArchive = async (file: File): Promise<void> => {
         }
         checkManifest(await readJson(entry))
         manifest = true
-      } else if (path === USER_PATH && !index && imported.size === 0) {
-        // 账号信息（已脱敏）不导入；文件可能缺失。
+      } else if (path === USER_PATH) {
+        // 账号信息（已脱敏）不导入；文件可能缺失，位置也不固定。
         await skipEntry(entry)
       } else if (sessionId !== null && !index) {
-        const local = toLocalSession(readSessionFile(await readJson(entry)))
+        const file = readSessionFile(await readJson(entry))
+        const local = toLocalSession(file)
         if (local.session.id !== sessionId || imported.has(sessionId)) {
           fail('backupIncomplete')
         }
         imported.add(sessionId)
-        currentSessionId = sessionId
         for (const [imagePath, id] of local.images) {
           images.set(imagePath, id)
         }
+        // 官方 v3 导出不一定带 chat_session_index.json，缺了就按会话文件补齐，
+        // 字段全部来自会话本身，不编造标题和时间。
+        derived.push({
+          id: file.id,
+          title: file.title,
+          pinned: false,
+          message_count: file.messages.length,
+          inserted_at: file.inserted_at,
+          updated_at: file.updated_at,
+        })
         await db.addStagingSession(local.session)
       } else if (path === INDEX_PATH && !index) {
         index = readSessionIndex(await readJson(entry))
-      } else if (
-        index
-          ? imported.has(/^chat_sessions\/([^/]+)_files\//.exec(path)?.[1] ?? '')
-          : currentSessionId && path.startsWith(sessionFilesDir(currentSessionId))
-      ) {
-        // 没有被引用的条目不保存，引用了但缺失的图片只展示文件名。
+      } else if (IMAGE_ENTRY.test(path)) {
+        // 附件条目与顺序无关：被会话引用就存，没被引用就跳过（导出的孤立产物）。
         const id = images.get(path)
         await (id === undefined ? skipEntry(entry) : saveImage(entry, id))
       } else {
@@ -145,14 +171,9 @@ export const importArchive = async (file: File): Promise<void> => {
   if (!manifest) {
     fail('backupUnrecognized')
   }
-  // index 只列出成功写出的会话，与会话文件一一对应。
-  const listed = new Set(index?.map((entry) => entry.id))
-  if (
-    !index ||
-    listed.size !== index.length ||
-    listed.size !== imported.size ||
-    [...imported].some((id) => !listed.has(id))
-  ) {
+  // 索引只列出成功写出的会话，与会话文件一一对应；没带索引时用推导出来的那份。
+  const entries = index ?? derived
+  if (entries.length === 0 || !indexMatchesSessions(entries, imported)) {
     fail('backupIncomplete')
   }
   await db.updateStagingFileTypes(stored)
