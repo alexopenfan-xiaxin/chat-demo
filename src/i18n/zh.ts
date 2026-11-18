@@ -12,6 +12,7 @@ export const zh = {
   sessionMissing: '这个对话已不在本机，可能已被导入的新记录替换',
   sessionSaveFailed: '对话或附件尚未保存到本机，关闭页面可能丢失，请重试',
   sessionDeleteFailed: '删除对话失败，请重试',
+  sessionDeleteBlocked: '这条对话还在生成中，已取消删除，等生成结束后再试',
   settings: '设置',
   appName: 'ds-chat',
   deleteSessionModalContentTitle: '永久删除对话',

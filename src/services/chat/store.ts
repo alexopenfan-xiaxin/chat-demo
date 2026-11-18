@@ -294,7 +294,7 @@ const unsavedSessions = new Set<string>()
 /** 保存失败时保留原件，重试成功后才释放。 */
 const pendingFiles = new Map<string, db.StoredFile[]>()
 const deletingSessions = new Set<string>()
-const deletionTasks = new Set<Promise<boolean>>()
+const deletionTasks = new Set<Promise<DeleteOutcome>>()
 const streamFlushes = new Map<string, () => void>()
 let accessSequence = 0
 let historyEpoch = 0
@@ -684,15 +684,17 @@ export const renameSession = (id: string, title: string) => {
  * 删除会话；本地原件仅在没有其他会话引用时清理。远端文件不删：导入、编辑、重新生成都会复用同一个附件，
  * 同一服务端文件可能被多个会话引用，不维护引用计数。
  */
-export const removeSession = (id: string): Promise<boolean> => {
+export type DeleteOutcome = 'deleted' | 'blocked' | 'failed'
+
+export const removeSession = (id: string): Promise<DeleteOutcome> => {
   const task = removeSessionData(id).finally(() => deletionTasks.delete(task))
   deletionTasks.add(task)
   return task
 }
 
-const removeSessionData = async (id: string): Promise<boolean> => {
+const removeSessionData = async (id: string): Promise<DeleteOutcome> => {
   if (get().importingHistory || deletingSessions.has(id)) {
-    return false
+    return 'blocked'
   }
   const epoch = historyEpoch
   deletingSessions.add(id)
@@ -701,11 +703,17 @@ const removeSessionData = async (id: string): Promise<boolean> => {
     // 等本会话的流收尾，避免删除之后又被收尾保存写回来。
     await waitForIdle(id)
     if (epoch !== historyEpoch) {
-      return false
+      return 'failed'
+    }
+    // waitForIdle 现在有上限，超时后流可能还在：这时候删掉它，
+    // 那条流之后任何一次 persist 都会把会话写回来，用户看到「删了又回来」。
+    // 宁可这次不删，让用户重试。
+    if (Object.hasOwn(get().streaming, id)) {
+      return 'blocked'
     }
     await db.deleteSession(id)
     if (epoch !== historyEpoch) {
-      return true
+      return 'deleted'
     }
     sessionLoads.delete(id)
     sessionAccess.delete(id)
@@ -725,10 +733,10 @@ const removeSessionData = async (id: string): Promise<boolean> => {
       ),
       activeId: state.activeId === id ? null : state.activeId,
     }))
-    return true
+    return 'deleted'
   } catch (error) {
     db.reportStorageError('delete session')(error)
-    return false
+    return 'failed'
   } finally {
     deletingSessions.delete(id)
     // 删除失败时保留会话，并保存停止生成后的最新状态。

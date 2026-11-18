@@ -15,6 +15,7 @@ export const en = {
   sessionSaveFailed:
     'Chats or attachments have not been saved locally. Retry before closing this page.',
   sessionDeleteFailed: 'Unable to delete this chat. Please try again.',
+  sessionDeleteBlocked: 'This conversation is still generating, so it was not deleted; try again once it stops',
   settings: 'Settings',
   appName: 'ds-chat',
   deleteSessionModalContentTitle: 'Delete chat?',

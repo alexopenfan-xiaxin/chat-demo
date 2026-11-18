@@ -164,10 +164,15 @@ export const Sider = ({
                 onClick={async () => {
                   setDeletePending(true)
                   try {
-                    if (await removeSession(deleting.id)) {
+                    const outcome = await removeSession(deleting.id)
+                    if (outcome === 'deleted') {
                       setDeleting(null)
                     } else {
-                      showToast({ key: 'sessionDeleteFailed', type: 'error' })
+                      // blocked：这条对话还在生成，删掉会被随后的保存写回来
+                      showToast({
+                        key: outcome === 'blocked' ? 'sessionDeleteBlocked' : 'sessionDeleteFailed',
+                        type: 'error',
+                      })
                     }
                   } finally {
                     setDeletePending(false)
