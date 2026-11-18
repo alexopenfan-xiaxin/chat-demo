@@ -522,6 +522,9 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
       }
       const summary = get().sessions.find((session) => session.id === id)
       if (!summary) {
+        // 列表里没有这个会话（例如导入替换把它换掉了）：给出可重试的失败态。
+        // 静默 return 会让界面永远停在「正在加载对话…」，既没有错误也没有重试按钮。
+        set((state) => ({ sessionLoadErrors: { ...state.sessionLoadErrors, [id]: true } }))
         return
       }
       if (!stored) {

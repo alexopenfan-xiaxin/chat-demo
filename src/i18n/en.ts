@@ -8,6 +8,7 @@ export const en = {
   newChat: 'New chat',
   untitledChat: 'New chat',
   sessionLoading: 'Loading chats...',
+  historyImporting: 'Importing history, conversations stay locked until it finishes...',
   sessionListLoadFailed: 'Unable to load the chat list. Please try again.',
   sessionLoadFailed: 'Unable to load this chat. Please try again.',
   sessionSaveFailed:

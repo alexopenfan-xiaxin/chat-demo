@@ -184,7 +184,14 @@ export const App = () => {
           ) : null}
           <div className={styles.content}>
             {siderCollapsed ? <CollapsedSider onLogout={onLogout} /> : null}
-            {!ready || (activeId !== null && !session) ? (
+            {importingHistory ? (
+              <div className={styles.loadingView}>
+                {isMobile ? <MobileHeader /> : null}
+                <div className={styles.loadingState} role="status" aria-live="polite">
+                  <span>{t('historyImporting')}</span>
+                </div>
+              </div>
+            ) : !ready || (activeId !== null && !session) ? (
               <div className={styles.loadingView}>
                 {isMobile ? <MobileHeader /> : null}
                 <div className={styles.loadingState} role="status" aria-live="polite">

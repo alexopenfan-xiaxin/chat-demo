@@ -6,6 +6,7 @@ export const zh = {
   newChat: '开启新对话',
   untitledChat: '新对话',
   sessionLoading: '正在加载对话...',
+  historyImporting: '正在导入历史对话，导入完成前不能切换对话...',
   sessionListLoadFailed: '对话列表加载失败，请重试',
   sessionLoadFailed: '对话加载失败，请重试',
   sessionSaveFailed: '对话或附件尚未保存到本机，关闭页面可能丢失，请重试',
