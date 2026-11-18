@@ -41,8 +41,11 @@ const imageType = (bytes: Uint8Array): string => {
   return ''
 }
 
-/** `chat_sessions/<id>_files/<...>`：会话自己的附件条目 */
-const IMAGE_ENTRY = /^chat_sessions\/[^/]+\/_files\/.+/
+/**
+ * `chat_sessions/<id>_files/<...>`：会话自己的附件条目，目录名以 _files 结尾。
+ * 注意不是 `_files/` 前加斜杠——目录名本身就是 `<id>_files`。
+ */
+export const isAttachmentEntry = (path: string) => /^chat_sessions\/[^/]+_files\/.+/.test(path)
 
 /**
  * 索引与已导入会话必须一一对应：重复、多列、少列都按不完整处理。
@@ -157,7 +160,7 @@ export const importArchive = async (file: File): Promise<void> => {
         await db.addStagingSession(local.session)
       } else if (path === INDEX_PATH && !index) {
         index = readSessionIndex(await readJson(entry))
-      } else if (IMAGE_ENTRY.test(path)) {
+      } else if (isAttachmentEntry(path)) {
         // 附件条目与顺序无关：被会话引用就存，没被引用就跳过（导出的孤立产物）。
         const id = images.get(path)
         await (id === undefined ? skipEntry(entry) : saveImage(entry, id))
