@@ -63,6 +63,41 @@ const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
  * 截断处落在半个词或标点上就清掉。只写一次——`session.title` 有值时不再覆盖，
  * 所以用户手动改过的名字不会在下一轮被改回去。
  */
+/**
+ * 首轮结束后请服务端用模型写一个更准的标题。
+ *
+ * 只在标题仍等于「本地截断」时替换：用户手改过的名字、或已经总结过的标题都不动。
+ * 请求失败、超时、被限流都保留本地截断，用户完全无感。
+ */
+const summariseTitle = (sessionId: string, question: string) => {
+  const local = deriveTitle(question)
+  const session = getSession(sessionId)
+  if (!local || !session || session.title !== local) {
+    return
+  }
+  void fetch('/api/title', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ question }),
+  })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((payload: unknown) => {
+      const title =
+        typeof payload === 'object' && payload !== null && typeof (payload as { title?: unknown }).title === 'string'
+          ? (payload as { title: string }).title.trim()
+          : ''
+      if (!title) {
+        return
+      }
+      updateSession(sessionId, (current) => (current.title === local ? { ...current, title } : current))
+      persist(sessionId)
+    })
+    .catch(() => {
+      // 保留本地截断
+    })
+}
+
 const TITLE_CJK_LIMIT = 24
 const TITLE_LATIN_LIMIT = 40
 const hasCjk = (text: string) => /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(text)
@@ -1095,6 +1130,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       }
     }
   } finally {
+    // 只有首轮（没有历史）才值得总结；后续轮次标题已经定下来了
+    if (request.history.length === 0) {
+      summariseTitle(sessionId, request.question.content)
+    }
     streamFlushes.delete(sessionId)
     cancelAnimationFrame(frame)
     updateReply(sessionId, reply)

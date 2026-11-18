@@ -30,14 +30,9 @@ import { listPanelKeys, pickPanelKey } from '../../server/panel'
  * （`credits: null`），前端主数字显示 `——`，绝不显示假的 0。
  */
 /*
- * ⚠️ 单用户假设（TODO：第二个用户注册前必须改掉）
- *
- * 现在所有用户共用同一把上游 key，`unlimited` 也来自全局配置 UPSTREAM_KEY_UNLIMITED。
- * 这只有在「全站只有一个用户」时才成立：第二个用户注册后，他会看到第一个用户的用量，
- * 而 unlimited 也会把所有人的账号都说成不限额。
- *
- * 多 key 落地时要换掉两处：下面取 key 的地方改成查 D1 里该用户自己的 key，
- * unlimited 改成读那把 key 的 quota_credit 是否为 0。响应形状不用动。
+ * 多 key 已经落地：每个用户在 D1 里都有自己的密文 key（`upstream_key_enc`），
+ * `unlimited` 由那把 key 的 `quota_credit` 是否为 0 决定，不再有全局开关。
+ * 这里与 `introspect` 共用同一份数据来源，改一处记得顺手改另一处。
  */
 type CreditEnv = Env & {
   /** 上游网关地址，默认与聊天链路同一个 */

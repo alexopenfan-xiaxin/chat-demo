@@ -3,7 +3,7 @@ import {
   pbkdf2Iterations, safeEqual, sessionCookie, sha256Hex, startSession, takeRateLimit, type Env,
 } from '../../../server/auth-core'
 import { encryptSecret } from '../../../server/keybox'
-import { createUpstreamKey } from '../../../server/panel'
+import { createUpstreamKey, deletePanelKey } from '../../../server/panel'
 
 /** POST /api/auth/register：用邮箱验证码 + 密码建号，直接登录 */
 export const onRequestPost = guarded(async (context: { request: Request; env: Env }) => {
@@ -72,6 +72,7 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
   // 建 key 走 proxy 的内部密钥通道，不需要用户会话（注册这一刻还没有会话）
   const keyEnv = env as Env & {
     INTERNAL_API_SECRET?: string
+    PANEL_KEY_IP_ALLOWLIST?: string
     UPSTREAM_BASE?: string
     PANEL_ADMIN_USER?: string
     PANEL_ADMIN_PASSWORD?: string
@@ -94,6 +95,9 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
       .bind(id, email, passwordHash, now, encrypted, created.name, created.key.slice(0, 11), created.quota)
       .run()
   } catch (error) {
+    // 写库失败就把刚建的 key 删掉：否则面板上留一把孤儿 key，而 key 名是按邮箱
+    // 确定性生成的，下次同一个邮箱再注册会撞到它、又拿不到明文，等于永久注册不进去。
+    await deletePanelKey(keyEnv, created.id)
     // users.email 有 UNIQUE：并发两个请求都能通过上面的存在性检查，让后到的那一个
     // 得到和先到的一样的回答，而不是一个 500。
     const message = error instanceof Error ? error.message : ''

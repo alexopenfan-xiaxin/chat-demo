@@ -23,6 +23,8 @@ type PanelEnv = {
   PANEL_ADMIN_PASSWORD?: string
   /** proxy 的内部密钥通道，服务端调用面板时用它过门禁 */
   INTERNAL_API_SECRET?: string
+  /** 建 key 时锁定的来源 IP，逗号分隔；默认本机出口 */
+  PANEL_KEY_IP_ALLOWLIST?: string
 }
 
 const num = (value: unknown): number | null =>
@@ -74,15 +76,48 @@ const login = async (env: PanelEnv): Promise<string | null> => {
  * 存 isolate 内存里，不做持久化：进程换了重新登录一次，代价只是多两秒。
  */
 let panelSession: { cookie: string; at: number } | null = null
+/** 并发未命中时只放一个人去登录，其余等它的结果 */
+let panelLogin: Promise<string | null> | null = null
 const PANEL_SESSION_TTL_MS = 5 * 60 * 1000
 
 const panelCookie = async (env: PanelEnv, force = false): Promise<string | null> => {
   if (!force && panelSession && Date.now() - panelSession.at < PANEL_SESSION_TTL_MS) {
     return panelSession.cookie
   }
-  const cookie = await login(env)
-  panelSession = cookie ? { cookie, at: Date.now() } : null
-  return cookie
+  if (!force && panelLogin) {
+    return panelLogin
+  }
+  const attempt = login(env).then((cookie) => {
+    panelSession = cookie ? { cookie, at: Date.now() } : null
+    return cookie
+  })
+  panelLogin = attempt
+  try {
+    return await attempt
+  } finally {
+    if (panelLogin === attempt) {
+      panelLogin = null
+    }
+  }
+}
+
+/**
+ * 删掉面板上的一把 key。注册在「建了 key 但写库失败」时用它补偿，
+ * 否则面板上会留下一把没人用的孤儿 key。
+ */
+export const deletePanelKey = async (env: PanelEnv, id: number | null): Promise<boolean> => {
+  if (id === null) {
+    return false
+  }
+  const cookie = await panelCookie(env)
+  if (!cookie) {
+    return false
+  }
+  const response = await fetch(`${panelBase(env)}/api/keys/${id}`, {
+    method: 'DELETE',
+    headers: { cookie, 'x-internal-secret': env.INTERNAL_API_SECRET ?? '' },
+  })
+  return response.ok
 }
 
 /** 面板给的 key 列表；字段名两种写法都认，认不出就当没有 */
@@ -157,7 +192,6 @@ export const pickPanelKey = (keys: PanelKey[], name: string | null): PanelKey | 
 export const SIGNUP_CREDIT_QUOTA = 10
 
 const KEY_MODELS = ['deepseek-v4.1-flash']
-const KEY_IP_ALLOWLIST = ['43.143.237.221']
 
 /**
  * key 名：`ds-chat-` + 邮箱哈希的 4 位 base36。
@@ -165,16 +199,18 @@ const KEY_IP_ALLOWLIST = ['43.143.237.221']
  */
 export const keyNameFor = async (email: string): Promise<string> => {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(email)))
+  // 取 6 字节（48 位）刚好覆盖 36^8 的空间
   let value = 0
   for (const byte of digest.slice(0, 6)) {
     value = value * 256 + byte
   }
-  // 36^4 = 1679616，够小也够分辨
-  const suffix = (value % 1679616).toString(36).padStart(4, '0')
+  // 8 位 base36 ≈ 2.8e12：4 位只有 168 万，1000 个用户时生日悖论下碰撞率约 26%。
+  // 面板允许重名，重名会让人在额度页看到别人的用量，所以这里必须放宽。
+  const suffix = (value % 2821109907456).toString(36).padStart(8, '0')
   return `ds-chat-${suffix}`
 }
 
-export type CreatedKey = { name: string; key: string; quota: number }
+export type CreatedKey = { id: number | null; name: string; key: string; quota: number }
 
 /**
  * 注册时建一把属于这个用户的上游 key。
@@ -193,7 +229,11 @@ export const createUpstreamKey = async (env: PanelEnv, email: string): Promise<C
     quota_credit: SIGNUP_CREDIT_QUOTA,
     models: KEY_MODELS,
     max_ips: 1,
-    ip_allowlist: KEY_IP_ALLOWLIST,
+    // 出口 IP 走配置：写死的话，机器换个出口所有已建 key 一起失效，还查不出原因
+    ip_allowlist: (env.PANEL_KEY_IP_ALLOWLIST ?? '43.143.237.221')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
   }
   const post = async (session: string) =>
     fetch(`${panelBase(env)}/api/keys`, {
@@ -233,5 +273,10 @@ export const createUpstreamKey = async (env: PanelEnv, email: string): Promise<C
   if (!plain) {
     return null
   }
-  return { name: typeof record.name === 'string' ? record.name : name, key: plain, quota: SIGNUP_CREDIT_QUOTA }
+  return {
+    id: typeof record.id === 'number' ? record.id : null,
+    name: typeof record.name === 'string' ? record.name : name,
+    key: plain,
+    quota: SIGNUP_CREDIT_QUOTA,
+  }
 }

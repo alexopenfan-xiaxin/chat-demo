@@ -98,3 +98,22 @@ describe('resolveUpstreamKey', () => {
     expect(result.key).toBe('')
   })
 })
+
+describe('keyNameFor', () => {
+  it('同一个邮箱稳定同结果，格式是 ds-chat-<8 位>', async () => {
+    const { keyNameFor } = await import('../server/panel')
+    const first = await keyNameFor('alex.openfan@gmail.com')
+    const again = await keyNameFor('alex.openfan@gmail.com')
+    expect(first).toBe(again)
+    expect(first).toMatch(/^ds-chat-[0-9a-z]{8}$/)
+  })
+
+  it('不同邮箱几乎不会撞名（取一万个样本不应出现重复）', async () => {
+    const { keyNameFor } = await import('../server/panel')
+    const seen = new Set<string>()
+    for (let i = 0; i < 10000; i += 1) {
+      seen.add(await keyNameFor(`user${i}@example.com`))
+    }
+    expect(seen.size).toBe(10000)
+  })
+})
