@@ -151,6 +151,32 @@ export const parseUsage = (raw: UpstreamUsage, unlimited: boolean): UsageSnapsho
   }
 }
 
+export type StoredKey = { enc: string | null; quota: number | null } | null
+
+/**
+ * 由 D1 里存的那份密文解出这个用户的上游 key，并顺便判定是否不限额。
+ *
+ * 解不出来就返回空 key —— 绝不能回落到全局 UPSTREAM_USAGE_KEY，那是管理员那把，
+ * 回落到它等于给「注册成功但建 key 失败」的账号一张无限额通行证。空 key 由调用方
+ * 转成 no_key 响应（额度页显示「额度未开通」，proxy 回 403）。
+ *
+ * 解密函数作为参数传入，测试里可以换成假的，不必真配主密钥。
+ */
+export const resolveUpstreamKey = async (
+  stored: StoredKey,
+  env: { KEY_ENC_SECRET?: string; UPSTREAM_KEY_UNLIMITED?: string },
+  decrypt: (stored: string, secret: string) => Promise<string | null>
+): Promise<{ key: string; unlimited: boolean }> => {
+  if (stored?.enc && env.KEY_ENC_SECRET) {
+    const plain = await decrypt(stored.enc, env.KEY_ENC_SECRET)
+    if (plain) {
+      // 面板语义：quota_credit 为 0 就是不限额，不是零额度
+      return { key: plain, unlimited: !(typeof stored.quota === 'number' && stored.quota > 0) }
+    }
+  }
+  return { key: '', unlimited: env.UPSTREAM_KEY_UNLIMITED === '1' }
+}
+
 export const onRequestGet = guarded(async (context: { request: Request; env: CreditEnv }) => {
   const { request, env } = context
   const user = await currentUser(request, env.DB)
@@ -187,16 +213,7 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
   )
     .bind(user.user.id)
     .first<{ enc: string | null; quota: number | null; keyName: string | null }>()
-  let key = ''
-  // quota_credit 为 0（或没记）就是面板语义里的「不限额」
-  let unlimited = env.UPSTREAM_KEY_UNLIMITED === '1'
-  if (stored?.enc && env.KEY_ENC_SECRET) {
-    const plain = await decryptSecret(stored.enc, env.KEY_ENC_SECRET)
-    if (plain) {
-      key = plain
-      unlimited = !(typeof stored.quota === 'number' && stored.quota > 0)
-    }
-  }
+  const { key, unlimited } = await resolveUpstreamKey(stored, env, decryptSecret)
   // 没有自己的 key 就没有额度可查。这里也不能回落到 UPSTREAM_USAGE_KEY：
   // 那是管理员那把，回落到它会让没绑 key 的账号看到别人的用量。
   if (!key) {
