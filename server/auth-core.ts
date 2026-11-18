@@ -214,6 +214,10 @@ export const takeRateLimit = async (
  *
  * 给「先问还能不能做，做成之后才计数」的场景用。takeRateLimit 是写在前面的，
  * 上游失败也会扣掉一次，用户重试几次额度就没了。
+ *
+ * 预检和记账之间不是原子的：并发突发时多个请求会同时通过预检、之后各记一次，
+ * 这一瞬间能超过上限。所以 60/小时 是软上限，只防正常使用的暴搜和误用，
+ * 不是精确配额——别拿这个数字做容量估算。
  */
 export const rateLimitReached = async (
   db: D1Database,
