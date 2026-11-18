@@ -110,6 +110,8 @@
 
 .fill {
   height: 100%;
+  /* 超额（used > limit）时钳在轨道内，别溢出版心 */
+  max-width: 100%;
   border-radius: 999px;
   background: var(--credit-brand);
   transition: width 160ms var(--ds-ease-in-out);
@@ -117,6 +119,11 @@
 
 .fillWarn {
   background: var(--credit-warn);
+}
+
+/* 额度已经用完：比「快用完」更醒目，用全局错误色 */
+.fillError {
+  background: var(--dsw-alias-state-error-primary);
 }
 
 .meta {

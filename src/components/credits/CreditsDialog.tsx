@@ -1,19 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { fetchCredits, type CreditsSnapshot } from '../../services/api/credits.js'
+import { barWidthPercent, formatCredits, formatPercent } from '../../services/credits/format.js'
 import { loadConversationUsage, type ConversationUsage } from '../../services/credits/usageStats.js'
 import { Modal } from '../base/Modal.js'
 import { IconChevronDownOutline14, IconRefreshOutline16 } from '../base/icons.js'
 import styles from './CreditsDialog.module.css'
-
-/** 积分口径：整数不留小数；一位够用就一位（12.7），不够就给两位（0.46） */
-const formatCredits = (value: number) => {
-  const two = Math.round(value * 100) / 100
-  if (Number.isInteger(two)) {
-    return String(two)
-  }
-  return Number.isInteger(two * 10) ? two.toFixed(1) : two.toFixed(2)
-}
 
 /** token 数：过万用「万」，保留一位小数 */
 const formatTokens = (value: number) => {
@@ -97,7 +89,18 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const limit = credits?.limit ?? null
 
   const exhausted = !unlimited && remaining !== null && remaining <= 0
-  const ratio = limit && limit > 0 && used !== null ? Math.min(1, used / limit) : null
+  /** 有额度信息才画条；超额时百分比按真实比例（104%），条钳在 100% 不溢出 */
+  const hasBar = limit !== null && limit > 0 && used !== null
+  const rawRatio = hasBar ? (used as number) / (limit as number) : null
+  const barWidth = barWidthPercent(used, limit)
+  const percentText = rawRatio === null || used === null || used <= 0 ? null : formatPercent(rawRatio)
+  /** 剩余比例决定条的警示色：剩得越少越刺眼，用完落 error 档 */
+  const remainingRatio = limit && limit > 0 && remaining !== null ? remaining / limit : null
+  const barTone = exhausted
+    ? styles.fillError
+    : remainingRatio !== null && remainingRatio <= 0.2
+      ? styles.fillWarn
+      : ''
 
   // 不限额时唯一有意义的数字是「用掉多少」；读不到时主数字位留一个破折号，不留空
   const mainValue =
@@ -164,12 +167,12 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
               <span className={styles.unit}>{status === 'unavailable' ? '' : mainUnit}</span>
             </div>
 
-            {status === 'ready' && !unlimited && ratio !== null ? (
+            {status === 'ready' && !unlimited && hasBar ? (
               <>
                 <div className={styles.track}>
                   <div
-                    className={[styles.fill, exhausted ? styles.fillWarn : ''].join(' ')}
-                    style={{ width: `${Math.round(ratio * 100)}%` }}
+                    className={[styles.fill, barTone].filter(Boolean).join(' ')}
+                    style={{ width: `${barWidth}%` }}
                   />
                 </div>
                 <p className={styles.meta}>
@@ -177,6 +180,7 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
                     used: used === null ? '—' : formatCredits(used),
                     limit: limit === null ? '—' : formatCredits(limit),
                   })}
+                  {percentText === null ? null : ` · ${percentText}`}
                 </p>
               </>
             ) : null}
