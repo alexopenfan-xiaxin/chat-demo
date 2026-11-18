@@ -7,11 +7,15 @@ import { toLocalSession } from './toLocal.js'
 import {
   ArchiveError,
   isZipFile,
+  listArchivePaths,
   readArchive,
   readEntry,
   skipEntry,
   type ArchiveEntry,
 } from './zipReader.js'
+
+/** 导入进度：总数取不到时为 null，界面据此退化成不带计数的文案 */
+export type ImportProgress = (done: number, total: number | null) => void
 
 /** 从原件字节补充图片 MIME；无法识别时为空字符串，图片身份仍由归档的 is_image 决定。 */
 const imageType = (bytes: Uint8Array): string => {
@@ -100,10 +104,19 @@ export const checkArchiveFormat = async (file: File): Promise<void> => {
  * 会话读完立即暂存，只保留图片路径映射；图片全部读完后逐会话回填 MIME，不改变图片身份。
  * 写入导入暂存存储；调用方负责先清空暂存，成功后替换正式数据，失败时清理暂存。
  */
-export const importArchive = async (file: File): Promise<void> => {
+export const importArchive = async (file: File, onProgress?: ImportProgress): Promise<void> => {
   if (!(await isZipFile(file))) {
     fail('backupUnrecognized')
   }
+  // 总数只数会话文件：中心目录里就有，不需要解压；数不出来就不显示"几分之几"，
+  // 免得把一个猜出来的分母摆给用户看。
+  let total: number | null = null
+  try {
+    total = (await listArchivePaths(file)).filter((path) => parseSessionPath(path) !== null).length
+  } catch {
+    total = null
+  }
+  onProgress?.(0, total)
   const imported = new Set<string>()
   const images = new Map<string, string>()
   /** 已保存的原件：文件 ID → MIME。同一图片出现在多个会话目录时只保存一次。 */
@@ -158,6 +171,7 @@ export const importArchive = async (file: File): Promise<void> => {
           updated_at: file.updated_at,
         })
         await db.addStagingSession(local.session)
+        onProgress?.(imported.size, total)
       } else if (path === INDEX_PATH && !index) {
         index = readSessionIndex(await readJson(entry))
       } else if (isAttachmentEntry(path)) {

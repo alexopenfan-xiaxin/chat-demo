@@ -51,6 +51,7 @@ export const App = () => {
   const initError = useChatStore((state) => state.initError)
   const saveError = useChatStore((state) => Object.values(state.sessionSaveErrors).some(Boolean))
   const importingHistory = useChatStore((state) => state.importingHistory)
+  const importProgress = useChatStore((state) => state.importProgress)
   const session = useChatStore((state) =>
     state.activeId !== null && Object.hasOwn(state.sessionCache, state.activeId)
       ? state.sessionCache[state.activeId]
@@ -194,6 +195,14 @@ export const App = () => {
                 {isMobile ? <MobileHeader /> : null}
                 <div className={styles.loadingState} role="status" aria-live="polite">
                   <span>{t('historyImporting')}</span>
+                  <p className={styles.loadingHint}>
+                    {importProgress !== null && importProgress.total !== null
+                      ? t('historyImportProgress', {
+                          done: importProgress.done,
+                          total: importProgress.total,
+                        })
+                      : t('historyImportApprox')}
+                  </p>
                 </div>
               </div>
             ) : !ready || (activeId !== null && !session) ? (
@@ -209,6 +218,9 @@ export const App = () => {
                           ? t('sessionLoadFailed')
                           : t('sessionLoading')}
                   </span>
+                  {sessionLoadError && !activeInList ? (
+                    <p className={styles.loadingHint}>{t('sessionMissingHint')}</p>
+                  ) : null}
                   {!ready && initError ? (
                     <Button variant="outlined" size="m" onClick={() => void initChat()}>
                       {t('retry')}

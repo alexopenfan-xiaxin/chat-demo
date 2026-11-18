@@ -257,6 +257,8 @@ type ChatState = {
   activeId: string | null
   /** 正在生成回复的会话 */
   streaming: Record<string, AbortController>
+  /** 导入进度：会话数已处理 / 总数（总数取不到时为 null） */
+  importProgress: { done: number; total: number | null } | null
 }
 
 export const useChatStore = create<ChatState>(() => ({
@@ -269,6 +271,7 @@ export const useChatStore = create<ChatState>(() => ({
   sessionSaveErrors: {},
   activeId: null,
   streaming: {},
+  importProgress: null,
 }))
 
 const { getState: get, setState: set } = useChatStore
@@ -630,7 +633,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     })
     return summaries.length
   } finally {
-    set({ importingHistory: false })
+    set({ importingHistory: false, importProgress: null })
     retrySaveSessions()
     const { activeId, ready } = get()
     // 替换失败时恢复被取消的详情读取，原有记录继续可用。
@@ -684,7 +687,11 @@ export const renameSession = (id: string, title: string) => {
  * 删除会话；本地原件仅在没有其他会话引用时清理。远端文件不删：导入、编辑、重新生成都会复用同一个附件，
  * 同一服务端文件可能被多个会话引用，不维护引用计数。
  */
-export type DeleteOutcome = 'deleted' | 'blocked' | 'failed'
+/**
+ * deleted 删除成功 · blocked 这条对话还在写（放弃删除）·
+ * busy 有导入在做（不是生成中，别用同一句文案）· failed 存储出错
+ */
+export type DeleteOutcome = 'deleted' | 'blocked' | 'busy' | 'failed'
 
 export const removeSession = (id: string): Promise<DeleteOutcome> => {
   const task = removeSessionData(id).finally(() => deletionTasks.delete(task))
@@ -694,7 +701,7 @@ export const removeSession = (id: string): Promise<DeleteOutcome> => {
 
 const removeSessionData = async (id: string): Promise<DeleteOutcome> => {
   if (get().importingHistory || deletingSessions.has(id)) {
-    return 'blocked'
+    return 'busy'
   }
   const epoch = historyEpoch
   deletingSessions.add(id)

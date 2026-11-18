@@ -228,6 +228,18 @@ const readEntryOffset = async (file: File, entry: Entry, boundary: number) => {
   return start
 }
 
+/**
+ * 只读中心目录列出全部条目名，用于导入前统计进度总数；不解压任何内容。
+ * 读不出来（结构损坏）就由调用方退化成不带总数的文案，不猜数量。
+ */
+export const listArchivePaths = async (file: File): Promise<string[]> => {
+  if (!(await isZipFile(file))) {
+    invalid()
+  }
+  const { entries } = await readDirectory(file)
+  return entries.map((entry) => entry.path)
+}
+
 export type ArchiveEntry = {
   path: string
   size: number

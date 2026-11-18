@@ -168,9 +168,14 @@ export const Sider = ({
                     if (outcome === 'deleted') {
                       setDeleting(null)
                     } else {
-                      // blocked：这条对话还在生成，删掉会被随后的保存写回来
+                      // blocked：还在生成，删掉会被随后的保存写回来；busy：正在导入，不是同一种原因
                       showToast({
-                        key: outcome === 'blocked' ? 'sessionDeleteBlocked' : 'sessionDeleteFailed',
+                        key:
+                          outcome === 'blocked'
+                            ? 'sessionDeleteBlocked'
+                            : outcome === 'busy'
+                              ? 'sessionDeleteBusy'
+                              : 'sessionDeleteFailed',
                         type: 'error',
                       })
                     }
