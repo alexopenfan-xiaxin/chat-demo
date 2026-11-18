@@ -181,6 +181,8 @@ export type FunctionToolParam = {
 export type ToolExchangeItem =
   | { type: 'function_call'; call_id: string; name: string; arguments: string }
   | { type: 'function_call_output'; call_id: string; output: string }
+  /** 模型在发起这一轮调用之前说的话，按 Responses 的 message item 简形式回传 */
+  | { role: 'assistant'; content: string }
 
 export type CreateMessageRequest = {
   model: ChatModel

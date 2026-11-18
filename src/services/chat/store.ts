@@ -1163,6 +1163,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     let toolRounds = 0
     for (;;) {
       const calls: ToolCall[] = []
+      /** 本轮之前的块数：用来只回传这一轮模型自己说的话 */
+      const blocksBefore = reply.blocks.length
       let roundDone = false
     for (let attempt = 0; ; attempt += 1) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
@@ -1317,6 +1319,16 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         updateReply(sessionId, reply)
         persist(sessionId)
         break
+      }
+      // 把模型这一轮自己说的是带回给它：多轮搜索后它看不见上文会重复解释。
+      // 顺序必须在 function_call 之前，否则就成了「先出结果再有调用」。
+      const said = reply.blocks
+        .slice(blocksBefore)
+        .flatMap((block) => (block.type === 'text' && !block.isTemplate ? [block.text] : []))
+        .join('\n\n')
+        .trim()
+      if (said) {
+        exchanges.push({ role: 'assistant', content: said })
       }
       calls.forEach((call, index) => {
         exchanges.push({
