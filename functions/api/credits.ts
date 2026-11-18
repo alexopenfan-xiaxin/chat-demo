@@ -230,7 +230,7 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
   let credits = snapshot.credits
   let creditsSource: 'upstream' | 'panel' | null = credits ? 'upstream' : null
   if (!snapshot.creditsReliable) {
-    const panelKey = pickPanelKey(await listPanelKeys(env, cookieToken), env)
+    const panelKey = pickPanelKey(await listPanelKeys(env), env)
     if (panelKey?.usedCredit !== null && panelKey?.usedCredit !== undefined) {
       const quota = panelKey.quotaCredit
       // quota 0 在面板里是「不限额」，不是零额度

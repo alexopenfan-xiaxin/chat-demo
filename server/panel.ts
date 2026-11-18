@@ -23,6 +23,8 @@ type PanelEnv = {
   PANEL_ADMIN_PASSWORD?: string
   /** 现有唯一用户绑的那把 key 的名字；多 key 落地后由 D1 逐用户提供 */
   PANEL_KEY_NAME?: string
+  /** proxy 的内部密钥通道，服务端调用面板时用它过门禁 */
+  INTERNAL_API_SECRET?: string
 }
 
 const num = (value: unknown): number | null =>
@@ -34,23 +36,22 @@ export const panelBase = (env: PanelEnv): string =>
 /**
  * 面板登录拿会话 cookie。
  *
- * 面板所有路径都挂了自己的鉴权，所以除了表单本身，还要带上 ds-chat 的会话票
- * （`x-ds-chat-auth`），否则请求在 proxy 那一层就被挡回来。
+ * 面板所有路径都挂在自己的鉴权后面，而我们的 proxy 又给 `/api/` 加了一道会话门禁。
+ * 注册那一刻用户还没登录、根本没有会话票，所以这里走 proxy 的内部密钥通道
+ * （`x-internal-secret`）：只对 `/api/` 生效，碰不到 `/v1`。
  */
-const login = async (
-  env: PanelEnv,
-  cookieToken: string
-): Promise<string | null> => {
+const login = async (env: PanelEnv): Promise<string | null> => {
   const user = env.PANEL_ADMIN_USER
   const password = env.PANEL_ADMIN_PASSWORD
-  if (!user || !password) {
+  const internal = env.INTERNAL_API_SECRET
+  if (!user || !password || !internal) {
     return null
   }
   const response = await fetch(`${panelBase(env)}/api/login`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-ds-chat-auth': cookieToken,
+      'x-internal-secret': internal,
     },
     body: JSON.stringify({ username: user, password }),
   })
@@ -77,33 +78,32 @@ const login = async (
 let panelSession: { cookie: string; at: number } | null = null
 const PANEL_SESSION_TTL_MS = 5 * 60 * 1000
 
-const panelCookie = async (env: PanelEnv, cookieToken: string, force = false): Promise<string | null> => {
+const panelCookie = async (env: PanelEnv, force = false): Promise<string | null> => {
   if (!force && panelSession && Date.now() - panelSession.at < PANEL_SESSION_TTL_MS) {
     return panelSession.cookie
   }
-  const cookie = await login(env, cookieToken)
+  const cookie = await login(env)
   panelSession = cookie ? { cookie, at: Date.now() } : null
   return cookie
 }
 
 /** 面板给的 key 列表；字段名两种写法都认，认不出就当没有 */
-export const listPanelKeys = async (
-  env: PanelEnv,
-  cookieToken: string
-): Promise<PanelKey[]> => {
-  const fetchKeys = async (cookie: string) =>
-    fetch(`${panelBase(env)}/api/keys`, {
-      headers: { cookie, 'x-ds-chat-auth': cookieToken, 'cache-control': 'no-store' },
-    })
+export const listPanelKeys = async (env: PanelEnv): Promise<PanelKey[]> => {
+  const headers = (cookie: string) => ({
+    cookie,
+    'x-internal-secret': env.INTERNAL_API_SECRET ?? '',
+    'cache-control': 'no-store',
+  })
+  const fetchKeys = async (cookie: string) => fetch(`${panelBase(env)}/api/keys`, { headers: headers(cookie) })
 
-  const cookie = await panelCookie(env, cookieToken)
+  const cookie = await panelCookie(env)
   if (!cookie) {
     return []
   }
   let response = await fetchKeys(cookie)
   // 会话过期就丢掉重登一次；别让一条失效 cookie 卡住 5 分钟
   if (response.status === 401 || response.status === 403) {
-    const refreshed = await panelCookie(env, cookieToken, true)
+    const refreshed = await panelCookie(env, true)
     if (!refreshed) {
       return []
     }
@@ -186,12 +186,8 @@ export type CreatedKey = { name: string; key: string; quota: number }
  * `quota_credit` 是首赠积分；注意面板里 `quota_credit: 0` 表示**不限额**，不是零额度，
  * 所以赠送额度绝不能是 0。`models` 只给 flash，`max_ips` 限死 1，来源 IP 固定本机出口。
  */
-export const createUpstreamKey = async (
-  env: PanelEnv,
-  cookieToken: string,
-  email: string
-): Promise<CreatedKey | null> => {
-  const cookie = await panelCookie(env, cookieToken)
+export const createUpstreamKey = async (env: PanelEnv, email: string): Promise<CreatedKey | null> => {
+  const cookie = await panelCookie(env)
   if (!cookie) {
     return null
   }
@@ -209,14 +205,14 @@ export const createUpstreamKey = async (
       headers: {
         cookie: session,
         'content-type': 'application/json',
-        'x-ds-chat-auth': cookieToken,
+        'x-internal-secret': env.INTERNAL_API_SECRET ?? '',
       },
       body: JSON.stringify(body),
     })
 
   let response = await post(cookie)
   if (response.status === 401 || response.status === 403) {
-    const refreshed = await panelCookie(env, cookieToken, true)
+    const refreshed = await panelCookie(env, true)
     if (!refreshed) {
       return null
     }

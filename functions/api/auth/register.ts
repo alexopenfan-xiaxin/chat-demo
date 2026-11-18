@@ -69,9 +69,9 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
   const id = crypto.randomUUID()
   const passwordHash = await hashPassword(password, pbkdf2Iterations(env))
 
-  // 先签会话：拿它做面板 /api/* 的门禁票。user 行还没写，但 sessions 不依赖外键。
-  const token = await startSession(env.DB, id, request)
+  // 建 key 走 proxy 的内部密钥通道，不需要用户会话（注册这一刻还没有会话）
   const keyEnv = env as Env & {
+    INTERNAL_API_SECRET?: string
     UPSTREAM_BASE?: string
     PANEL_ADMIN_USER?: string
     PANEL_ADMIN_PASSWORD?: string
@@ -79,13 +79,11 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
   }
   const encSecret = keyEnv.KEY_ENC_SECRET
   if (!encSecret) {
-    await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256Hex(token)).run()
     return bad('注册暂时不可用，稍后再试', 503)
   }
   // 建这把用户的 key：失败就不建号，免得出一个没有额度、聊不了天的账号
-  const created = await createUpstreamKey(keyEnv, token, email)
+  const created = await createUpstreamKey(keyEnv, email)
   if (!created) {
-    await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256Hex(token)).run()
     return bad('开通额度失败，稍后再试', 503)
   }
   const encrypted = await encryptSecret(created.key, encSecret)
@@ -104,5 +102,7 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
     }
     throw error
   }
+  // 账已经建好，这时候才签会话：建 key 失败不会留下一条孤儿会话
+  const token = await startSession(env.DB, id, request)
   return json({ user: { id, email }, token }, 200, { 'set-cookie': sessionCookie(token) })
 })
