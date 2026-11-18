@@ -5,6 +5,7 @@ import { readServerSentEvents } from './sse.js'
 import {
   itemKind,
   readDelta,
+  readFunctionCall,
   readFailure,
   readResponseMeta,
   readStopReason,
@@ -259,6 +260,13 @@ export async function* streamMessage(
       }
       case 'response.output_item.done': {
         const kind = itemKind(payload.item)
+        if (kind === 'function_call') {
+          const call = readFunctionCall(payload.item)
+          if (call) {
+            yield { type: 'tool_call', call }
+          }
+          break
+        }
         if (kind === 'reasoning' && thinkingIndex !== null) {
           yield { type: 'content_block_stop', index: thinkingIndex }
           thinkingIndex = null

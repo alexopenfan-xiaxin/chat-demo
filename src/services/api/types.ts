@@ -160,24 +160,36 @@ export type MessageParam =
   | { role: 'user'; content: string | (FileBlockParam | TextBlockParam)[] }
   | { role: 'assistant'; content: AssistantBlockParam[] }
 
-/** 开启联网搜索与边想边搜 */
-export type DeepseekWebSearchTool = {
-  type: 'deepseek_web_search'
-  name: 'deepseek_web_search'
+/**
+ * 标准 function 工具声明。旧版只给 `{type:'deepseek_web_search', name}` 这种没有 schema
+ * 的声明，模型填不出参数、arguments 恒为 {}，所以联网工具从来没真正执行过。
+ */
+export type FunctionToolParam = {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: {
+      type: 'object'
+      properties: Record<string, { type: string; description?: string }>
+      required?: string[]
+    }
+  }
 }
 
-/** 阅读本轮用户消息中的链接，与搜索工具独立声明 */
-export type DeepseekReadUrlTool = {
-  type: 'deepseek_read_url'
-  name: 'deepseek_read_url'
-}
+/** 工具往返要原样带回下一轮请求的两类条目 */
+export type ToolExchangeItem =
+  | { type: 'function_call'; call_id: string; name: string; arguments: string }
+  | { type: 'function_call_output'; call_id: string; output: string }
 
 export type CreateMessageRequest = {
   model: ChatModel
   system: string
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
-  tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
+  tools: FunctionToolParam[]
+  /** 上一轮工具调用与结果的往返，按发生顺序追加在用户消息之后 */
+  toolExchange?: ToolExchangeItem[]
   safety_check: { level: 'high' }
   title?: { enabled: boolean }
 }
@@ -229,6 +241,11 @@ export type MessageStreamEvent =
         title?: string
       }
       usage?: MessageUsage
+    }
+  | {
+      /** 模型要调一个客户端工具：调用方执行后带结果重新发一轮请求 */
+      type: 'tool_call'
+      call: { callId: string; name: string; arguments: string }
     }
   | { type: 'message_stop' }
   | { type: 'ping' }

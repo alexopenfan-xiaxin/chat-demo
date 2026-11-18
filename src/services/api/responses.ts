@@ -74,11 +74,17 @@ export const toResponsesBody = (body: CreateMessageRequest) => {
     }
     append(input, 'assistant', textOf(message.content))
   }
+  // 工具往返必须排在用户消息之后、按发生顺序：function_call 与它的 output 成对出现
+  for (const item of body.toolExchange ?? []) {
+    input.push(item as unknown as ResponsesInputItem)
+  }
   return {
     model: MODEL_ALIAS[body.model] ?? body.model ?? DEFAULT_MODEL,
     instructions: body.system,
     input,
     stream: true,
+    tool_choice: body.tools.length > 0 ? 'auto' : undefined,
+    tools: body.tools,
     reasoning: { effort: body.thinking.type === 'enabled' ? 'high' : 'low' },
   }
 }
@@ -101,7 +107,7 @@ export const readUsage = (value: unknown): MessageUsage | undefined => {
   }
 }
 
-export type ResponsesItemKind = 'reasoning' | 'message' | 'other'
+export type ResponsesItemKind = 'reasoning' | 'message' | 'function_call' | 'other'
 
 /** 输出项类型：reasoning 是思考，message 是正文，其余（工具调用等）不参与展示 */
 export const itemKind = (item: unknown): ResponsesItemKind => {
@@ -111,7 +117,25 @@ export const itemKind = (item: unknown): ResponsesItemKind => {
   if (item.type === 'reasoning') {
     return 'reasoning'
   }
+  if (item.type === 'function_call') {
+    return 'function_call'
+  }
   return item.type === 'message' ? 'message' : 'other'
+}
+
+/** 读一条 function_call：call_id、名称、参数 JSON 原文 */
+export const readFunctionCall = (
+  item: unknown
+): { callId: string; name: string; arguments: string } | null => {
+  if (!isRecord(item) || item.type !== 'function_call') {
+    return null
+  }
+  const callId = isString(item.call_id) ? item.call_id : isString(item.id) ? item.id : ''
+  const name = isString(item.name) ? item.name : ''
+  if (!callId || !name) {
+    return null
+  }
+  return { callId, name, arguments: isString(item.arguments) ? item.arguments : '{}' }
 }
 
 export const readResponseMeta = (value: unknown): { id: string; model: string } => {

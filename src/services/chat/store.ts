@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import type { ChatModel, CreateMessageRequest, ToolExchangeItem } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
@@ -15,6 +15,7 @@ import {
   prepareDraftMessage,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
+import type { TextPart } from './types.js'
 import {
   applyEvent,
   canContinueReply,
@@ -45,15 +46,128 @@ const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
 
-/** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
+/**
+ * 工具声明统一用标准 function schema。
+ *
+ * 旧写法 `{type:'deepseek_web_search', name}` 只给名字不给参数结构，模型收到之后
+ * arguments 恒为 `{}`，工具永远执行不起来——那是这套联网能力的根本原因，不是补充。
+ * 阅读链接常开；智能搜索关着时不声明搜索工具。
+ */
 const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
   const tools: CreateMessageRequest['tools'] = [
-    { type: 'deepseek_read_url', name: 'deepseek_read_url' },
+    {
+      type: 'function',
+      function: {
+        name: 'read_url',
+        description: '读取一个网页的正文内容，返回标题和正文纯文本',
+        parameters: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: '要读取的完整网址，以 http 或 https 开头' },
+          },
+          required: ['url'],
+        },
+      },
+    },
   ]
   if (search) {
-    tools.push({ type: 'deepseek_web_search', name: 'deepseek_web_search' })
+    tools.push({
+      type: 'function',
+      function: {
+        name: 'web_search',
+        description: '搜索互联网，返回若干条结果的标题、链接和摘要',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: '搜索关键词' },
+          },
+          required: ['query'],
+        },
+      },
+    })
   }
   return tools
+}
+
+/** 工具调用最多连做 3 轮；模型还想调就收敛成一句说明，不静默丢弃 */
+const MAX_TOOL_ROUNDS = 3
+
+type ToolCall = { callId: string; name: string; arguments: string }
+
+/** 给用户看的过程文案：正在搜索/正在读取 */
+const toolStatusText = (call: ToolCall): string => {
+  let query = ''
+  try {
+    const args = JSON.parse(call.arguments) as { query?: unknown; url?: unknown }
+    query = typeof args.query === 'string' ? args.query : typeof args.url === 'string' ? args.url : ''
+  } catch {
+    query = ''
+  }
+  const name = call.name === 'web_search' ? '正在搜索' : '正在读取网页'
+  return query ? `${name}「${query}」…` : `${name}…`
+}
+
+/**
+ * 执行一次工具调用，返回要回传给模型的字符串。
+ *
+ * 工具结果一律当作**不可信数据**：只有搜索结果的标题/链接/摘要或网页标题+正文，
+ * 不带会话 token、用户邮箱、历史消息。失败也回一条 error 描述，让模型自己决定怎么说。
+ */
+const runToolCall = async (call: ToolCall, signal: AbortSignal): Promise<string> => {
+  let args: Record<string, unknown> = {}
+  try {
+    args = JSON.parse(call.arguments) as Record<string, unknown>
+  } catch {
+    args = {}
+  }
+  try {
+    if (call.name === 'web_search') {
+      const query = typeof args.query === 'string' ? args.query : ''
+      const response = await fetch('/api/tools/search', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query }),
+        signal,
+      })
+      const payload = (await response.json()) as {
+        results?: Array<{ title: string; url: string; snippet: string }>
+        error?: string
+      }
+      if (!response.ok) {
+        return JSON.stringify({ error: payload.error ?? '搜索失败' })
+      }
+      const lines = (payload.results ?? []).map(
+        (item, index) => `${index + 1}. ${item.title}\n${item.url}\n${item.snippet}`
+      )
+      return lines.length > 0 ? `搜索结果：\n${lines.join('\n\n')}` : '没有找到相关结果'
+    }
+    if (call.name === 'read_url') {
+      const url = typeof args.url === 'string' ? args.url : ''
+      const response = await fetch(`/api/tools/fetch?url=${encodeURIComponent(url)}`, {
+        credentials: 'same-origin',
+        signal,
+      })
+      const payload = (await response.json()) as {
+        title?: string
+        content?: string
+        truncated?: boolean
+        error?: string
+      }
+      if (!response.ok) {
+        return JSON.stringify({ error: payload.error ?? '读取失败' })
+      }
+      const head = payload.title ? `标题：${payload.title}\n` : ''
+      const tail = payload.truncated ? '\n（正文过长，已截断）' : ''
+      return `${head}正文：\n${payload.content ?? ''}${tail}`
+    }
+    return JSON.stringify({ error: `未知工具：${call.name}` })
+  } catch (error) {
+    if (signal.aborted) {
+      throw error
+    }
+    return JSON.stringify({ error: error instanceof Error ? error.message : '工具调用失败' })
+  }
 }
 
 /**
@@ -1038,6 +1152,12 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   streamFlushes.set(sessionId, flush)
 
   try {
+    // 工具往返：模型发起调用 → 我们执行 → 结果回传 → 它接着说完，最多 MAX_TOOL_ROUNDS 轮
+    const exchanges: ToolExchangeItem[] = []
+    let toolRounds = 0
+    for (;;) {
+      const calls: ToolCall[] = []
+      let roundDone = false
     for (let attempt = 0; ; attempt += 1) {
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
       let preparing = true
@@ -1068,11 +1188,16 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
             safety_check: SAFETY_CHECK,
             tools: serverTools(initial.search ?? false),
+            toolExchange: exchanges.length > 0 ? [...exchanges] : undefined,
           },
           controller.signal
         )
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
+          if (event.type === 'tool_call') {
+            calls.push(event.call)
+            continue
+          }
           receivedContent ||= event.type === 'content_block_start'
           reply = applyEvent(reply, event, Date.now(), blockIndexes)
           if (document.visibilityState === 'hidden') {
@@ -1082,6 +1207,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           }
         }
         reply = settleReply(reply, 'done', Date.now())
+        roundDone = true
         break
       } catch (error) {
         if (controller.signal.aborted) {
@@ -1128,6 +1254,52 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         }
         break
       }
+    }
+      if (!roundDone || calls.length === 0) {
+        break
+      }
+      if (toolRounds >= MAX_TOOL_ROUNDS) {
+        // 到上限还在调：给一句明确说明，别让界面空着
+        const notice: TextPart = {
+          type: 'text',
+          text: `工具调用已达上限（${MAX_TOOL_ROUNDS} 轮），先按现有结果回答。`,
+          isTemplate: true,
+        }
+        reply = { ...reply, blocks: [...reply.blocks, notice] }
+        updateReply(sessionId, reply)
+        persist(sessionId)
+        break
+      }
+      toolRounds += 1
+      // 过程状态：让用户知道在等什么，而不是对着空屏
+      const status: TextPart = { type: 'text', text: calls.map(toolStatusText).join(' '), isTemplate: true }
+      reply = { ...reply, blocks: [...reply.blocks, status], status: 'streaming' }
+      updateReply(sessionId, reply)
+      const outputs: string[] = []
+      for (const call of calls) {
+        outputs.push(await runToolCall(call, controller.signal))
+        if (controller.signal.aborted) {
+          break
+        }
+      }
+      // 状态块只用于过程展示，工具结果本身通过 function_call_output 回传
+      reply = { ...reply, blocks: reply.blocks.filter((block) => block !== status) }
+      if (controller.signal.aborted) {
+        reply = settleReply(reply, 'stopped', Date.now())
+        updateReply(sessionId, reply)
+        persist(sessionId)
+        break
+      }
+      calls.forEach((call, index) => {
+        exchanges.push({
+          type: 'function_call',
+          call_id: call.callId,
+          name: call.name,
+          arguments: call.arguments,
+        })
+        exchanges.push({ type: 'function_call_output', call_id: call.callId, output: outputs[index] ?? '' })
+      })
+      updateReply(sessionId, reply)
     }
   } finally {
     // 只有首轮（没有历史）才值得总结；后续轮次标题已经定下来了
