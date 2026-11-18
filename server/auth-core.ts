@@ -210,6 +210,30 @@ export const takeRateLimit = async (
 }
 
 /**
+ * 只读预检：这个桶是否已经用满，不写库。
+ *
+ * 给「先问还能不能做，做成之后才计数」的场景用。takeRateLimit 是写在前面的，
+ * 上游失败也会扣掉一次，用户重试几次额度就没了。
+ */
+export const rateLimitReached = async (
+  db: D1Database,
+  key: string,
+  limit: number
+): Promise<boolean> => {
+  const row = await db
+    .prepare('SELECT count, reset_at FROM rate_limits WHERE key = ?')
+    .bind(key)
+    .first<{ count: number; reset_at: number }>()
+  if (row === null) {
+    return false
+  }
+  if (row.reset_at <= Math.floor(Date.now() / 1000)) {
+    return false
+  }
+  return row.count >= limit
+}
+
+/**
  * 只信 Cloudflare 注入的 cf-connecting-ip。x-real-ip / x-forwarded-for 都是调用方
  * 可以自己写的，取了就等于把限流键交给攻击者。
  */
