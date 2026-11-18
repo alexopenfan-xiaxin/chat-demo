@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { barWidthPercent, formatCredits, formatPercent } from '../src/services/credits/format'
+import { barWidthPercent, creditTone, formatCredits, formatPercent } from '../src/services/credits/format'
 
 describe('formatCredits', () => {
   it('小于 10 保留两位，0.02 不能变成 0.0', () => {
     expect(formatCredits(0.02)).toBe('0.02')
     expect(formatCredits(9.98)).toBe('9.98')
-    expect(formatCredits(0.004)).toBe('0.00')
+  })
+
+  it('正数被舍成 0 时写 <0.01，不写 0.00', () => {
+    expect(formatCredits(0.004)).toBe('<0.01')
+    expect(formatCredits(0.0002)).toBe('<0.01')
+    expect(formatCredits(0)).toBe('0.00')
   })
 
   it('10 到 100 一位小数，整数不带 .0', () => {
@@ -26,9 +31,14 @@ describe('formatPercent', () => {
     expect(formatPercent(0.0099)).toBe('<1%')
   })
 
-  it('超过 1% 四舍五入成整数百分比，超额照实写', () => {
+  it('未满 100% 向下取整，别把 99.6% 写成 100%', () => {
     expect(formatPercent(0.01)).toBe('1%')
-    expect(formatPercent(0.996)).toBe('100%')
+    expect(formatPercent(0.996)).toBe('99%')
+    expect(formatPercent(0.9999)).toBe('99%')
+    expect(formatPercent(1)).toBe('100%')
+  })
+
+  it('超额照实写', () => {
     expect(formatPercent(1.04)).toBe('104%')
   })
 })
@@ -49,5 +59,25 @@ describe('barWidthPercent', () => {
     expect(barWidthPercent(null, 10)).toBe(0)
     expect(barWidthPercent(1, null)).toBe(0)
     expect(barWidthPercent(1, 0)).toBe(0)
+  })
+})
+
+describe('creditTone（阈值判定）', () => {
+  it('剩余比例决定档位，0.2 刚好落 warn，超过就是品牌色', () => {
+    expect(creditTone(10, 2)).toBe('warn')
+    expect(creditTone(10, 2.001)).toBe('brand')
+    expect(creditTone(10, 10)).toBe('brand')
+  })
+
+  it('用完与渲染成 <0.01 的微量都算 error', () => {
+    expect(creditTone(10, 0)).toBe('error')
+    expect(creditTone(10, 0.0002)).toBe('error')
+    expect(creditTone(10, 0.006)).toBe('warn')
+  })
+
+  it('没有额度信息时不判错，回 brand', () => {
+    expect(creditTone(null, 1)).toBe('brand')
+    expect(creditTone(10, null)).toBe('brand')
+    expect(creditTone(0, 0)).toBe('brand')
   })
 })

@@ -8,12 +8,14 @@
   --credit-brand: #2b63f0;
   --credit-track: #eceef2;
   --credit-warn: #8a5200;
+  --credit-error: #ec1313;
 }
 
 [data-ds-dark-theme] .panel {
   --credit-brand: #4c7eff;
   --credit-track: rgba(255, 255, 255, 0.12);
-  --credit-warn: #f5c26b;
+  --credit-warn: #f7ad31;
+  --credit-error: #ff7878;
 }
 
 /* 标题行：标题在左，快照时间 + 刷新贴右，同一行内完成 */
@@ -90,6 +92,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* 用完了：数字和条说同一件事，不能条变红、数字还是黑的 */
+.amountError {
+  color: var(--credit-error);
+}
+
 .unit {
   font-size: 13px;
   line-height: 20px;
@@ -121,9 +128,9 @@
   background: var(--credit-warn);
 }
 
-/* 额度已经用完：比「快用完」更醒目，用全局错误色 */
+/* 额度已经用完：比「快用完」更醒目，是质变不是明度差 */
 .fillError {
-  background: var(--dsw-alias-state-error-primary);
+  background: var(--credit-error);
 }
 
 .meta {
@@ -234,6 +241,11 @@
 
 .noticeWarn {
   color: var(--credit-warn);
+}
+
+/* 用完的提示跟条、数字同色，否则一句话里出现两种警示色 */
+.noticeError {
+  color: var(--credit-error);
 }
 
 @keyframes credit-spin {

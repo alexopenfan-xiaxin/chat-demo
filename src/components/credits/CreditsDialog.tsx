@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { fetchCredits, type CreditsSnapshot } from '../../services/api/credits.js'
-import { barWidthPercent, formatCredits, formatPercent } from '../../services/credits/format.js'
+import { barWidthPercent, creditTone, formatCredits, formatPercent } from '../../services/credits/format.js'
 import { loadConversationUsage, type ConversationUsage } from '../../services/credits/usageStats.js'
 import { Modal } from '../base/Modal.js'
 import { IconChevronDownOutline14, IconRefreshOutline16 } from '../base/icons.js'
@@ -88,19 +88,18 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const used = credits?.used ?? null
   const limit = credits?.limit ?? null
 
-  const exhausted = !unlimited && remaining !== null && remaining <= 0
+  /**
+   * 警示档按剩余比例算，且「渲染成 <0.01」也算用完：
+   * 否则卡片会同时说「剩余 0.00」「棕条」「没有用完提示」三件矛盾的话。
+   */
+  const tone = creditTone(limit, remaining)
+  const exhausted = !unlimited && tone === 'error'
   /** 有额度信息才画条；超额时百分比按真实比例（104%），条钳在 100% 不溢出 */
   const hasBar = limit !== null && limit > 0 && used !== null
   const rawRatio = hasBar ? (used as number) / (limit as number) : null
   const barWidth = barWidthPercent(used, limit)
   const percentText = rawRatio === null || used === null || used <= 0 ? null : formatPercent(rawRatio)
-  /** 剩余比例决定条的警示色：剩得越少越刺眼，用完落 error 档 */
-  const remainingRatio = limit && limit > 0 && remaining !== null ? remaining / limit : null
-  const barTone = exhausted
-    ? styles.fillError
-    : remainingRatio !== null && remainingRatio <= 0.2
-      ? styles.fillWarn
-      : ''
+  const barTone = tone === 'error' ? styles.fillError : tone === 'warn' ? styles.fillWarn : ''
 
   // 不限额时唯一有意义的数字是「用掉多少」；读不到时主数字位留一个破折号，不留空
   const mainValue =
@@ -160,7 +159,10 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
                 className={[
                   styles.amount,
                   status === 'unavailable' || status === 'nokey' ? styles.amountMuted : '',
-                ].join(' ')}
+                  exhausted ? styles.amountError : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               >
                 {mainText}
               </span>
@@ -188,7 +190,7 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
             {status === 'ready' && unlimited ? <p className={styles.meta}>{t('creditsUnlimited')}</p> : null}
             {status === 'unavailable' ? <p className={styles.meta}>{t('creditsUnavailable')}</p> : null}
             {status === 'nokey' ? <p className={styles.meta}>{t('creditsNoKey')}</p> : null}
-            {exhausted ? <p className={[styles.notice, styles.noticeWarn].join(' ')}>{t('creditsExhausted')}</p> : null}
+            {exhausted ? <p className={[styles.notice, styles.noticeError].join(' ')}>{t('creditsExhausted')}</p> : null}
           </>
         )}
 
