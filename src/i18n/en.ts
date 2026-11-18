@@ -11,6 +11,7 @@ export const en = {
   historyImporting: 'Importing history, conversations stay locked until it finishes...',
   sessionListLoadFailed: 'Unable to load the chat list. Please try again.',
   sessionLoadFailed: 'Unable to load this chat. Please try again.',
+  sessionMissing: 'This conversation is no longer on this device, possibly replaced by an import',
   sessionSaveFailed:
     'Chats or attachments have not been saved locally. Retry before closing this page.',
   sessionDeleteFailed: 'Unable to delete this chat. Please try again.',

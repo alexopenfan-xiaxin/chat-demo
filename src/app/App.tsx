@@ -5,6 +5,7 @@ import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport
 import {
   bindChatPersistence,
   initChat,
+  newChat,
   retrySaveSessions,
   selectSession,
   useChatStore,
@@ -57,6 +58,10 @@ export const App = () => {
   )
   const sessionLoadError = useChatStore((state) =>
     state.activeId === null ? false : state.sessionLoadErrors[state.activeId] === true
+  )
+  /** 当前会话是否还在列表里：不在列表时「重试」永远不可能成功，只能回新对话 */
+  const activeInList = useChatStore((state) =>
+    state.activeId === null ? true : state.sessions.some((item) => item.id === state.activeId)
   )
   const frameRef = useMobileViewport(isMobile)
   const streaming = useChatStore((state) =>
@@ -196,21 +201,28 @@ export const App = () => {
                 {isMobile ? <MobileHeader /> : null}
                 <div className={styles.loadingState} role="status" aria-live="polite">
                   <span>
-                    {(!ready ? initError : sessionLoadError)
-                      ? t(!ready ? 'sessionListLoadFailed' : 'sessionLoadFailed')
-                      : t('sessionLoading')}
+                    {!ready && initError
+                      ? t('sessionListLoadFailed')
+                      : sessionLoadError && !activeInList
+                        ? t('sessionMissing')
+                        : sessionLoadError
+                          ? t('sessionLoadFailed')
+                          : t('sessionLoading')}
                   </span>
-                  {(!ready ? initError : sessionLoadError) ? (
+                  {!ready && initError ? (
+                    <Button variant="outlined" size="m" onClick={() => void initChat()}>
+                      {t('retry')}
+                    </Button>
+                  ) : sessionLoadError && !activeInList ? (
+                    // 会话不在列表里：重试没有意义，给一个真能走通的出口
+                    <Button variant="outlined" size="m" onClick={newChat}>
+                      {t('newChat')}
+                    </Button>
+                  ) : sessionLoadError && activeId !== null ? (
                     <Button
                       variant="outlined"
                       size="m"
-                      onClick={() => {
-                        if (!ready) {
-                          void initChat()
-                        } else if (activeId !== null) {
-                          selectSession(activeId)
-                        }
-                      }}
+                      onClick={() => selectSession(activeId)}
                     >
                       {t('retry')}
                     </Button>

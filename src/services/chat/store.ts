@@ -553,7 +553,14 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
   return load.promise
 }
 
-/** 等所有回复的收尾（落盘）完成 */
+/**
+ * 等所有回复的收尾（落盘）完成。
+ *
+ * 有上限：只要有一个流因为任何原因没从 `streaming` 里摘掉，这一步就永远不返回，
+ * `importingHistory` 会一直是 true，界面锁在「正在导入」上，只能刷新逃出去。
+ * 挂起不抛异常，finally 兜不住，所以这里自己兜。
+ */
+const IDLE_TIMEOUT = 10_000
 const waitForIdle = (sessionId?: string) =>
   new Promise<void>((resolve) => {
     const isIdle = (state: ChatState) =>
@@ -564,12 +571,20 @@ const waitForIdle = (sessionId?: string) =>
       resolve()
       return
     }
+    let timer = 0
     const unsubscribe = useChatStore.subscribe((state) => {
       if (isIdle(state)) {
+        clearTimeout(timer)
         unsubscribe()
         resolve()
       }
     })
+    timer = setTimeout(() => {
+      unsubscribe()
+      // eslint-disable-next-line no-console
+      console.warn('waitForIdle timed out, continuing', Object.keys(get().streaming))
+      resolve()
+    }, IDLE_TIMEOUT) as unknown as number
   })
 
 /**
