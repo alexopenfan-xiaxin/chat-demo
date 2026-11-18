@@ -21,8 +21,6 @@ type PanelEnv = {
   UPSTREAM_BASE?: string
   PANEL_ADMIN_USER?: string
   PANEL_ADMIN_PASSWORD?: string
-  /** 现有唯一用户绑的那把 key 的名字；多 key 落地后由 D1 逐用户提供 */
-  PANEL_KEY_NAME?: string
   /** proxy 的内部密钥通道，服务端调用面板时用它过门禁 */
   INTERNAL_API_SECRET?: string
 }
@@ -142,19 +140,17 @@ export const listPanelKeys = async (env: PanelEnv): Promise<PanelKey[]> => {
 }
 
 /**
- * 挑出属于这个用户的 key。
+ * 挑出属于这个用户的 key：只按 key 名精确匹配。
  *
- * 现在全站只有一个用户、共用一把 ds-chat key，所以按 key 名精确匹配；
- * 名字没配时只接受「面板里恰好只有一把 ds-chat 开头的 key」这种确定情形，
- * 有多把就返回 null——宁可显示读不到，也不能把别人的用量显示给这个人。
+ * 名字来自 D1 里该用户自己的 `upstream_key_name`，不再按前缀猜——面板里一旦有多把
+ * `ds-chat-*`（多用户下必然如此），前缀匹配就会歧义，猜错就是把别人的用量显示给这个人。
+ * 名字为空或者面板里查不到，就返回 null，让页面显示「读不到」，不编数字。
  */
-export const pickPanelKey = (keys: PanelKey[], env: PanelEnv): PanelKey | null => {
-  const wanted = env.PANEL_KEY_NAME
-  if (wanted) {
-    return keys.find((key) => key.name === wanted) ?? null
+export const pickPanelKey = (keys: PanelKey[], name: string | null): PanelKey | null => {
+  if (!name) {
+    return null
   }
-  const candidates = keys.filter((key) => key.name.startsWith('ds-chat'))
-  return candidates.length === 1 ? candidates[0] : null
+  return keys.find((key) => key.name === name) ?? null
 }
 
 /** 首赠额度（积分）。用户拍板 10，改这一个常量即可。 */

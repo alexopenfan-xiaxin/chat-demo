@@ -48,7 +48,6 @@ type CreditEnv = Env & {
   /** 面板管理口，只在 /v1/usage 的 credits 段坏掉时用来补一次真实积分 */
   PANEL_ADMIN_USER?: string
   PANEL_ADMIN_PASSWORD?: string
-  PANEL_KEY_NAME?: string
   /** 用户 key 的 AES-GCM 主密钥 */
   KEY_ENC_SECRET?: string
 }
@@ -184,10 +183,10 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
 
   // 每个用户查自己的那把 key。key 只在服务端解密，浏览器全程接触不到。
   const stored = await env.DB.prepare(
-    'SELECT upstream_key_enc AS enc, upstream_key_quota AS quota FROM users WHERE id = ?'
+    'SELECT upstream_key_enc AS enc, upstream_key_quota AS quota, upstream_key_name AS keyName FROM users WHERE id = ?'
   )
     .bind(user.user.id)
-    .first<{ enc: string | null; quota: number | null }>()
+    .first<{ enc: string | null; quota: number | null; keyName: string | null }>()
   let key = ''
   // quota_credit 为 0（或没记）就是面板语义里的「不限额」
   let unlimited = env.UPSTREAM_KEY_UNLIMITED === '1'
@@ -230,7 +229,7 @@ export const onRequestGet = guarded(async (context: { request: Request; env: Cre
   let credits = snapshot.credits
   let creditsSource: 'upstream' | 'panel' | null = credits ? 'upstream' : null
   if (!snapshot.creditsReliable) {
-    const panelKey = pickPanelKey(await listPanelKeys(env), env)
+    const panelKey = pickPanelKey(await listPanelKeys(env), stored?.keyName ?? null)
     if (panelKey?.usedCredit !== null && panelKey?.usedCredit !== undefined) {
       const quota = panelKey.quotaCredit
       // quota 0 在面板里是「不限额」，不是零额度
