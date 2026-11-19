@@ -44,6 +44,7 @@ declare const styles: {
   readonly "termsHint": string;
   readonly "termsLink": string;
   readonly "termsText": string;
+  readonly "hcaptchaReady": string;
   readonly "turnstile": string;
   readonly "turnstileFailed": string;
   readonly "turnstileSkeleton": string;

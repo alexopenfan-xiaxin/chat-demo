@@ -663,6 +663,13 @@
   margin-bottom: 12px;
 }
 
+.hcaptchaReady {
+  /* hCaptcha 的 widget 自己不带尺寸，父容器给 0 宽就会被渲染成看不见的 iframe */
+  width: 303px;
+  max-width: 100%;
+  min-height: 65px;
+}
+
 .turnstileSkeleton {
   width: 300px;
   max-width: 100%;
@@ -850,6 +857,10 @@
 @media (max-width: 359px) {
   .turnstile {
     align-items: center;
+  }
+
+  .hcaptchaReady {
+    width: 100%;
   }
 
   .otpRow {

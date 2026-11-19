@@ -154,7 +154,7 @@ export const Hcaptcha = ({ resetSignal, onToken, onUnavailable }: HcaptchaProps)
 
   return (
     <div className={styles.turnstile} aria-label={t('authTurnstileLabel')} role="group">
-      <div ref={holder} className={styles.turnstileReady} />
+      <div ref={holder} className={styles.hcaptchaReady} />
       <span className={styles.srOnly}>{t('authTurnstileLabel')}</span>
     </div>
   )
