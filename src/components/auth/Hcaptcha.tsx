@@ -14,56 +14,44 @@ declare global {
   }
 }
 
-const SCRIPT_SRC = 'https://js.hcaptcha.com/1/api.js?render=explicit'
-/** 脚本本身多久没回来就算加载失败：这是备用通道，等太久不如退回提示让人重试 */
+/** 用文档规定的 onload 回调：只等 window.hcaptcha 出现是不够的，
+ *  对象挂上时内部状态还没就绪，这时 render 会静默什么都不画。 */
+const SCRIPT_SRC = 'https://js.hcaptcha.com/1/api.js?render=explicit&onload=__dsHcaptchaOnload'
+/** 脚本多久没回来就算加载失败：这是备用通道，等太久不如退回提示让人重试 */
 const SCRIPT_TIMEOUT_MS = 8000
+
+type OnloadWindow = Window & { __dsHcaptchaOnload?: () => void }
 
 let scriptPromise: Promise<void> | null = null
 
-/**
- * 只插一次脚本；失败后清掉缓存的 promise，允许下一轮重新拉。
- *
- * 脚本 onload 不保证 window.hcaptcha 已经挂上（不同网络下资源还会二次请求），
- * 所以 onload 之后再轮询一小会儿，拿不到全局对象仍算失败。
- */
+/** 只插一次脚本；失败后清掉缓存的 promise，允许下一轮重新拉 */
 const loadScript = () => {
   if (window.hcaptcha) {
     return Promise.resolve()
   }
   if (!scriptPromise) {
     scriptPromise = new Promise<void>((resolve, reject) => {
+      const scoped = window as OnloadWindow
       const script = document.createElement('script')
-      script.src = SCRIPT_SRC
-      script.async = true
-      script.defer = true
+      const cleanup = () => {
+        window.clearTimeout(timer)
+        delete scoped.__dsHcaptchaOnload
+      }
       const timer = window.setTimeout(() => {
+        cleanup()
         scriptPromise = null
         script.remove()
         reject(new Error('hcaptcha script timeout'))
       }, SCRIPT_TIMEOUT_MS)
-      const settle = () => {
-        let tries = 0
-        const poll = () => {
-          if (window.hcaptcha) {
-            window.clearTimeout(timer)
-            resolve()
-            return
-          }
-          if (tries >= 20) {
-            window.clearTimeout(timer)
-            scriptPromise = null
-            script.remove()
-            reject(new Error('hcaptcha global missing'))
-            return
-          }
-          tries += 1
-          window.setTimeout(poll, 100)
-        }
-        poll()
+      scoped.__dsHcaptchaOnload = () => {
+        cleanup()
+        resolve()
       }
-      script.onload = settle
+      script.src = SCRIPT_SRC
+      script.async = true
+      script.defer = true
       script.onerror = () => {
-        window.clearTimeout(timer)
+        cleanup()
         scriptPromise = null
         script.remove()
         reject(new Error('hcaptcha script failed'))
