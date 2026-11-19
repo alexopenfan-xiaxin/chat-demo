@@ -65,11 +65,13 @@ const SettingsContent = () => {
     <>
       <Modal
         title={t('settings')}
-        closable
+        closable={!replacingHistory}
         className={styles.dialog}
         mainClassName={styles.dialogMain}
         onClose={() => {
-          if (!historyDelete.busy) {
+          // 导入在 store 里跑，关掉弹窗不会中断它，但这是唯一能看到进度的入口，
+          // 导到一半关掉用户既看不见进度也不知道完成没有，所以导入期间先不让关
+          if (!historyDelete.busy && !replacingHistory) {
             closeSettings()
           }
         }}
@@ -405,12 +407,15 @@ const SettingCell = ({
   label,
   description,
   status,
+  progress,
   action,
   className,
 }: {
   label: string
   description?: string
   status: Status
+  /** 进度这类需要单独一行、随导入实时刷新的提示 */
+  progress?: ReactNode
   action: ReactNode
   className?: string
 }) => {
@@ -424,6 +429,11 @@ const SettingCell = ({
             {status
               ? t(status.key, status.reason ? { message: t(status.reason) } : status.params)
               : description}
+          </div>
+        ) : null}
+        {progress ? (
+          <div className={styles.progress} role="status" aria-live="polite">
+            {progress}
           </div>
         ) : null}
       </div>
@@ -450,8 +460,10 @@ const useHistoryImport = () => {
     try {
       const count = await importHistory(file)
       setStatus({ key: count === 1 ? 'historyImportedOne' : 'historyImported', params: { count } })
-    } catch {
-      setStatus({ key: 'historyImportFailed', error: true })
+    } catch (error) {
+      // 每种失败原因都有自己的文案：版本过新、格式不是我们的、文件不完整、JSON 坏了
+      // 都让用户看到具体是哪一种，而不是一句「可能是格式错误」让他反复试
+      setStatus(error instanceof BackupError ? { key: error.key, error: true } : { key: 'historyImportFailed', error: true })
     } finally {
       importing.current = false
       setBusy(false)
@@ -471,12 +483,22 @@ const ImportHistory = ({
 }) => {
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
+  // 导入是从这个弹窗发起的，主区域那条进度被弹窗整个盖住，所以这里显示同一份进度
+  const progress = useChatStore((state) => state.importProgress)
+  const importing = useChatStore((state) => state.importingHistory)
 
   return (
     <SettingCell
       label={t('historyImport')}
       description={t('historyImportDescription')}
-      status={historyImport.status}
+      status={importing ? { key: 'historyImporting' } : historyImport.status}
+      progress={
+        importing
+          ? progress !== null && progress.total !== null
+            ? t('historyImportProgress', { done: progress.done, total: progress.total })
+            : t('historyImportApprox')
+          : undefined
+      }
       action={
         <>
           <Button

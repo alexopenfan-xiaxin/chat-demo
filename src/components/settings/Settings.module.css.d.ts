@@ -20,6 +20,7 @@ declare const styles: {
   readonly "themeOption": string;
   readonly "themeOptionSelected": string;
   readonly "description": string;
+  readonly "progress": string;
   readonly "error": string;
   readonly "divider": string;
   readonly "confirm": string;

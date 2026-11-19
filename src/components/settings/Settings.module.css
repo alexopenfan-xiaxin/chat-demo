@@ -198,6 +198,13 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.progress {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .error {
   font-size: 12px;
   line-height: 18px;
