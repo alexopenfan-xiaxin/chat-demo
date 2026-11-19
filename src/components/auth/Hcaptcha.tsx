@@ -129,7 +129,9 @@ export const Hcaptcha = ({ resetSignal, onToken, onUnavailable }: HcaptchaProps)
     widgetId.current = api.render(container, {
       sitekey: __HCAPTCHA_SITE_KEY__,
       theme: themeDark ? 'dark' : 'light',
-      size: isMobile() ? 'flexible' : 'normal',
+      // hCaptcha 只认 normal / compact / invisible：'flexible' 是 Turnstile 的取值，
+      // 传进去不会报错，但 widget 会静默不渲染，所以移动端这里用 compact。
+      size: isMobile() ? 'compact' : 'normal',
       hl: document.documentElement.lang === 'en-US' ? 'en' : 'zh-cn',
       callback: (token: string) => onTokenRef.current(token),
       'error-callback': () => {
