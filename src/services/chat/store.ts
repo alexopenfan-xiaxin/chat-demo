@@ -23,11 +23,13 @@ import {
   settleReply,
   toRequestMessages,
 } from './reply.js'
+import { fetchBlocks, searchBlocks } from './toolBlocks.js'
 import {
   toSessionSummary,
   type AssistantMessage,
   type FileAttachment,
   type Message,
+  type ReplyBlock,
   type Session,
   type SessionSummary,
   type UserMessage,
@@ -119,7 +121,10 @@ const toolStatusText = (call: ToolCall): string => {
  * 工具结果一律当作**不可信数据**：只有搜索结果的标题/链接/摘要或网页标题+正文，
  * 不带会话 token、用户邮箱、历史消息。失败也回一条 error 描述，让模型自己决定怎么说。
  */
-const runToolCall = async (call: ToolCall, signal: AbortSignal): Promise<string> => {
+const runToolCall = async (
+  call: ToolCall,
+  signal: AbortSignal
+): Promise<{ output: string; blocks: ReplyBlock[] }> => {
   let args: Record<string, unknown> = {}
   try {
     args = JSON.parse(call.arguments) as Record<string, unknown>
@@ -141,12 +146,20 @@ const runToolCall = async (call: ToolCall, signal: AbortSignal): Promise<string>
         error?: string
       }
       if (!response.ok) {
-        return JSON.stringify({ error: payload.error ?? '搜索失败' })
+        return {
+          output: JSON.stringify({ error: payload.error ?? '搜索失败' }),
+          // 失败也留一张卡片：历史里的失败搜索同样会显示，用户需要知道它确实跑了
+          blocks: searchBlocks(call.callId, query, [], true),
+        }
       }
-      const lines = (payload.results ?? []).map(
+      const results = payload.results ?? []
+      const lines = results.map(
         (item, index) => `${index + 1}. ${item.title}\n${item.url}\n${item.snippet}`
       )
-      return lines.length > 0 ? `搜索结果：\n${lines.join('\n\n')}` : '没有找到相关结果'
+      return {
+        output: lines.length > 0 ? `搜索结果：\n${lines.join('\n\n')}` : '没有找到相关结果',
+        blocks: searchBlocks(call.callId, query, results),
+      }
     }
     if (call.name === 'read_url') {
       const url = typeof args.url === 'string' ? args.url : ''
@@ -161,18 +174,27 @@ const runToolCall = async (call: ToolCall, signal: AbortSignal): Promise<string>
         error?: string
       }
       if (!response.ok) {
-        return JSON.stringify({ error: payload.error ?? '读取失败' })
+        return {
+          output: JSON.stringify({ error: payload.error ?? '读取失败' }),
+          blocks: fetchBlocks(call.callId, url, undefined, true),
+        }
       }
       const head = payload.title ? `标题：${payload.title}\n` : ''
       const tail = payload.truncated ? '\n（正文过长，已截断）' : ''
-      return `${head}正文：\n${payload.content ?? ''}${tail}`
+      return {
+        output: `${head}正文：\n${payload.content ?? ''}${tail}`,
+        blocks: fetchBlocks(call.callId, url, { title: payload.title ?? null }),
+      }
     }
-    return JSON.stringify({ error: `未知工具：${call.name}` })
+    return { output: JSON.stringify({ error: `未知工具：${call.name}` }), blocks: [] }
   } catch (error) {
     if (signal.aborted) {
       throw error
     }
-    return JSON.stringify({ error: error instanceof Error ? error.message : '工具调用失败' })
+    return {
+      output: JSON.stringify({ error: error instanceof Error ? error.message : '工具调用失败' }),
+      blocks: [],
+    }
   }
 }
 
@@ -1323,10 +1345,14 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       reply = { ...reply, blocks: [...reply.blocks, status], status: 'streaming' }
       updateReply(sessionId, reply)
       const outputs: string[] = []
+      /** 工具结果的展示块（与历史导入同构），替换掉过程状态块画在回复里 */
+      const runs: ReplyBlock[] = []
       let toolFailure: unknown = null
       try {
         for (const call of calls) {
-          outputs.push(await runToolCall(call, controller.signal))
+          const run = await runToolCall(call, controller.signal)
+          outputs.push(run.output)
+          runs.push(...run.blocks)
           if (controller.signal.aborted) {
             break
           }
@@ -1335,8 +1361,12 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         // runToolCall 只在停止时重抛，其余失败已经转成给模型看的错误 JSON
         toolFailure = error
       } finally {
-        // 无论停止、失败还是正常结束，状态块都要摘掉：它被 persist 进历史就永久留在对话里
-        reply = { ...reply, blocks: reply.blocks.filter((block) => block !== status) }
+        // 无论停止、失败还是正常结束，状态块都要摘掉：它被 persist 进历史就永久留在对话里。
+        // 已完成的调用换成结果卡片，位置就是状态块原来所在的地方。
+        reply = {
+          ...reply,
+          blocks: [...reply.blocks.filter((block) => block !== status), ...runs],
+        }
       }
       if (controller.signal.aborted) {
         reply = settleReply(reply, 'stopped', Date.now())
