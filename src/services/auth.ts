@@ -122,17 +122,25 @@ export const logout = async (): Promise<void> => {
 }
 
 /** 请求验证码，turnstileToken 必须来自人机验证；purpose=reset 用于忘记密码 */
+/** 人机验证用的是哪条通道：后端按这个标记选对应的 siteverify，不接受未知值 */
+export type CaptchaProvider = 'turnstile' | 'hcaptcha'
+
 export const requestCode = async (
   email: string,
-  turnstileToken: string,
-  purpose: 'register' | 'reset' = 'register'
+  captchaToken: string,
+  purpose: 'register' | 'reset' = 'register',
+  captchaProvider: CaptchaProvider = 'turnstile'
 ): Promise<void> => {
-  await post('code', { email, turnstileToken, purpose })
+  await post('code', { email, captchaToken, captchaProvider, purpose })
 }
 
 /** 请求重置密码的验证码；和注册用的是同一个端点，靠 purpose 区分 */
-export const requestResetCode = async (email: string, turnstileToken: string): Promise<void> => {
-  await post('code', { email, turnstileToken, purpose: 'reset' })
+export const requestResetCode = async (
+  email: string,
+  captchaToken: string,
+  captchaProvider: CaptchaProvider = 'turnstile'
+): Promise<void> => {
+  await post('code', { email, captchaToken, captchaProvider, purpose: 'reset' })
 }
 
 /** 用邮箱验证码重置密码；成功后要重新登录，接口不会直接发会话 */

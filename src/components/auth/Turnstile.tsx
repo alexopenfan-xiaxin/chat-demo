@@ -50,13 +50,18 @@ type TurnstileProps = {
   resetSignal: number
   onToken: (token: string | null) => void
   onError?: () => void
+  /**
+   * 脚本拉不下来 / widget 起不来时调用。传了这个回调就由父组件接管（切 hCaptcha），
+   * 不再显示「点此重试」——重试同一个拉不下来的域名没有意义。
+   */
+  onUnavailable?: () => void
 }
 
 /**
  * 人机验证。先占 65px 再渲染，避免脚本回来把下面的表单顶下去；
  * 主题切换与令牌重置都走「remove 再 render」，不做 transform 缩放。
  */
-export const Turnstile = ({ resetSignal, onToken, onError }: TurnstileProps) => {
+export const Turnstile = ({ resetSignal, onToken, onError, onUnavailable }: TurnstileProps) => {
   const t = useTranslate()
   const holder = useRef<HTMLDivElement | null>(null)
   const widgetId = useRef<string | null>(null)
@@ -64,6 +69,7 @@ export const Turnstile = ({ resetSignal, onToken, onError }: TurnstileProps) => 
   // 别让它们进 mount 的依赖——否则 setInterval 每秒一次 setNow 都会把 widget 拆了重建。
   const onTokenRef = useRef(onToken)
   const onErrorRef = useRef(onError)
+  const onUnavailableRef = useRef(onUnavailable)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [themeDark, setThemeDark] = useState(isDarkTheme)
@@ -80,6 +86,19 @@ export const Turnstile = ({ resetSignal, onToken, onError }: TurnstileProps) => 
     onErrorRef.current = onError
   }, [onToken, onError])
 
+  useEffect(() => {
+    onUnavailableRef.current = onUnavailable
+  }, [onUnavailable])
+
+  /** 加载失败：有接管方就交给它（切备用通道），没有才落到本组件自己的重试按钮 */
+  const unavailable = useCallback(() => {
+    if (onUnavailableRef.current) {
+      onUnavailableRef.current()
+      return
+    }
+    setFailed(true)
+  }, [])
+
   const mount = useCallback(async () => {
     const container = holder.current
     if (!container) {
@@ -88,12 +107,12 @@ export const Turnstile = ({ resetSignal, onToken, onError }: TurnstileProps) => 
     try {
       await loadScript()
     } catch {
-      setFailed(true)
+      unavailable()
       return
     }
     const api = window.turnstile
     if (!api) {
-      setFailed(true)
+      unavailable()
       return
     }
     setFailed(false)
@@ -106,11 +125,16 @@ export const Turnstile = ({ resetSignal, onToken, onError }: TurnstileProps) => 
       callback: (token: string) => onTokenRef.current(token),
       'error-callback': () => {
         onTokenRef.current(null)
-        onErrorRef.current?.()
+        // 挑战跑不起来（多半也是连不上）同样切备用通道；父组件没接管就走原来的提示
+        if (onUnavailableRef.current) {
+          onUnavailableRef.current()
+        } else {
+          onErrorRef.current?.()
+        }
       },
       'expired-callback': () => onTokenRef.current(null),
     })
-  }, [themeDark])
+  }, [themeDark, unavailable])
 
   useEffect(() => {
     void mount()

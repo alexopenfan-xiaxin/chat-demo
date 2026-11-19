@@ -224,6 +224,7 @@ export const zh = {
   authGoLogin: '登录',
   authTurnstileLabel: '人机验证',
   authTurnstileFailed: '人机验证加载失败，点此重试',
+  authCaptchaFailed: '验证加载失败，请切换网络后重试',
   authTurnstileRetry: '重试',
   authTurnstileRequired: '先完成人机验证',
   authLogout: '退出登录',

@@ -6,6 +6,8 @@
 export type Env = {
   DB: D1Database
   TURNSTILE_SECRET: string
+  /** hCaptcha 的 siteverify 密钥；没配时 hCaptcha 通道一律拒绝，不做任何放行 */
+  HCAPTCHA_SECRET?: string
   MAIL_RELAY_URL: string
   MAIL_RELAY_TOKEN: string
   /** 可选：覆盖建哈希用的 PBKDF2 迭代次数，Workers 的 CPU 限额各档不同 */
@@ -269,6 +271,66 @@ export const verifyTurnstile = async (
   } catch {
     return false
   }
+}
+
+/**
+ * hCaptcha 的 siteverify。和 Turnstile 一样：HTTP 失败、超时、解析失败、success 不是
+ * 严格的 true，全部当失败。没配密钥也当失败——「没配就跳过」是最典型的绕过口子。
+ */
+export const verifyHcaptcha = async (env: Env, token: string, ip: string): Promise<boolean> => {
+  const secret = env.HCAPTCHA_SECRET
+  if (!secret) {
+    return false
+  }
+  const body = new URLSearchParams({ secret, response: token })
+  if (ip !== 'unknown') {
+    body.set('remoteip', ip)
+  }
+  try {
+    const res = await fetch('https://api.hcaptcha.com/siteverify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) {
+      return false
+    }
+    const data = (await res.json()) as { success?: boolean }
+    return data.success === true
+  } catch {
+    return false
+  }
+}
+
+export type CaptchaProvider = 'turnstile' | 'hcaptcha'
+
+/**
+ * 按调用方声明的 provider 选一个真实验证通道。
+ *
+ * 三条口径：
+ * 1. 两边的 token 都真的去验，不存在「声明成 hcaptcha 就跳过」的路径；
+ * 2. 非法 provider 一律失败，不默认落到任何一边；
+ * 3. 没带 provider 的按 Turnstile 验——那是改版前缓存下来的旧 bundle，token 仍然
+ *    要过真实验证，所以这不是放行，只是兼容旧页面。
+ */
+export const verifyCaptcha = async (
+  env: Env,
+  provider: unknown,
+  token: unknown,
+  ip: string
+): Promise<boolean> => {
+  if (typeof token !== 'string' || token.trim() === '') {
+    return false
+  }
+  const value = token.trim()
+  if (provider === undefined || provider === 'turnstile') {
+    return verifyTurnstile(env, value, ip)
+  }
+  if (provider === 'hcaptcha') {
+    return verifyHcaptcha(env, value, ip)
+  }
+  return false
 }
 
 /**

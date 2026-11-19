@@ -2,11 +2,11 @@ import clsx from 'clsx'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { AuthError, register, requestCode, type AuthUser } from '../../services/auth.js'
+import { AuthError, register, requestCode, type AuthUser, type CaptchaProvider } from '../../services/auth.js'
 import styles from './AuthScreen.module.css'
 import { OtpInput } from './OtpInput.js'
 import { TermsRow } from './TermsRow.js'
-import { Turnstile } from './Turnstile.js'
+import { Captcha } from './Captcha.js'
 import { PasswordToggle, TextField } from './TextField.js'
 
 /** 与 server/auth-core.ts 的常量对齐，前端不自己编数字 */
@@ -47,7 +47,8 @@ export const RegisterForm = ({
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [shown, setShown] = useState(false)
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaProvider, setCaptchaProvider] = useState<CaptchaProvider>('turnstile')
   const [turnstileSignal, setTurnstileSignal] = useState(0)
   const [sending, setSending] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -85,7 +86,7 @@ export const RegisterForm = ({
   const codeReady = code.every((digit) => digit !== '')
 
   const resetTurnstile = () => {
-    setTurnstileToken(null)
+    setCaptchaToken(null)
     setTurnstileSignal((value) => value + 1)
   }
 
@@ -101,13 +102,13 @@ export const RegisterForm = ({
       return
     }
     commitEmail(emailValue)
-    if (!turnstileToken) {
+    if (!captchaToken) {
       setSendError(t('authTurnstileRequired'))
       return
     }
     setSending(true)
     try {
-      await requestCode(emailValue, turnstileToken)
+      await requestCode(emailValue, captchaToken, 'register', captchaProvider)
       setSent(true)
       setCooldownUntil(Date.now() + RESEND_SECONDS * 1000)
       setExpiresAt(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
@@ -216,10 +217,13 @@ export const RegisterForm = ({
         </button>
       </div>
 
-      <Turnstile
+      <Captcha
         resetSignal={turnstileSignal}
-        onToken={setTurnstileToken}
-        onError={() => setSendError(t('authTurnstileFailed'))}
+        onToken={(token, provider) => {
+          setCaptchaToken(token)
+          setCaptchaProvider(provider)
+        }}
+        onError={() => setSendError(t('authCaptchaFailed'))}
       />
 
       <div className={styles.stage}>

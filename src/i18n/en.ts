@@ -232,6 +232,7 @@ export const en = {
   authGoLogin: 'Sign in',
   authTurnstileLabel: 'Human verification',
   authTurnstileFailed: 'Human verification failed to load. Click to retry',
+  authCaptchaFailed: 'Verification failed to load. Switch networks and try again',
   authTurnstileRetry: 'Retry',
   authTurnstileRequired: 'Finish the human verification first',
   authLogout: 'Sign out',

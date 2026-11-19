@@ -8,6 +8,8 @@ const dev = process.env.NODE_ENV !== 'production'
 
 /** Turnstile 的公开 sitekey（写进页面没关系，密钥那半在 Pages 环境变量里） */
 const DEFAULT_TURNSTILE_SITE_KEY = '0x4AAAAAAGEqE1p9RFWYX98_'
+/** hCaptcha 的公开 sitekey：Turnstile 脚本拉不下来时自动切到它 */
+const DEFAULT_HCAPTCHA_SITE_KEY = 'f7ee9ad8-2f3c-4c2c-bad6-0ef29d285f96'
 const targets = ['chrome >= 105', 'edge >= 105', 'safari >= 16', 'firefox >= 110']
 const root = path.dirname(fileURLToPath(import.meta.url))
 const { version } = JSON.parse(
@@ -106,6 +108,7 @@ export const createConfig = ({
     new rspack.DefinePlugin({
       __API_ORIGIN__: JSON.stringify(apiOrigin),
       __TURNSTILE_SITE_KEY__: JSON.stringify(process.env.TURNSTILE_SITE_KEY ?? DEFAULT_TURNSTILE_SITE_KEY),
+      __HCAPTCHA_SITE_KEY__: JSON.stringify(process.env.HCAPTCHA_SITE_KEY ?? DEFAULT_HCAPTCHA_SITE_KEY),
     }),
     new rspack.CopyRspackPlugin({
       patterns: [{ from: path.resolve(root, 'LICENSE'), to: 'LICENSE', toType: 'file' }],

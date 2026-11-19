@@ -1,6 +1,6 @@
 import {
   guarded, CODE_TTL, bad, clientIp, json, normalizeEmail, sendMail, sha256Hex, takeRateLimit,
-  verifyTurnstile, type Env,
+  verifyCaptcha, type Env,
 } from '../../../server/auth-core'
 
 /** 只认这两个用途：多一个用途就多一条能发信的路 */
@@ -20,7 +20,14 @@ const isPurpose = (value: unknown): value is Purpose =>
 export const onRequestPost = guarded(async (context: { request: Request; env: Env }) => {
   const { request, env } = context
   const ip = clientIp(request)
-  let body: { email?: unknown; turnstileToken?: unknown; purpose?: unknown }
+  let body: {
+    email?: unknown
+    /** 新版前端发的是 captchaToken，旧 bundle 发的是 turnstileToken，两个都收 */
+    captchaToken?: unknown
+    turnstileToken?: unknown
+    captchaProvider?: unknown
+    purpose?: unknown
+  }
   try {
     body = (await request.json()) as typeof body
   } catch {
@@ -36,7 +43,9 @@ export const onRequestPost = guarded(async (context: { request: Request; env: En
   if (!(await takeRateLimit(env.DB, `code:${purpose}:ip:${ip}`, 20, 3600))) {
     return bad('这个网络地址一小时内请求太多，过一会儿再试', 429)
   }
-  if (!(await verifyTurnstile(env, body.turnstileToken, ip))) {
+  // provider 决定走哪条 siteverify；缺失按 Turnstile 处理（旧 bundle），非法值直接失败
+  const token = body.captchaToken ?? body.turnstileToken
+  if (!(await verifyCaptcha(env, body.captchaProvider, token, ip))) {
     return bad('人机验证没通过，刷新后重试', 403)
   }
   if (!(await takeRateLimit(env.DB, `code:${purpose}:gap:${email}`, 1, 60))) {
