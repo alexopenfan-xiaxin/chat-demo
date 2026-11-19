@@ -271,12 +271,19 @@ export const verifyTurnstile = async (
   }
 }
 
+/**
+ * 走本机 relay 发信。超时给到 25 秒：relay 背后是 Gmail SMTP，一次 TLS + 登录 + 投递
+ * 实测 3-5 秒，偶发要多试一个地址，8 秒会先于信放弃，用户就吃到 502（信却发出去了）。
+ *
+ * 最坏耗时口径：verifyTurnstile 5 秒 + 这里 25 秒 = 30 秒墙钟，CPU 仍然只有几十毫秒
+ * （Pages Functions 限的是 CPU 时间，等 I/O 不计入）。两个超时互相独立，不要一起改。
+ */
 export const sendMail = async (env: Env, to: string, subject: string, text: string) => {
   const res = await fetch(env.MAIL_RELAY_URL.replace(/\/+$/, '') + '/send', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-relay-token': env.MAIL_RELAY_TOKEN },
     body: JSON.stringify({ to, subject, text }),
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(25000),
   })
   if (!res.ok) {
     throw new Error(`发信失败：${res.status}`)
