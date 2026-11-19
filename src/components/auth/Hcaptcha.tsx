@@ -113,7 +113,12 @@ export const Hcaptcha = ({ resetSignal, onToken, onUnavailable }: HcaptchaProps)
       onUnavailableRef.current()
       return
     }
-    api.remove(widgetId.current ?? undefined)
+    // 只在真有旧 widget 时 remove：hCaptcha 的 remove(undefined) 会抛错，
+    // 而这里在 async 里，抛出去就是静默失败，widget 根本不画
+    if (widgetId.current) {
+      api.remove(widgetId.current)
+      widgetId.current = null
+    }
     widgetId.current = api.render(container, {
       sitekey: __HCAPTCHA_SITE_KEY__,
       theme: themeDark ? 'dark' : 'light',
