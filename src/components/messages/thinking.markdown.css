@@ -94,3 +94,31 @@
     }
   }
 }
+
+/* 思考块从纯文本切到 Markdown 时的高度对齐（画眉实测值）。
+   特异性要压过下面 `.ds-think-content .ds-markdown .ds-markdown-paragraph`（0,3,0），
+   实测那条把段落固定成 12/12，导致切换时每段多 24px。 */
+.ds-think-content.ds-think-block .ds-markdown {
+  margin: 12px 0;
+}
+
+.ds-think-content.ds-think-block .ds-markdown .ds-markdown-paragraph {
+  margin: 0 0 24px;
+}
+
+.ds-think-content.ds-think-block .ds-markdown > :first-child {
+  margin-top: 0;
+}
+
+.ds-think-content.ds-think-block .ds-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.ds-think-content.ds-think-block .ds-markdown ul,
+.ds-think-content.ds-think-block .ds-markdown ol {
+  margin: 6px 0;
+}
+
+.ds-think-content.ds-think-block .ds-markdown li {
+  margin: 0;
+}

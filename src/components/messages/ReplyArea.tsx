@@ -140,7 +140,7 @@ const StepItem = ({
       // 超长思考不解析：一次性 parse 两万字以上只会卡住那一帧，留着纯文本更稳
       const plain = thinking || [...text].length > THINKING_MARKDOWN_LIMIT
       return (
-        <ContentItem isLast={isLast} active={thinking} className={styles.thinkingBlock}>
+        <ContentItem isLast={isLast} active={thinking} className="ds-think-block">
           {plain ? (
             <ThinkingStream text={text} />
           ) : (
