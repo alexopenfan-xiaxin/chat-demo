@@ -174,8 +174,26 @@
     transition: none;
   }
 
+  /* 静止形态用 45° 斜纹，不用任何「固定宽度的段」：
+     填充的边界永远是竖直的，斜纹永远不是——靠调透明度区分不了这两者。
+     一条固定 30% 的段停在那里，静态看就是「进度填到 30%」，跟不确定态要表达
+     「进度未知」正好相反。周期 10px（明暗各 5px）：试到 6px 会糊成一条均匀的蓝。 */
   .indeterminate {
-    width: 30%;
+    width: 100%;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(43, 99, 240, 0.14) 0 5px,
+      rgba(43, 99, 240, 0.66) 5px 10px
+    );
     animation: none;
+  }
+
+  /* 深色要放在后面：主题规则的选择器权重比上面的媒体查询内规则高 */
+  [data-ds-dark-theme] .indeterminate {
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(76, 126, 255, 0.16) 0 5px,
+      rgba(76, 126, 255, 0.74) 5px 10px
+    );
   }
 }
