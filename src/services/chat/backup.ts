@@ -4,6 +4,7 @@ import { replaceHistory, useChatStore } from './store.js'
 import type { Session } from './types.js'
 
 import { BackupError } from './history/errors.js'
+import { createProgressReporter } from './history/progress.js'
 
 export { BackupError }
 
@@ -49,10 +50,10 @@ export const importHistory = (file: File): Promise<number> =>
   enqueueBackup(async () => {
     const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
     const { isZipFile, openArchive, ArchiveError } = await import('./history/zipReader.js')
-    const stage = (done: number, total: number | null, phase: 'checking' | 'listing' | 'writing') =>
-      useChatStore.setState({ importProgress: { done, total, stage: phase } })
+    // 节流：目录解析与逐条写入都可能触发几十上百次，每次都 setState 会让 React 反复渲染
+    const stage = createProgressReporter((value) => useChatStore.setState({ importProgress: value }))
     // 先置 listing：目录在手机上要读好几秒，这段必须让界面有数字可看
-    stage(0, null, 'listing')
+    stage(0, null, 'listing', true)
     try {
       if (!(await isZipFile(file))) {
         throw new BackupError('backupUnrecognized')
