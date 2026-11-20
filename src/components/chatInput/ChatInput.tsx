@@ -22,7 +22,6 @@ import {
   useDrafts,
 } from '../../services/chat/drafts.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
-import { prefetchInput } from '../../services/memory/prefetch.js'
 import { IconButton } from '../base/IconButton.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
@@ -177,11 +176,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           autoFocus={!isMobile}
           disabled={importingHistory}
           value={text}
-          onChange={(event) => {
-            setText(event.target.value)
-            // 停顿 400ms 就先把向量算好：发送时召回不用等这一跳
-            prefetchInput(event.target.value)
-          }}
+          onChange={(event) => setText(event.target.value)}
           onMouseDown={(event) => {
             // 首次点击时手动聚焦，避免 Safari 把整个页面滚到输入框位置。
             if (isMobile && event.button === 0 && document.activeElement !== event.currentTarget) {

@@ -13,17 +13,22 @@ import { ensureAccessToken } from '../auth.js'
  */
 const EMBEDDINGS_SAME_ORIGIN = '/api/embeddings'
 
-/** 本机 emb-relay（隧道路由 emb-ds-chat → 127.0.0.1:18789），走它要先确认隧道质量 */
+/** 本机 emb-relay（隧道路由 emb-ds-chat → 127.0.0.1:18789），保留当备份 */
 export const EMBEDDINGS_VIA_TUNNEL = 'https://emb-ds-chat.openfan.dpdns.org/embeddings'
 
+/** 公网直连：DNS only 指到服务器，本机 openresty 443 → emb-relay，不经 Cloudflare 边缘 */
+export const EMBEDDINGS_PUBLIC = 'https://emb.openfan.dpdns.org/embeddings'
+
 /**
- * 切换点：走本机转发。
+ * 切换点：走公网直连。
  *
- * 预取把这一跳挪进了打字停顿，但同源那条要 4 秒才回来，等它到账时用户多半已经发出去了；
- * 隧道这条 1.4 秒，命中率高得多。后台请求失败不影响任何东西（静默走兜底/降级），
- * 所以代价只有「浪费一次后台调用」。要退回同源，把下面一行换成 EMBEDDINGS_SAME_ORIGIN。
+ * 三条路的实测差距：同源 Pages Function 4 秒级；隧道 1.4 秒（边缘 AMS → 隧道 lax，
+ * 绕了半个地球）；公网直连预热后 0.12～0.39 秒。预取虽然把这一跳挪进了打字停顿，
+ * 但只有公网这条能让请求在按下发送前真的到账。
+ *
+ * 回退：换成 EMBEDDINGS_VIA_TUNNEL 或 EMBEDDINGS_SAME_ORIGIN，都是一行。
  */
-export const EMBEDDINGS_URL = EMBEDDINGS_VIA_TUNNEL
+export const EMBEDDINGS_URL = EMBEDDINGS_PUBLIC
 
 /** 同源 Pages Function 这条备用，切回时用 */
 export { EMBEDDINGS_SAME_ORIGIN }

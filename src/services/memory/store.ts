@@ -1,6 +1,5 @@
 import * as db from '../chat/db.js'
 import { embedTexts, EmbeddingsUnavailable } from './api.js'
-import { fallbackVector, rememberVector, setLastQuery, takeVector } from './prefetch.js'
 
 /**
  * 记忆：内容与向量都只存在浏览器 IndexedDB，服务端一张表都没有。
@@ -127,20 +126,23 @@ export const buildBlock = (profile: string, hits: readonly MemoryHit[]): string 
   return `${BLOCK_HEADER}\n\n${sections.join('\n\n')}`
 }
 
+/** 上一次算成功的向量：只在本轮请求失败时兜底，不当常态用 */
+let lastVector: { vec: Float32Array; dim: number } | null = null
+
 /**
- * 发送前检索：全库点积、取 top-4。
+ * 发送前检索：点发送时算一次向量、全库点积、取 top-4。
  *
- * 向量来源按代价从低到高：预取缓存（打字停顿时已经算好，本地命中零网络）
- * → 最后一条算成功的向量兜底（可能和这句无关，阈值会把它挡在召回之外）
- * → 现算（预算 800ms）。全失败返回 null，调用方只带画像，绝不拖住发送。
+ * 正常路径只有一次网络往返，预算 800ms。只有**这一次**失败或超时才用上一次成功的
+ * 向量顶上（那种情况下至少还能命中跨会话的长期偏好），两者都没有就返回 null，
+ * 调用方只带画像，绝不让检索拖住发送。
  *
- * `fallback: false` 给记忆页的检索预览用：预览必须对应输入的那句话，
- * 拿兜底向量会显示成另一个问题的结果。
+ * `staleFallback: false` 给记忆页的检索预览用：预览必须对应输入的那句话，
+ * 拿上一次的向量会把别的问题的结果显示出来。
  */
 export const searchMemory = async (
   question: string,
   sessionId: string | null = null,
-  options: { fallback?: boolean } = {}
+  options: { staleFallback?: boolean } = {}
 ): Promise<MemoryHit[] | null> => {
   const text = question.trim()
   if (!text) {
@@ -159,18 +161,16 @@ export const searchMemory = async (
       skip: recentIds(entries, sessionId),
     })
 
-  const ready = takeVector(text) ?? (options.fallback === false ? null : fallbackVector())
-  if (ready) {
-    return rank(ready.vec, ready.dim)
-  }
   try {
     const { vectors, dim } = await embedTexts([text], RETRIEVAL_TIMEOUT_MS)
     const vec = toVector(vectors[0])
-    rememberVector(text, vectors[0], dim)
-    setLastQuery(vec, dim)
+    lastVector = { vec, dim }
     return rank(vec, dim)
   } catch {
-    return null
+    if (options.staleFallback === false || !lastVector) {
+      return null
+    }
+    return rank(lastVector.vec, lastVector.dim)
   }
 }
 

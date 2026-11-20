@@ -117,8 +117,8 @@ export const MemoryPage = () => {
     }
     setPreviewBusy(true)
     try {
-      // 预览必须对应输入的那句话，不许用兜底向量冒充
-      setHits(await searchMemory(query, null, { fallback: false }))
+      // 预览必须对应输入的那句话，不许拿上一次的向量冒充
+      setHits(await searchMemory(query, null, { staleFallback: false }))
     } finally {
       setPreviewBusy(false)
     }
