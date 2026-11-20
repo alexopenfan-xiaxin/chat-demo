@@ -5,7 +5,6 @@ import {
   IconBrowseOutline16,
   IconBrowseWarningOutline16,
   IconChevronDownOutline14,
-  IconChevronRightOutline14,
   IconCheckedOutline14,
   IconCloseFill14,
   IconLinkOutline16,
@@ -20,6 +19,7 @@ import {
   isDeepSearchKind,
   isImageSearchKind,
   type FindStep,
+  type MemoryStep,
   type OpenStep,
   type PageItem,
   type ReadLinkStep,
@@ -30,6 +30,7 @@ import {
 } from '../../services/chat/view.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { Markdown } from '../markdown/Markdown.js'
+import { MemoryActionRow } from './MemoryActionRow.js'
 import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
 import styles from './ReplyArea.module.css'
@@ -68,6 +69,13 @@ export const ReplyArea = memo(function ReplyArea({
   const [open, setOpen] = useState(true)
   const titleActive = streaming && !hasResponse
   useTicker(titleActive, 1000)
+  // 回复结束就收起一次，走的正是用户点标题的同一个 setter。
+  // 之后用户自己再点开，不会再有任何东西把它收回去（这条没有第二次 streaming → done）。
+  useEffect(() => {
+    if (!streaming) {
+      setOpen(false)
+    }
+  }, [streaming])
   if (view.steps.length === 0 && !(message.thinking && streaming)) {
     return null
   }
@@ -75,19 +83,26 @@ export const ReplyArea = memo(function ReplyArea({
   const thinking = message.thinking ?? view.steps.some((step) => step.type === 'thinking')
   const title = thinking ? getAreaTitle(view, streaming, Date.now(), hasResponse) : null
   const stopped = !streaming && !hasResponse
+  const expanded = !title || open
   return (
     <div className={styles.area}>
       {title ? (
-        <div className={styles.title} onClick={() => setOpen((value) => !value)}>
+        <div
+          className={clsx(styles.title, !open && styles.titleCollapsed)}
+          onClick={() => setOpen((value) => !value)}
+        >
           <span className={clsx(styles.titleIcon, stopped && styles.stoppedIcon)}>
             <IconThinkOutline16 />
           </span>
           <span className={clsx(styles.titleText, titleActive && styles.shimmer)}>{title}</span>
-          {open ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
+          <span className={clsx(styles.chevron, !open && styles.chevronCollapsed)}>
+            <IconChevronDownOutline14 />
+          </span>
         </div>
       ) : null}
-      {open || !title ? (
-        <div className={styles.steps}>
+      {/* 收起用 grid-template-rows 过渡（内容不定高，max-height 会不匀速）；内层裁切掉零行高后的内容 */}
+      <div className={clsx(styles.stepsWrap, !expanded && styles.collapsed)}>
+        <div className={styles.stepsInner}>
           {view.steps.map((step, index) => (
             <StepItem
               key={stepKey(step, index)}
@@ -99,13 +114,13 @@ export const ReplyArea = memo(function ReplyArea({
             />
           ))}
         </div>
-      ) : null}
+      </div>
     </div>
   )
 })
 
 const stepKey = (step: Step, index: number) =>
-  step.type === 'thinking' || step.type === 'text' || step.type === 'search'
+  step.type === 'thinking' || step.type === 'text' || step.type === 'search' || step.type === 'memory'
     ? step.key
     : `${step.type}-${index}`
 
@@ -152,6 +167,8 @@ const StepItem = ({
       )
     case 'search':
       return <SearchRow step={step} message={message} streaming={streaming} isLast={isLast} />
+    case 'memory':
+      return <MemoryRow step={step} isLast={isLast} />
     case 'open':
       return <OpenRow step={step} sources={sources} isLast={isLast} />
     case 'find':
@@ -178,6 +195,13 @@ const ContentItem = ({
       <span className={clsx(styles.dotInner, !active && styles.inactive)} />
     </span>
     {children}
+  </div>
+)
+
+/** 记忆工具：一行一个动作，位置就是它被调用的位置（与搜索、读取同一套时间线） */
+const MemoryRow = ({ step, isLast }: { step: MemoryStep; isLast: boolean }) => (
+  <div className={clsx(styles.row, !isLast && styles.withLine)}>
+    <MemoryActionRow part={step.part} />
   </div>
 )
 

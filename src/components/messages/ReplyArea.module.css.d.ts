@@ -4,6 +4,12 @@ declare const styles: {
   readonly "titleIcon": string;
   readonly "stoppedIcon": string;
   readonly "titleText": string;
+  readonly "titleCollapsed": string;
+  readonly "chevron": string;
+  readonly "chevronCollapsed": string;
+  readonly "stepsWrap": string;
+  readonly "stepsInner": string;
+  readonly "collapsed": string;
   readonly "shimmer": string;
   readonly "withLine": string;
   readonly "content": string;

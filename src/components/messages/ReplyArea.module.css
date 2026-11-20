@@ -10,10 +10,56 @@
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   user-select: none;
-  transition: color 0.2s;
+  transition:
+    color 0.2s,
+    margin-bottom 200ms var(--ds-ease-in-out);
 
   &:hover {
     color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* 收起时下面是空的，那 2px 是给展开内容留的缝，留着会多出一段空档 */
+.titleCollapsed {
+  margin-bottom: 0;
+}
+
+.chevron {
+  display: flex;
+  transition: transform 200ms var(--ds-ease-in-out);
+}
+
+.chevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+/*
+ * 展开/收起：内容不定高，max-height 过渡会忽快忽慢、height: auto 又没法过渡，
+ * 所以用 grid-template-rows 1fr → 0fr；内层 min-height: 0 + 裁切才是零高度。
+ */
+.stepsWrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 200ms var(--ds-ease-in-out);
+}
+
+.collapsed {
+  grid-template-rows: 0fr;
+}
+
+.stepsInner {
+  min-height: 0;
+  overflow: hidden;
+
+  /* 高度从上百 px 掉到 0 时保住滚动锚点，下方内容不往上顶 */
+  overflow-anchor: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepsWrap,
+  .chevron,
+  .title {
+    transition: none;
   }
 }
 
