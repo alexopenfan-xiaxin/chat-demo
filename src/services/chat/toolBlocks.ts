@@ -98,3 +98,48 @@ export const fetchBlocks = (
   }
   return [use, result]
 }
+
+/**
+ * 记忆工具的动作记录块：一次调用一行，按调用顺序排（调用方按 runToolCall 的返回顺序追加）。
+ *
+ * 只保留动作与条数：用户明确要求「不用显示具体记了啥、改了啥」，所以这里
+ * 不出现正文、不出现 id、不出现旧→新。失败原因也只给归类后的短文案，
+ * 因为底层失败信息里可能带出相近条目的正文（memory_save 的冲突提示就是那样）。
+ */
+export const memoryActionBlocks = (
+  callId: string,
+  action: 'save' | 'edit' | 'profile',
+  ok: boolean,
+  failureKey?: string
+): ReplyBlock[] => [
+  {
+    type: 'memory_action',
+    id: `memory-${callId}`,
+    action,
+    count: ok ? 1 : 0,
+    ...(ok ? {} : { failureKey: failureKey ?? 'memoryActionFailedUnknown' }),
+  },
+]
+
+/** 把记忆工具的失败信息归到几个固定文案上，避免正文从错误信息里漏进界面 */
+export const memoryFailureKey = (message: string): string => {
+  if (message.includes('没有那么配置') || message.includes('还没有配置')) {
+    return 'memoryActionFailedUnavailable'
+  }
+  if (message.includes('向量')) {
+    return 'memoryActionFailedEmbedding'
+  }
+  if (message.includes('最多')) {
+    return 'memoryActionFailedTooLong'
+  }
+  if (message.includes('没有这条记忆')) {
+    return 'memoryActionFailedMissing'
+  }
+  if (message.includes('相近')) {
+    return 'memoryActionFailedConflict'
+  }
+  if (message.includes('为空')) {
+    return 'memoryActionFailedEmpty'
+  }
+  return 'memoryActionFailedUnknown'
+}

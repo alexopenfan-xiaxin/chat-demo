@@ -62,8 +62,25 @@ export type TextPart = {
   isTemplate?: boolean
 }
 
+/**
+ * 记忆工具的动作记录：只报「做了哪类动作、几条」，**不含记忆正文、不含 id、不含旧→新**。
+ *
+ * 记忆本来就只在本机，但这条记录同样不进任何请求（`toAssistantParam` 只认 text /
+ * thinking / read_link，其余块一律丢弃），也不写日志。开关关闭时压根不会产生这个块，
+ * 所以请求体与不显示时字节一致。
+ */
+export type MemoryActionPart = {
+  type: 'memory_action'
+  id: string
+  action: 'save' | 'edit' | 'profile'
+  /** 本次影响几条：成功 1，失败 0 */
+  count: number
+  /** 失败原因的短文案键（本地 i18n key），成功时没有 */
+  failureKey?: string
+}
+
 /** 服务端工具调用与结果块按协议原样保存；历史请求只回传 read_link 调用与结果 */
-export type ReplyBlock = ThinkingPart | TextPart | ServerToolBlock
+export type ReplyBlock = ThinkingPart | TextPart | ServerToolBlock | MemoryActionPart
 
 /**
  * pending：已发出请求，还没收到事件；streaming：正在接收；

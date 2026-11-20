@@ -1,10 +1,7 @@
 import { memo, useState } from 'react'
 import clsx from 'clsx'
-import {
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
-  IconMemoryOutline14,
-} from '../base/icons.js'
+import { IconChevronDownOutline14, IconChevronRightOutline14 } from '../base/icons.js'
+import { IconBrain } from '../base/IconBrain.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useChatStore } from '../../services/chat/store.js'
 import type { AssistantMessage } from '../../services/chat/types.js'
@@ -43,7 +40,7 @@ export const MemoryRecall = memo(function MemoryRecall({ message }: { message: A
         aria-expanded={open}
       >
         <span className={styles.icon}>
-          <IconMemoryOutline14 />
+          <IconBrain size={14} />
         </span>
         <span>{t('memoryRecallHint', { count: items.length })}</span>
         {open ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}

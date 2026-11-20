@@ -1,0 +1,50 @@
+/*
+ * 记忆动作记录：一行一个动作。
+ * 与「参考了 N 条记忆」胶囊的区别靠圆角——胶囊 28 高 + 999 圆角 + 有箭头（能点开），
+ * 这一行 24 高 + 6 圆角 + 无箭头（只是说明）。比只靠「更轻」更容易让人摸索出来。
+ */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row,
+.rowFailed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+
+  /* 单行截断：记录只说一句，长了就省略 */
+  & > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.rowFailed {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowFailed .icon {
+  color: var(--dsw-alias-state-error-primary);
+}

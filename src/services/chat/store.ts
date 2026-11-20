@@ -34,7 +34,7 @@ import {
   settleReply,
   toRequestMessages,
 } from './reply.js'
-import { fetchBlocks, searchBlocks } from './toolBlocks.js'
+import { fetchBlocks, memoryActionBlocks, memoryFailureKey, searchBlocks } from './toolBlocks.js'
 import {
   toSessionSummary,
   type AssistantMessage,
@@ -65,8 +65,22 @@ const MAX_TOOL_ROUNDS = 3
 
 type ToolCall = { callId: string; name: string; arguments: string }
 
-/** 给用户看的过程文案：正在搜索/正在读取 */
+/**
+ * 给用户看的过程文案：正在搜索/正在读取。
+ *
+ * 记忆工具只报动作、不读 content：用户明确要求「不用显示具体记了啥改了啥」，
+ * 记忆正文也不该出现在这行瞬时状态里。
+ */
 const toolStatusText = (call: ToolCall): string => {
+  if (call.name === 'memory_save') {
+    return '正在记住…'
+  }
+  if (call.name === 'memory_edit') {
+    return '正在更新记忆…'
+  }
+  if (call.name === 'memory_update_profile') {
+    return '正在重写用户画像…'
+  }
   let query = ''
   try {
     const args = JSON.parse(call.arguments) as { query?: unknown; url?: unknown }
@@ -74,16 +88,7 @@ const toolStatusText = (call: ToolCall): string => {
   } catch {
     query = ''
   }
-  const name =
-    call.name === 'web_search'
-      ? '正在搜索'
-      : call.name === 'read_url'
-        ? '正在读取网页'
-        : call.name === 'memory_save'
-          ? '正在记住'
-          : call.name === 'memory_edit'
-            ? '正在更新记忆'
-            : '正在更新画像'
+  const name = call.name === 'web_search' ? '正在搜索' : '正在读取网页'
   return query ? `${name}「${query}」…` : `${name}…`
 }
 
@@ -163,7 +168,10 @@ const runToolCall = async (
     if (call.name === 'memory_update_profile') {
       const fullText = typeof args.full_text === 'string' ? args.full_text : ''
       const result = await updateProfile(fullText)
-      return { output: JSON.stringify(result), blocks: [] }
+      return {
+        output: JSON.stringify(result),
+        blocks: memoryActionBlocks(call.callId, 'profile', result.ok, memoryFailureKey(result.message)),
+      }
     }
     if (call.name === 'memory_save') {
       const content = typeof args.content === 'string' ? args.content : ''
@@ -171,7 +179,10 @@ const runToolCall = async (
         ? args.tags.filter((tag): tag is string => typeof tag === 'string')
         : undefined
       const result = await saveMemory({ content, tags, sessionId })
-      return { output: JSON.stringify(result), blocks: [] }
+      return {
+        output: JSON.stringify(result),
+        blocks: memoryActionBlocks(call.callId, 'save', result.ok, memoryFailureKey(result.message)),
+      }
     }
     if (call.name === 'memory_edit') {
       const id = typeof args.id === 'string' ? args.id : ''
@@ -180,7 +191,10 @@ const runToolCall = async (
         ? args.tags.filter((tag): tag is string => typeof tag === 'string')
         : undefined
       const result = await editMemory({ id, content, tags })
-      return { output: JSON.stringify(result), blocks: [] }
+      return {
+        output: JSON.stringify(result),
+        blocks: memoryActionBlocks(call.callId, 'edit', result.ok, memoryFailureKey(result.message)),
+      }
     }
     return { output: JSON.stringify({ error: `未知工具：${call.name}` }), blocks: [] }
   } catch (error) {

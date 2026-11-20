@@ -15,6 +15,7 @@ import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
 import { ReadAloudButton } from './ReadAloudButton.js'
 import { CopyButton } from './CopyButton.js'
+import { MemoryActions } from './MemoryActions.js'
 import { MemoryRecall } from './MemoryRecall.js'
 import { ReplyArea } from './ReplyArea.js'
 import { useReplyView } from './useReplyView.js'
@@ -85,6 +86,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           ))}
         </div>
       ) : null}
+      <MemoryActions message={message} />
       {notice?.presentation === 'response' ? (
         <Markdown
           className="ds-assistant-message-main-content"

@@ -27,7 +27,8 @@ import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
-import { IconArrowLeftOutline16, IconMemoryOutline14, IconSearchOutline16 } from '../base/icons.js'
+import { IconArrowLeftOutline16, IconSearchOutline16 } from '../base/icons.js'
+import { IconBrain } from '../base/IconBrain.js'
 import styles from './MemoryPage.module.css'
 
 /**
@@ -392,7 +393,7 @@ export const MemoryPage = () => {
               {entries.length === 0 ? (
                 <div className={styles.empty}>
                   <span className={styles.emptyIcon}>
-                    <IconMemoryOutline14 />
+                    <IconBrain size={40} />
                   </span>
                   <p className={styles.emptyTitle}>{t('memoryEmptyTitle')}</p>
                   <p className={styles.emptyHint}>{t('memoryEmptyHint')}</p>
@@ -585,7 +586,7 @@ export const MemoryPage = () => {
       ) : (
         <div className={styles.guide}>
           <span className={styles.guideMark}>
-            <IconMemoryOutline14 />
+            <IconBrain size={24} />
           </span>
           <h2 className={styles.guideTitle}>{t('memoryGuideTitle')}</h2>
           <p className={styles.guideText}>{t('memoryGuideText')}</p>

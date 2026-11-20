@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { IconPanelLeftOutline16, IconSettingsOutline16, IconWallet16, NewChatIcon } from '../base/icons.js'
+import { IconBrain } from '../base/IconBrain.js'
 import { BrandIcon } from '../base/BrandIcon.js'
 import { CreditsDialog } from '../credits/CreditsDialog.js'
 import { closeCredits, openCredits, useCreditsDialog } from '../credits/creditsDialogState.js'
@@ -19,17 +20,6 @@ import { MEMORY_PATH, navigateTo } from '../../app/route.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
 import styles from './Sider.module.css'
-
-const IconMemory16 = () => (
-  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-    <path
-      d="M4 2.8h8v10.4l-4-2.6-4 2.6z"
-      stroke="currentColor"
-      strokeWidth="1.3"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
 
 /** 展开的侧边栏：名称与收起按钮、开启新对话、按时间分组的会话列表、底部账号与设置；移动端放在抽屉里，收起按钮关闭抽屉 */
 export const Sider = ({ mobile = false, user }: { mobile?: boolean; user: AuthUser }) => {
@@ -126,7 +116,7 @@ export const Sider = ({ mobile = false, user }: { mobile?: boolean; user: AuthUs
           }}
         >
           <span className={styles.settingsIcon}>
-            <IconMemory16 />
+            <IconBrain size={16} />
           </span>
           <span className={styles.settingsLabel}>{t('memory')}</span>
         </button>
