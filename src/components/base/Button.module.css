@@ -53,7 +53,7 @@
 }
 
 .primary {
-  color: var(--dsw-alias-label-primary-foreground);
+  color: var(--dsw-alias-button-filled-foreground);
   background-color: var(--dsw-alias-button-primary-fill);
 
   &:hover:not(:disabled) {
@@ -73,7 +73,7 @@
 }
 
 .danger {
-  color: var(--dsw-static-neutral-bluish-00);
+  color: var(--dsw-alias-button-filled-foreground);
   background-color: var(--dsw-alias-state-error-primary);
 
   &:hover:not(:disabled) {

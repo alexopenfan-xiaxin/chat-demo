@@ -159,7 +159,7 @@
 /* 不可重试时删除按钮常显，提示需要先删除 */
 .invalidRemove {
   opacity: 1;
-  color: var(--dsw-alias-label-primary-foreground);
+  color: var(--dsw-alias-button-filled-foreground);
   background-color: var(--dsw-alias-state-error-primary);
 }
 

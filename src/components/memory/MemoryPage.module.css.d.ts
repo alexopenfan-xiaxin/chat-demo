@@ -58,7 +58,7 @@ declare const styles: {
   readonly "hitBarFill": string;
   readonly "hitText": string;
   readonly "emptyHits": string;
-  readonly "danger": string;
+  readonly "dangerZone": string;
   readonly "dangerActions": string;
   readonly "guide": string;
   readonly "guideMark": string;

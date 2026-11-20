@@ -123,6 +123,6 @@
 
 .invalidRemove {
   opacity: 1;
-  color: var(--dsw-alias-label-primary-foreground);
+  color: var(--dsw-alias-button-filled-foreground);
   background-color: var(--dsw-alias-state-error-primary);
 }

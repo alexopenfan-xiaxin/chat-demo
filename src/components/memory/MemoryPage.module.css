@@ -51,12 +51,24 @@
   backdrop-filter: blur(12px);
 }
 
+/* 顶部栏标题：静止态不显示（Hero 已有 28px 大标题），滚过 Hero 后淡入 */
 .topTitle {
   margin: 0;
   font-size: 17px;
   line-height: 24px;
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  pointer-events: none;
+}
+
+.topbarScrolled .topTitle {
+  opacity: 1;
+  transform: none;
 }
 
 /* ---------- 桌面：左栏（Hero + 画像）sticky，右栏滚动 ---------- */
@@ -256,7 +268,12 @@
   height: 12px;
   border-radius: 50%;
   background: var(--dsw-alias-bg-base);
-  border: 1.5px solid var(--dsw-alias-border-l3);
+  /* §14.3：border-l3（12%）渲出来的空心圆几乎看不见，改用不透明一档 */
+  border: 1.5px solid rgb(0 0 0 / 22%);
+
+  [data-ds-dark-theme] & {
+    border-color: rgb(255 255 255 / 28%);
+  }
 }
 
 /* 被召回过：实心 + 光环，把「这条被用过」直接画出来 */
@@ -334,6 +351,7 @@
   margin-top: 6px;
 }
 
+/* §14.4：可点击的必须可读——tertiary 3.71:1 不达 AA，用 secondary（5.80:1） */
 .textButton {
   padding: 0;
   border: 0;
@@ -341,7 +359,7 @@
   font: inherit;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
 }
 
@@ -437,7 +455,7 @@
   font: inherit;
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   cursor: pointer;
 }
 
@@ -515,7 +533,7 @@
 }
 
 .hitScore {
-  flex: 0 0 46px;
+  flex: 0 0 42px;
   text-align: right;
   font: 500 13px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-variant-numeric: tabular-nums;
@@ -526,11 +544,11 @@
   color: var(--dsw-alias-label-caption);
 }
 
+/* §14.2：56px 下 0.86 与 0.72 只差 8px 分不出；改 72，且未填充部分透明，别让灰尾巴稀释「长度=相似度」 */
 .hitBar {
-  flex: 0 0 56px;
+  flex: 0 0 72px;
   height: 3px;
   border-radius: 2px;
-  background: var(--dsw-alias-border-l3);
   overflow: hidden;
 }
 
@@ -542,7 +560,7 @@
 }
 
 .hitMiss .hitBarFill {
-  background: var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-label-caption);
 }
 
 .hitText {
@@ -564,7 +582,7 @@
 }
 
 /* ---------- 危险区 ---------- */
-.danger {
+.dangerZone {
   display: flex;
   flex-direction: column;
   margin-top: 40px;
@@ -692,9 +710,21 @@
   }
 }
 
+/* ≤360：把宽度让给正文（正文只剩约 15 个中文字的余量，条不再加长） */
+@media (max-width: 360px) {
+  .hitScore {
+    flex: 0 0 38px;
+  }
+
+  .hitBar {
+    flex: 0 0 48px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .topbar,
-  .profileEditor {
+  .profileEditor,
+  .topTitle {
     transition: none;
   }
 }

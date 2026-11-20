@@ -200,7 +200,7 @@
   border: 0;
   border-radius: 999px;
   background: var(--dsw-alias-button-primary-fill);
-  color: var(--dsw-alias-label-primary-foreground);
+  color: var(--dsw-alias-button-filled-foreground);
   font-size: 14px;
   line-height: 22px;
   font-weight: 500;

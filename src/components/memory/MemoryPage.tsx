@@ -499,7 +499,7 @@ export const MemoryPage = () => {
               {previewBusy ? <p className={styles.emptyHits}>{t('memoryRetrieving')}</p> : null}
             </section>
 
-            <section className={styles.danger}>
+            <section className={styles.dangerZone}>
               <p className={styles.caption}>{t('memoryDangerHint')}</p>
               <div className={styles.dangerActions}>
                 <Button variant="outlined" size="s" onClick={() => void download()}>
