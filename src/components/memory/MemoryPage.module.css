@@ -257,10 +257,20 @@
 .item {
   position: relative;
   padding-bottom: 20px;
-  /* §17：200 条一次性布局在降速设备上要 108ms（阈值 80）。按屏付费后 ×4 降到 ~11ms。
-     122px 是实测加权中位（有标签 126 / 无标签 100），auto 让浏览器记住真实高度。 */
+  /*
+   * §17：200 条一次性布局在降速设备上要 108ms（阈值 80），按屏付费后 ×4 降到 ~11ms。
+   *
+   * 102px 是量出来的内容盒高度：条目总高中位 122，减去下面的 padding-bottom 20
+   * ——contain-intrinsic-size 填的是内容盒，不是含 padding 的盒子高度。
+   * 填 122 会让 200 条总高多估 3694px、滚动条漂 276px；填 102 偏差 0.19%、漂移 4px。
+   *
+   * 长期约束：content-visibility 会让离屏条目不参与布局，以后任何新加的逻辑只要读
+   * offsetHeight / getBoundingClientRect / offsetTop，都要先想清楚它会不会拿到估算值。
+   * 现有三处不受影响：轨道是容器级绝对定位（跟容器高度走）、统计条数与占用来自数据层、
+   * 导出 JSON 也不读 DOM。
+   */
   content-visibility: auto;
-  contain-intrinsic-size: auto 122px;
+  contain-intrinsic-size: auto 102px;
 }
 
 .item:last-child {
