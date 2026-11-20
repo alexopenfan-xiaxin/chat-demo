@@ -13,7 +13,7 @@ const LEAVE_MS = 160
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-type View = { done: number; total: number | null; stage: 'checking' | 'writing' }
+type View = { done: number; total: number | null; stage: 'checking' | 'listing' | 'writing' }
 
 /**
  * 导入历史对话的进度浮层。
@@ -89,6 +89,8 @@ export const ImportProgressOverlay = () => {
   const percent = determinate && total ? Math.min(100, Math.round((done / total) * 100)) : null
   const preparing = waiting && !slow
   const counting = view === null || view.stage === 'checking'
+  // 数中心目录这段也有数字：同一个计数位，文案说清现在在数什么
+  const listing = view?.stage === 'listing' && view.done > 0
 
   return createPortal(
     <div className={clsx(styles.overlay, !active && styles.leaving)}>
@@ -100,9 +102,11 @@ export const ImportProgressOverlay = () => {
               ? t('historyImportPreparing')
               : determinate
                 ? `${done} / ${total}`
-                : counting || reduced
-                  ? t('historyImportWorking')
-                  : t('historyImportCount', { count: done })}
+                : listing
+                  ? t('historyImportReadingList', { count: done })
+                  : counting || reduced
+                    ? t('historyImportWorking')
+                    : t('historyImportCount', { count: done })}
           </span>
         </div>
         <div

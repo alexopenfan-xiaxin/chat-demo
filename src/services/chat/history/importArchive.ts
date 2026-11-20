@@ -6,11 +6,12 @@ import { checkManifest, readSessionFile, readSessionIndex } from './schema.js'
 import { toLocalSession } from './toLocal.js'
 import {
   ArchiveError,
-  isZipFile,
   listArchivePaths,
   readArchive,
-  readEntry,
+  readEntryBlob,
+  readEntryText,
   skipEntry,
+  type Archive,
   type ArchiveEntry,
 } from './zipReader.js'
 
@@ -68,7 +69,7 @@ export const indexMatchesSessions = (
 }
 
 const readJson = async (entry: ArchiveEntry): Promise<unknown> => {
-  const text = await (await readEntry(entry)).text()
+  const text = await readEntryText(entry)
   try {
     return JSON.parse(text)
   } catch {
@@ -80,12 +81,9 @@ const readJson = async (entry: ArchiveEntry): Promise<unknown> => {
  * 检查 ZIP 格式、首个 manifest 条目及格式版本。
  * 校验失败时保留正在生成的回答和现有暂存数据。
  */
-export const checkArchiveFormat = async (file: File): Promise<void> => {
-  if (!(await isZipFile(file))) {
-    fail('backupUnrecognized')
-  }
+export const checkArchiveFormat = async (archive: Archive): Promise<void> => {
   try {
-    for await (const entry of readArchive(file)) {
+    for await (const entry of readArchive(archive)) {
       if (entry.path !== MANIFEST_PATH) {
         fail('backupUnrecognized')
       }
@@ -104,21 +102,9 @@ export const checkArchiveFormat = async (file: File): Promise<void> => {
  * 会话读完立即暂存，只保留图片路径映射；图片全部读完后逐会话回填 MIME，不改变图片身份。
  * 写入导入暂存存储；调用方负责先清空暂存，成功后替换正式数据，失败时清理暂存。
  */
-export const importArchive = async (file: File, onProgress?: ImportProgress): Promise<void> => {
-  if (!(await isZipFile(file))) {
-    fail('backupUnrecognized')
-  }
-  // 总数只数会话文件：中心目录里就有，不需要解压；数不出来就不显示"几分之几"，
-  // 免得把一个猜出来的分母摆给用户看。
-  // 总数只数会话文件：中心目录里就有，不需要解压。
-  // 数不出来说明中心目录读不了，后面逐条读取会撞上同一处损坏，所以这里不吞异常：
-  // 静默退化成「大约需要几秒」会让用户以为导入在正常进行，实际马上就会失败。
-  let total: number
-  try {
-    total = (await listArchivePaths(file)).filter((path) => parseSessionPath(path) !== null).length
-  } catch (error) {
-    throw error instanceof ArchiveError ? new BackupError('backupIncomplete') : error
-  }
+export const importArchive = async (archive: Archive, onProgress?: ImportProgress): Promise<void> => {
+  // 总数只数会话文件：中央目录已经打开，纯内存过滤，不再扫盘。
+  const total = listArchivePaths(archive).filter((path) => parseSessionPath(path) !== null).length
   onProgress?.(0, total)
   const imported = new Set<string>()
   const images = new Map<string, string>()
@@ -134,14 +120,14 @@ export const importArchive = async (file: File, onProgress?: ImportProgress): Pr
       await skipEntry(entry)
       return
     }
-    const data = await readEntry(entry)
+    const data = await readEntryBlob(entry)
     const type = imageType(new Uint8Array(await data.slice(0, 16).arrayBuffer()))
     await db.saveStagingFiles([{ id, blob: new Blob([data], { type }) }])
     stored.set(id, type)
   }
 
   try {
-    for await (const entry of readArchive(file)) {
+    for await (const entry of readArchive(archive)) {
       const { path } = entry
       const sessionId = parseSessionPath(path)
       if (!manifest) {

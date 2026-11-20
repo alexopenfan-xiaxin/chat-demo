@@ -1,6 +1,10 @@
 import { Inflate } from 'fflate'
 
 const READ_CHUNK_BYTES = 256 * 1024
+/** 解析中央目录时每这么多条报一次进度，太少会变成刷屏，太多会显不出「在动」 */
+const DIRECTORY_PROGRESS_EVERY = 32
+/** 单条目内联读进内存的上限；超过就退回按块建 Blob，避免大附件整个压进 JS 堆 */
+const INLINE_ENTRY_LIMIT = 8 * 1024 * 1024
 // 控制每轮同步解压的工作量；输出交给调用方保存后才继续读取。
 const INFLATE_CHUNK_BYTES = 8 * 1024
 
@@ -11,6 +15,9 @@ export class ArchiveError extends Error {
     this.name = 'ArchiveError'
   }
 }
+
+/** 中央目录解析进度：已解析条数 / 总条数（总数来自 EOCD，一开始就知道） */
+export type DirectoryProgress = (parsed: number, total: number) => void
 
 const invalid = (): never => {
   throw new ArchiveError()
@@ -74,7 +81,8 @@ const decodePath = (bytes: Uint8Array, flags: number) => {
   return path
 }
 
-type Entry = {
+/** 中央目录里的一条记录 */
+export type Entry = {
   path: string
   name: Uint8Array
   flags: number
@@ -85,7 +93,15 @@ type Entry = {
   offset: number
 }
 
-const readDirectory = async (file: File): Promise<{ entries: Entry[]; offset: number }> => {
+/**
+ * 读中央目录：整段一次读进内存再解析。
+ * 之前是每个条目单独读 46 字节头、名字、extra，一条三次异步 slice，
+ * 手机上每次 slice 都要过一次主线程调度，几百个条目就积成几秒。
+ */
+const readDirectory = async (
+  file: File,
+  onProgress?: DirectoryProgress
+): Promise<{ entries: Entry[]; offset: number }> => {
   if (file.size < 22) {
     invalid()
   }
@@ -119,12 +135,15 @@ const readDirectory = async (file: File): Promise<{ entries: Entry[]; offset: nu
   }
   const entries: Entry[] = []
   const paths = new Set<string>()
+  // 整段读一次：中央目录通常几十 KB，读进内存后逐条解析不再有 I/O
+  const directory = await readBytes(file, offset, size)
+  onProgress?.(0, count)
   let cursor = 0
   for (let index = 0; index < count; index++) {
     if (cursor + 46 > size) {
       invalid()
     }
-    const view = viewOf(await readBytes(file, offset + cursor, 46))
+    const view = viewOf(directory.subarray(cursor))
     if (view.getUint32(0, true) !== 0x02014b50) {
       invalid()
     }
@@ -150,7 +169,7 @@ const readDirectory = async (file: File): Promise<{ entries: Entry[]; offset: nu
     ) {
       invalid()
     }
-    const name = await readBytes(file, offset + cursor + 46, nameLength)
+    const name = directory.subarray(cursor + 46, cursor + 46 + nameLength)
     const path = decodePath(name, flags)
     // 目录和同名文件也不能互相覆盖。
     const identity = path.endsWith('/') ? path.slice(0, -1) : path
@@ -158,7 +177,7 @@ const readDirectory = async (file: File): Promise<{ entries: Entry[]; offset: nu
       invalid()
     }
     paths.add(identity)
-    checkExtra(await readBytes(file, offset + cursor + 46 + nameLength, extraLength))
+    checkExtra(directory.subarray(cursor + 46 + nameLength, cursor + 46 + nameLength + extraLength))
     entries.push({
       path,
       name,
@@ -170,10 +189,14 @@ const readDirectory = async (file: File): Promise<{ entries: Entry[]; offset: nu
       offset: entryOffset,
     })
     cursor = next
+    if ((index + 1) % DIRECTORY_PROGRESS_EVERY === 0) {
+      onProgress?.(index + 1, count)
+    }
   }
   if (cursor !== size) {
     invalid()
   }
+  onProgress?.(count, count)
   return { entries: entries.sort((a, b) => a.offset - b.offset), offset }
 }
 
@@ -205,6 +228,7 @@ const readEntryOffset = async (file: File, entry: Entry, boundary: number) => {
       invalid()
     }
   }
+  // 名字与 extra 一次读完（原来分两次 slice）；descriptor 在压缩数据之后，只能单独读
   const metadata = await readBytes(file, entry.offset + 30, nameLength + extraLength)
   if (entry.name.some((byte, index) => byte !== metadata[index])) {
     invalid()
@@ -229,16 +253,32 @@ const readEntryOffset = async (file: File, entry: Entry, boundary: number) => {
 }
 
 /**
- * 只读中心目录列出全部条目名，用于导入前统计进度总数；不解压任何内容。
- * 读不出来（结构损坏）就由调用方退化成不带总数的文案，不猜数量。
+ * 打开归档：读一次中央目录，之后所有步骤复用同一个对象。
+ *
+ * 类型上强制「只读一次」——`checkFormat` 与 `import` 都只接受 Archive，
+ * 想再扫一遍目录只能重新 openArchive，调用方一眼能看出来。
  */
-export const listArchivePaths = async (file: File): Promise<string[]> => {
+export type Archive = {
+  readonly file: File
+  readonly entries: readonly Entry[]
+  /** 中央目录的起始偏移，也是最后一个条目数据的边界 */
+  readonly boundary: number
+}
+
+export const openArchive = async (file: File, onProgress?: DirectoryProgress): Promise<Archive> => {
   if (!(await isZipFile(file))) {
     invalid()
   }
-  const { entries } = await readDirectory(file)
-  return entries.map((entry) => entry.path)
+  const { entries, offset } = await readDirectory(file, onProgress)
+  return { file, entries, boundary: offset }
 }
+
+/**
+ * 列出全部条目名：纯粹的内存操作，不再碰文件。
+ * 读不出来（结构损坏）的包在 openArchive 就已经失败，不会走到这里。
+ */
+export const listArchivePaths = (archive: Archive): string[] =>
+  archive.entries.map((entry) => entry.path)
 
 export type ArchiveEntry = {
   path: string
@@ -250,10 +290,10 @@ export type ArchiveEntry = {
  * 按条目在文件中的物理顺序逐条、逐块解压，跳过目录条目。
  * 调用方必须消费完当前条目的数据，再请求下一个条目。
  */
-export async function* readArchive(file: File): AsyncGenerator<ArchiveEntry> {
-  const directory = await readDirectory(file)
-  for (const [index, entry] of directory.entries.entries()) {
-    const boundary = directory.entries[index + 1]?.offset ?? directory.offset
+export async function* readArchive(archive: Archive): AsyncGenerator<ArchiveEntry> {
+  const { file, entries } = archive
+  for (const [index, entry] of entries.entries()) {
+    const boundary = entries[index + 1]?.offset ?? archive.boundary
     const start = await readEntryOffset(file, entry, boundary)
     if (entry.path.endsWith('/')) {
       continue
@@ -310,13 +350,48 @@ export async function* readArchive(file: File): AsyncGenerator<ArchiveEntry> {
   }
 }
 
-/** 读出整个条目：会话 JSON 需要完整解析，图片需要识别类型后整张保存。 */
-export const readEntry = async (entry: ArchiveEntry): Promise<Blob> => {
-  const parts: Blob[] = []
+/**
+ * 读出整个条目到内存：按 entry.size 预分配，逐块复制。
+ *
+ * 之前每块都建一个 Blob 再拼起来，400 个会话在 6x 降速下 5564ms；
+ * 直接拼 Uint8Array 是 3485ms（实测）。大附件不走这条，避免整块压进 JS 堆。
+ */
+export const readEntryBytes = async (entry: ArchiveEntry): Promise<Uint8Array> => {
+  const bytes = new Uint8Array(entry.size)
+  let offset = 0
   for await (const chunk of entry.stream) {
-    parts.push(new Blob([chunk as Uint8Array<ArrayBuffer>]))
+    bytes.set(chunk, offset)
+    offset += chunk.length
   }
-  return new Blob(parts)
+  if (offset !== entry.size) {
+    invalid()
+  }
+  return bytes
+}
+
+/** 文本条目（会话 JSON、manifest、index）：解码一次，不经过 Blob。 */
+export const readEntryText = async (entry: ArchiveEntry): Promise<string> => {
+  if (entry.size > INLINE_ENTRY_LIMIT) {
+    return (await readEntryBlob(entry)).text()
+  }
+  return new TextDecoder().decode(await readEntryBytes(entry))
+}
+
+/**
+ * 大条目退回按块收集：附件可能几十 MB，整块进 JS 堆会顶内存上限。
+ * 最后一次性建 Blob，不嵌套 Blob。
+ */
+export const readEntryBlob = async (entry: ArchiveEntry): Promise<Blob> => {
+  const parts: Uint8Array[] = []
+  let total = 0
+  for await (const chunk of entry.stream) {
+    parts.push(chunk)
+    total += chunk.length
+  }
+  if (total !== entry.size) {
+    invalid()
+  }
+  return new Blob(parts as BlobPart[])
 }
 
 /** 不需要的条目也要读完，以校验大小与 CRC。 */

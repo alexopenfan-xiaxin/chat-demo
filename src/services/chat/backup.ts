@@ -3,7 +3,9 @@ import * as db from './db.js'
 import { replaceHistory, useChatStore } from './store.js'
 import type { Session } from './types.js'
 
-export { BackupError } from './history/errors.js'
+import { BackupError } from './history/errors.js'
+
+export { BackupError }
 
 // 导入、导出与全部删除串行处理，避免读取归档时数据被清空或两个替换事务交错。
 let backupQueue: Promise<unknown> = Promise.resolve()
@@ -46,15 +48,25 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
 export const importHistory = (file: File): Promise<number> =>
   enqueueBackup(async () => {
     const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
-    // 先置 checking：数一个几万条目的包要几秒，这段空窗里界面什么都不显示，
-    // 用户会以为点击没生效。浮层靠这个标记提前出现（准备态 / 不确定态）。
-    useChatStore.setState({ importProgress: { done: 0, total: null, stage: 'checking' } })
+    const { isZipFile, openArchive, ArchiveError } = await import('./history/zipReader.js')
+    const stage = (done: number, total: number | null, phase: 'checking' | 'listing' | 'writing') =>
+      useChatStore.setState({ importProgress: { done, total, stage: phase } })
+    // 先置 listing：目录在手机上要读好几秒，这段必须让界面有数字可看
+    stage(0, null, 'listing')
     try {
-      await checkArchiveFormat(file)
+      if (!(await isZipFile(file))) {
+        throw new BackupError('backupUnrecognized')
+      }
+      let archive: Awaited<ReturnType<typeof openArchive>>
+      try {
+        // 目录只读这一次：后面校验与导入都复用它（见 zipReader 的 Archive）
+        archive = await openArchive(file, (parsed) => stage(parsed, null, 'listing'))
+      } catch (error) {
+        throw error instanceof ArchiveError ? new BackupError('backupIncomplete') : error
+      }
+      await checkArchiveFormat(archive)
       return await replaceHistory(async () => {
-        await importArchive(file, (done, total) => {
-          useChatStore.setState({ importProgress: { done, total, stage: 'writing' } })
-        })
+        await importArchive(archive, (done, total) => stage(done, total, 'writing'))
       })
     } finally {
       useChatStore.setState({ importProgress: null })

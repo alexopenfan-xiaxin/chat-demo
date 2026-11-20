@@ -284,7 +284,12 @@ type ChatState = {
    * checking 是「还在数文件、没开始写」的阶段：这时候连总数都没有，
    * 浮层据此显示准备态 / 不确定态，而不是摆一个假的 0 / 0。
    */
-  importProgress: { done: number; total: number | null; stage?: 'checking' | 'writing' } | null
+  importProgress: {
+    done: number
+    total: number | null
+    /** listing＝还在解析中央目录，checking＝校验格式，writing＝逐条写入 */
+    stage?: 'checking' | 'listing' | 'writing'
+  } | null
 }
 
 export const useChatStore = create<ChatState>(() => ({

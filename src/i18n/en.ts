@@ -15,6 +15,7 @@ export const en = {
   historyImportKeepOpen: 'Keep this page open',
   historyImportCount: '{count} chats processed',
   historyImportWorking: 'Working',
+  historyImportReadingList: '{count} entries read',
   sessionListLoadFailed: 'Unable to load the chat list. Please try again.',
   sessionLoadFailed: 'Unable to load this chat. Please try again.',
   sessionMissing: 'This conversation is no longer in the list',

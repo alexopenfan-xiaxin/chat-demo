@@ -13,6 +13,7 @@ export const zh = {
   historyImportKeepOpen: '期间请不要关闭页面',
   historyImportCount: '已处理 {count} 个对话',
   historyImportWorking: '正在处理',
+  historyImportReadingList: '已读取 {count} 个条目',
   sessionListLoadFailed: '对话列表加载失败，请重试',
   sessionLoadFailed: '对话加载失败，请重试',
   sessionMissing: '这个对话已经不在列表里了',
