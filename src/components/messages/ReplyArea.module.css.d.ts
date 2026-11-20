@@ -7,6 +7,7 @@ declare const styles: {
   readonly "shimmer": string;
   readonly "withLine": string;
   readonly "content": string;
+  readonly "thinkingStream": string;
   readonly "lastItem": string;
   readonly "dot": string;
   readonly "dotInner": string;
