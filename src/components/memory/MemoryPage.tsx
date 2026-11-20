@@ -130,21 +130,27 @@ export const MemoryPage = () => {
     }
     // 只取真正被布局过的（在视口内的）条目：离屏条目 getBoundingClientRect 返回的是估算值，
     // 拿它们校准等于自己证明自己。
-    const view = scrollRef.current?.getBoundingClientRect()
-    const sample = [...element.querySelectorAll<HTMLElement>('[data-memory-entry]')]
-      .filter((item) => {
-        const rect = item.getBoundingClientRect()
-        return view ? rect.top < view.bottom && rect.bottom > view.top : false
-      })
-      .slice(0, 8)
-    const heights = sample.map((item) => item.getBoundingClientRect().height).filter((height) => height > 40)
-    if (heights.length < 3) {
-      return
+    // 必须等一帧以上再量：content-visibility 的「进入视口才布局」是异步判定的，
+    // 挂载当帧读到的还只是估算值。
+    const calibrate = () => {
+      const view = scrollRef.current?.getBoundingClientRect()
+      const sample = [...element.querySelectorAll<HTMLElement>('[data-memory-entry]')]
+        .filter((item) => {
+          const rect = item.getBoundingClientRect()
+          return view ? rect.top < view.bottom && rect.bottom > view.top : false
+        })
+        .slice(0, 8)
+      const heights = sample.map((item) => item.getBoundingClientRect().height).filter((height) => height > 40)
+      if (heights.length < 3) {
+        return
+      }
+      const average = heights.reduce((total, height) => total + height, 0) / heights.length
+      // 减掉条目自己的 padding-bottom(20)，contain-intrinsic-size 填的是内容盒
+      const estimate = Math.max(40, Math.round(average - 20))
+      element.style.setProperty('--entry-estimate', `${estimate}px`)
     }
-    const average = heights.reduce((total, height) => total + height, 0) / heights.length
-    // 减掉条目自己的 padding-bottom(20)，contain-intrinsic-size 填的是内容盒
-    const estimate = Math.max(40, Math.round(average - 20))
-    element.style.setProperty('--entry-estimate', `${estimate}px`)
+    const timer = window.setTimeout(calibrate, 260)
+    return () => window.clearTimeout(timer)
   }, [entries])
 
   useEffect(() => {
