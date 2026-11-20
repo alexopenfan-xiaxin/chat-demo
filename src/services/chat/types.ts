@@ -71,6 +71,19 @@ export type ReplyBlock = ThinkingPart | TextPart | ServerToolBlock
  */
 export type ReplyStatus = 'pending' | 'streaming' | 'done' | 'stopped' | 'error'
 
+/**
+ * 本轮注入过的一条记忆。只留展示需要的字段：向量绝不随消息进库，
+ * 768 维 × 4 条会让每条回复多出十几 KB。
+ */
+export type RecalledMemory = {
+  id: string
+  content: string
+  score: number
+  /** 来源会话；手动添加或跨会话导入的条目可能为空 */
+  sessionId: string | null
+  createdAt: number
+}
+
 export type AssistantMessage = MessageBranch & {
   id: string
   role: 'assistant'
@@ -90,6 +103,8 @@ export type AssistantMessage = MessageBranch & {
   blocks: ReplyBlock[]
   stopReason?: StopReason
   stopDetails?: StopDetails
+  /** 本轮参考过的记忆，用于回复上方的提示条；未注入时缺省 */
+  recall?: RecalledMemory[]
   /** 最近一次请求的用量，续写后更新 */
   usage?: MessageUsage
   error?: {

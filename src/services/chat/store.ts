@@ -1237,6 +1237,18 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     memoryBlock = buildBlock(profile, hits ?? [])
     if (hits && hits.length > 0) {
       void markHits(hits)
+      // 回复上方要显示「参考了 N 条」：只留展示字段，向量不进消息库
+      reply = {
+        ...reply,
+        recall: hits.map((hit) => ({
+          id: hit.entry.id,
+          content: hit.entry.content,
+          score: Math.round(hit.score * 100) / 100,
+          sessionId: hit.entry.sessionId,
+          createdAt: hit.entry.createdAt,
+        })),
+      }
+      updateReply(sessionId, reply)
     }
   }
   try {
