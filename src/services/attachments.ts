@@ -251,6 +251,16 @@ export const resolveMimeType = (file: File) => file.type || MIME_BY_EXT[getFileE
 
 export const isImage = (mimeType: string) => mimeType.startsWith('image/')
 
+/**
+ * 附件的打开方式：光栅图与 PDF 在新标签打开（MIME 已按后缀指定，浏览器不会猜）；
+ * SVG 只能下载——data: 地址在顶层导航里仍可能被当成文档执行脚本，下载最稳；
+ * 其余文件一律按原文件名下载。
+ */
+export const getFileViewAction = (type: string, name: string) =>
+  type === 'application/pdf' || (isImage(type) && type !== 'image/svg+xml')
+    ? { target: '_blank', rel: 'noreferrer' }
+    : { download: name }
+
 /** 文件扩展名（大写），用于卡片元信息 */
 export const getExtension = (name: string) => {
   const dot = name.lastIndexOf('.')

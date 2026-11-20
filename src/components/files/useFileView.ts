@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getFileViewType, isImage } from '../../services/attachments.js'
+import { getFileViewAction, getFileViewType, isImage } from '../../services/attachments.js'
 import { loadFile } from '../../services/chat/db.js'
 
 const createViewUrl = (original: Blob, type: string) => {
@@ -42,8 +42,9 @@ export const useFileView = (source: File | string, name: string) => {
   }, [source, type])
 
   const url = state?.source === source && state.type === type ? state.url : undefined
-  const image = isImage(type)
-  const openInTab = type === 'application/pdf' || (image && type !== 'image/svg+xml')
-  const action = openInTab ? { target: '_blank', rel: 'noreferrer' } : { download: name }
-  return { url, image, link: url ? { href: url, ...action } : undefined }
+  return {
+    url,
+    image: isImage(type),
+    link: url ? { href: url, ...getFileViewAction(type, name) } : undefined,
+  }
 }

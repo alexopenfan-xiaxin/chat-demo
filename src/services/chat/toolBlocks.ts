@@ -4,6 +4,7 @@ import type {
   WebSearchToolResultBlock,
 } from '../api/types.js'
 import type { ReplyBlock } from './types.js'
+import { isWebUrl } from '../../utils/url.js'
 
 /**
  * 把客户端工具的执行结果写成「服务端搜索」那种内容块。
@@ -20,15 +21,6 @@ import type { ReplyBlock } from './types.js'
  */
 
 export type SearchHit = { title: string; url: string; snippet: string }
-
-/** 只有 http/https 链接能进来源列表，避免把 javascript: 之类渲染成可点的来源 */
-const isWebUrl = (value: string) => {
-  try {
-    return ['http:', 'https:'].includes(new URL(value).protocol)
-  } catch {
-    return false
-  }
-}
 
 /** 一次搜索的结果块：成功时是结果列表（可以为空），失败时是一个错误项 */
 export const searchBlocks = (
