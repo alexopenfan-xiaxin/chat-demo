@@ -79,9 +79,19 @@
   position: absolute;
   inset: 0;
   width: 100%;
-  /* 32% 而不是 40%：太宽静态看像「进度到 40% 了」，用户会拿它当进度读 */
-  background: linear-gradient(90deg, transparent, rgba(43, 99, 240, 0.55), transparent) 0 0 / 32% 100%
-    no-repeat;
+  /* 32% 而不是 40%：太宽静态看像「进度到 40% 了」，用户会拿它当进度读。
+     平台型而不是尖峰型：尖峰两头透明、只有一个最亮点，平均下来很淡，静态看又像「填了一点」；
+     中间留一段等亮的平台，才读得出「一条光带在跑」而不是「进度推进到某处」。 */
+  background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(43, 99, 240, 0.42) 22%,
+      rgba(43, 99, 240, 0.7) 38%,
+      rgba(43, 99, 240, 0.7) 62%,
+      rgba(43, 99, 240, 0.42) 78%,
+      transparent 100%
+    )
+    0 0 / 32% 100% no-repeat;
   animation: indeterminate 1100ms ease-in-out infinite;
 }
 
@@ -141,8 +151,16 @@
 }
 
 [data-ds-dark-theme] .indeterminate {
-  background: linear-gradient(90deg, transparent, rgba(76, 126, 255, 0.6), transparent) 0 0 / 32% 100%
-    no-repeat;
+  background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(76, 126, 255, 0.48) 22%,
+      rgba(76, 126, 255, 0.78) 38%,
+      rgba(76, 126, 255, 0.78) 62%,
+      rgba(76, 126, 255, 0.48) 78%,
+      transparent 100%
+    )
+    0 0 / 32% 100% no-repeat;
 }
 
 /* 减少动效：不扫动，固定一段 30% 宽的静态高光，计数文案换成「正在处理」 */
