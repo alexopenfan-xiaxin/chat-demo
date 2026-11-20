@@ -69,6 +69,23 @@ describe('导入分阶段计时', () => {
   })
 })
 
+describe('writing 内部细分', () => {
+  it('addDetail 逐段累计，finish 不影响明细', () => {
+    let clock = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const run = createImportRun(0)
+    run.enter('writing')
+    run.addDetail('read', 120)
+    run.addDetail('read', 30)
+    run.addDetail('write', 45)
+    clock = 500
+    run.finish()
+    expect(run.detail).toEqual({ read: 150, write: 45 })
+    expect(run.phases).toEqual({ writing: 500 })
+    vi.restoreAllMocks()
+  })
+})
+
 describe('导入明细存取', () => {
   beforeEach(() => {
     installStorage()

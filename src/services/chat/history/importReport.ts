@@ -1,3 +1,4 @@
+import type { ImportWritingStage } from './importArchive.js'
 import type { ImportPhase } from './progress.js'
 
 /** 一次导入的分阶段实测数据：给真机定位用，别拿桌面或 CPU 节流的数字推真机 */
@@ -11,6 +12,8 @@ export type ImportRunReport = {
   sessionsWritten: number
   /** 各阶段毫秒数，键缺省表示没走到那一阶段 */
   phases: Partial<Record<ImportPhase, number>>
+  /** writing 内部细分：读+解压、JSON.parse、schema 校验、转本地、真正写库 */
+  detail?: Partial<Record<ImportWritingStage, number>>
   environment: {
     ua: string
     hardwareConcurrency: number | null
@@ -45,6 +48,7 @@ export const formatImportReports = (reports: ImportRunReport[]): string =>
 /** 分阶段计时：每次 enter 结束上一段、开始下一段；finish 收尾把当前段封口 */
 export const createImportRun = (startedAt: number) => {
   const phases: Partial<Record<ImportPhase, number>> = {}
+  const detail: Partial<Record<ImportWritingStage, number>> = {}
   let current: ImportPhase | null = null
   let since = startedAt
   const close = (at: number) => {
@@ -63,11 +67,16 @@ export const createImportRun = (startedAt: number) => {
       close(performance.now())
       current = null
     },
+    /** writing 内部的细分累计 */
+    addDetail(stage: ImportWritingStage, ms: number) {
+      detail[stage] = (detail[stage] ?? 0) + ms
+    },
     /** 总计到此刻为止的耗时，phase 里不含还没结束的那一段 */
     elapsed() {
       return performance.now() - startedAt
     },
     phases,
+    detail,
   }
 }
 

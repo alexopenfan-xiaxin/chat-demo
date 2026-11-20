@@ -171,6 +171,21 @@ export const addStagingSession = async (session: Session): Promise<void> => {
   await (await getDB()).add('sessionsStaging', session)
 }
 
+/**
+ * 批量写暂存会话：一个事务写完一批。
+ *
+ * 安卓 Chrome 上每个事务都要真正落盘，逐个会话开事务时 76 个会话能吃掉几十秒
+ * （真机实测 writing 占 96%）；桌面几乎无感，所以这个成本在桌面基准确认不了。
+ * 失败时整套暂存由 importHistory 的 catch 清掉，等价于回滚。
+ */
+export const addStagingSessions = async (sessions: readonly Session[]): Promise<void> => {
+  if (sessions.length === 0) {
+    return
+  }
+  const tx = (await getDB()).transaction('sessionsStaging', 'readwrite')
+  await Promise.all([...sessions.map((session) => tx.store.put(session)), tx.done])
+}
+
 export const saveStagingFiles = (files: StoredFile[]): Promise<void> =>
   putFiles('filesStaging', files)
 

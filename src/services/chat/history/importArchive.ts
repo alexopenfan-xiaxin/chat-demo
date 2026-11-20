@@ -1,4 +1,5 @@
 import * as db from '../db.js'
+import type { Session } from '../types.js'
 import { BackupError, fail } from './errors.js'
 import type { SessionIndexEntry } from './format.js'
 import { INDEX_PATH, MANIFEST_PATH, USER_PATH, parseSessionPath } from './paths.js'
@@ -17,6 +18,13 @@ import {
 
 /** 导入进度：总数取不到时为 null，界面据此退化成不带计数的文案 */
 export type ImportProgress = (done: number, total: number | null) => void
+
+/** writing 阶段内部的细分耗时（毫秒），只用于真机定位 */
+export type ImportWritingStage = 'read' | 'parse' | 'schema' | 'toLocal' | 'write'
+export type ImportWritingTiming = (stage: ImportWritingStage, ms: number) => void
+
+/** 每批写入的会话数：安卓上事务数决定落盘次数，但一批太大又占内存 */
+const WRITE_BATCH = 16
 
 /** 从原件字节补充图片 MIME；无法识别时为空字符串，图片身份仍由归档的 is_image 决定。 */
 const imageType = (bytes: Uint8Array): string => {
@@ -102,7 +110,11 @@ export const checkArchiveFormat = async (archive: Archive): Promise<void> => {
  * 会话读完立即暂存，只保留图片路径映射；图片全部读完后逐会话回填 MIME，不改变图片身份。
  * 写入导入暂存存储；调用方负责先清空暂存，成功后替换正式数据，失败时清理暂存。
  */
-export const importArchive = async (archive: Archive, onProgress?: ImportProgress): Promise<void> => {
+export const importArchive = async (
+  archive: Archive,
+  onProgress?: ImportProgress,
+  onTiming?: ImportWritingTiming
+): Promise<void> => {
   // 总数只数会话文件：中央目录已经打开，纯内存过滤，不再扫盘。
   const total = listArchivePaths(archive).filter((path) => parseSessionPath(path) !== null).length
   onProgress?.(0, total)
@@ -126,6 +138,18 @@ export const importArchive = async (archive: Archive, onProgress?: ImportProgres
     stored.set(id, type)
   }
 
+  /** 待写会话：攒够一批再开事务，减少安卓上的落盘次数 */
+  let batch: Session[] = []
+  const flush = async () => {
+    if (batch.length === 0) {
+      return
+    }
+    const started = performance.now()
+    await db.addStagingSessions(batch)
+    onTiming?.('write', performance.now() - started)
+    batch = []
+  }
+
   try {
     for await (const entry of readArchive(archive)) {
       const { path } = entry
@@ -140,8 +164,23 @@ export const importArchive = async (archive: Archive, onProgress?: ImportProgres
         // 账号信息（已脱敏）不导入；文件可能缺失，位置也不固定。
         await skipEntry(entry)
       } else if (sessionId !== null && !index) {
-        const file = readSessionFile(await readJson(entry))
+        const readStarted = performance.now()
+        const text = await readEntryText(entry)
+        onTiming?.('read', performance.now() - readStarted)
+        const parseStarted = performance.now()
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          fail('backupInvalidJson')
+        }
+        onTiming?.('parse', performance.now() - parseStarted)
+        const schemaStarted = performance.now()
+        const file = readSessionFile(parsed)
+        onTiming?.('schema', performance.now() - schemaStarted)
+        const localStarted = performance.now()
         const local = toLocalSession(file)
+        onTiming?.('toLocal', performance.now() - localStarted)
         if (local.session.id !== sessionId || imported.has(sessionId)) {
           fail('backupIncomplete')
         }
@@ -159,7 +198,10 @@ export const importArchive = async (archive: Archive, onProgress?: ImportProgres
           inserted_at: file.inserted_at,
           updated_at: file.updated_at,
         })
-        await db.addStagingSession(local.session)
+        batch.push(local.session)
+        if (batch.length >= WRITE_BATCH) {
+          await flush()
+        }
         onProgress?.(imported.size, total)
       } else if (path === INDEX_PATH && !index) {
         index = readSessionIndex(await readJson(entry))
@@ -171,6 +213,7 @@ export const importArchive = async (archive: Archive, onProgress?: ImportProgres
         fail('backupIncomplete')
       }
     }
+    await flush()
   } catch (error) {
     throw error instanceof ArchiveError ? new BackupError('backupIncomplete') : error
   }

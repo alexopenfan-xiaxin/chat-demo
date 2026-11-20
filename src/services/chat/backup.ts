@@ -76,6 +76,9 @@ export const importHistory = (file: File): Promise<number> =>
         phases: Object.fromEntries(
           Object.entries(run.phases).map(([phase, ms]) => [phase, Math.round(ms as number)])
         ) as ImportRunReport['phases'],
+        detail: Object.fromEntries(
+          Object.entries(run.detail).map(([stage, ms]) => [stage, Math.round(ms as number)])
+        ) as ImportRunReport['detail'],
         environment,
       }
       saveImportReport(value)
@@ -104,8 +107,10 @@ export const importHistory = (file: File): Promise<number> =>
       const count = await replaceHistory(
         async () => {
           run.enter('writing')
-          await importArchive(archive as NonNullable<typeof archive>, (done, totalSessions) =>
-            stage(done, totalSessions, 'writing')
+          await importArchive(
+            archive as NonNullable<typeof archive>,
+            (done, totalSessions) => stage(done, totalSessions, 'writing'),
+            (name, ms) => run.addDetail(name, ms)
           )
         },
         (phase) => {

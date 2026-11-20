@@ -17,6 +17,7 @@ type View = { done: number; total: number | null; stage: ImportPhase }
 type Result = { report: ImportRunReport; ok: boolean }
 
 const PHASES: ImportPhase[] = ['listing', 'checking', 'writing', 'committing', 'rebuilding']
+const WRITING_STAGES = ['read', 'parse', 'schema', 'toLocal', 'write'] as const
 
 const formatBytes = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -164,6 +165,16 @@ export const ImportProgressOverlay = () => {
       }
       const share = Math.round((ms / Math.max(1, report.totalMs)) * 100)
       lines.push(`  ${pad(phase, 11)}${pad(`${ms} ms`, 9)}${share}%`)
+      // writing 内部再拆五段：真机上到底卡在读、解析还是写库，一眼能看出来
+      if (phase === 'writing' && report.detail) {
+        for (const stage of WRITING_STAGES) {
+          const stageMs = report.detail[stage]
+          if (stageMs === undefined) {
+            continue
+          }
+          lines.push(`      ${pad(stage, 11)}${pad(`${stageMs} ms`, 9)}${Math.round((stageMs / Math.max(1, ms)) * 100)}%`)
+        }
+      }
     }
     lines.push('')
     // UA 是一长串，跟标签挤在一行会被折断、把两列对齐搞乱，单独起一行
