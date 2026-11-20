@@ -8,7 +8,7 @@ export type Locale = 'zh-CN' | 'en-US'
 export type ThemePreference = 'light' | 'dark' | 'system'
 
 /**
- * 本机设置，存 localStorage：语言、主题、位置、朗读音色、显示思考过程与智能搜索开关、侧边栏收起状态。
+ * 本机设置，存 localStorage：语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态。
  *
  * 这里曾经存过用户填的 API Key。现在 key 由服务端按会话注入，浏览器不再需要它，
  * 所以字段删掉，并在初始化时把老版本留下的那份明文从 localStorage 里清掉。

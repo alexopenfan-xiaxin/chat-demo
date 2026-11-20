@@ -110,7 +110,7 @@ export type AssistantMessage = MessageBranch & {
   createdAt: number
   /** 未记录模型时为 null，续写使用当前默认模型。 */
   model: ChatModel | null
-  /** 是否在界面展示思考过程；只影响渲染，不进请求体 */
+  /** 深度思考开关：只决定界面是否展示思考块，不进请求体 */
   thinking?: boolean
   /** 请求时是否声明 deepseek_web_search；关闭时仍声明 deepseek_read_url */
   search?: boolean

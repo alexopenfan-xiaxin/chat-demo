@@ -276,9 +276,7 @@ export const en = {
   uploadFileStatusFailed: 'Upload failed',
   uploadRetry: '{message}. Click to retry',
   chatInputPlaceholderChat: 'Enter a message',
-  deactivatedThinkTooltip: "Also show the model's thinking; the answer is unchanged",
-  thinkingToggle: 'Show thinking',
-  /** Title of the thinking block inside a reply; the switch itself uses thinkingToggle */
+  deactivatedThinkTooltip: 'Think before responding to solve reasoning problems',
   thinkingSwitch: 'DeepThink',
   deactivatedSearchTooltip: 'Search the web when necessary',
   search: 'Search',

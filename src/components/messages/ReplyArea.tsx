@@ -50,7 +50,7 @@ const useTicker = (active: boolean, interval: number) => {
 
 /**
  * 思考与工具步骤的时间线：
- * 开启「显示思考过程」时带可折叠的标题（正在思考 / 正在搜索 / 正在浏览网页 / 已思考（用时 N 秒））；
+ * 开启深度思考时带可折叠的标题（正在思考 / 正在搜索 / 正在浏览网页 / 已思考（用时 N 秒））；
  * 未开启时只有工具步骤（如普通搜索的「已阅读 N 个网页」）。
  */
 export const ReplyArea = memo(function ReplyArea({

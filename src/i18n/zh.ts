@@ -269,9 +269,7 @@ export const zh = {
   uploadFileStatusFailed: '上传失败',
   uploadRetry: '{message}，点击重试',
   chatInputPlaceholderChat: '请输入消息',
-  deactivatedThinkTooltip: '开启后额外显示模型的思考过程，回答本身不变',
-  thinkingToggle: '显示思考过程',
-  /** 回复区里思考块的标题；开关本身用上面的 thinkingToggle */
+  deactivatedThinkTooltip: '先思考后回答，解决推理问题',
   thinkingSwitch: '深度思考',
   deactivatedSearchTooltip: '按需搜索网页',
   search: '智能搜索',
