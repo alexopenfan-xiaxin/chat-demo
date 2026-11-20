@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { isTranslationKey, useTranslate } from '../../i18n/index.js'
-import { IconBrain } from '../base/IconBrain.js'
+import { IconBrainOutline } from '../base/icons.js'
 import type { AssistantMessage, MemoryActionPart } from '../../services/chat/types.js'
 import styles from './MemoryActions.module.css'
 
@@ -24,7 +24,7 @@ export const MemoryActions = memo(function MemoryActions({ message }: { message:
       {actions.map((action) => (
         <li key={action.id} className={action.count > 0 ? styles.row : styles.rowFailed}>
           <span className={styles.icon}>
-            <IconBrain size={14} />
+            <IconBrainOutline size={14} />
           </span>
           <span>
             {action.count === 0

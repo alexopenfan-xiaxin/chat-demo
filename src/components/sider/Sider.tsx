@@ -1,8 +1,7 @@
 import clsx from 'clsx'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { IconPanelLeftOutline16, IconSettingsOutline16, IconWallet16, NewChatIcon } from '../base/icons.js'
-import { IconBrain } from '../base/IconBrain.js'
+import { IconBrainOutline, IconPanelLeftOutline16, IconSettingsOutline16, IconWallet16, NewChatIcon } from '../base/icons.js'
 import { BrandIcon } from '../base/BrandIcon.js'
 import { CreditsDialog } from '../credits/CreditsDialog.js'
 import { closeCredits, openCredits, useCreditsDialog } from '../credits/creditsDialogState.js'
@@ -116,7 +115,7 @@ export const Sider = ({ mobile = false, user }: { mobile?: boolean; user: AuthUs
           }}
         >
           <span className={styles.settingsIcon}>
-            <IconBrain size={16} />
+            <IconBrainOutline size={16} />
           </span>
           <span className={styles.settingsLabel}>{t('memory')}</span>
         </button>

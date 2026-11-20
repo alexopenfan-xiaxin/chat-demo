@@ -90,11 +90,6 @@ const recentIds = (entries: readonly db.MemoryEntry[], sessionId: string | null)
   return skip
 }
 
-/** 本轮注入过的 id：memory_edit 只接受这些，模型看不到的条目不许改 */
-let injectedThisTurn: Set<string> = new Set()
-
-export const injectedIds = () => injectedThisTurn
-
 const toVector = (values: readonly number[]): Float32Array => Float32Array.from(values)
 
 export const loadProfile = async (): Promise<string> => (await db.loadMemoryProfile())?.text ?? ''
@@ -119,10 +114,8 @@ export const buildBlock = (profile: string, hits: readonly MemoryHit[]): string 
     sections.push(`【相关记忆】\n${lines.join('\n')}`)
   }
   if (sections.length === 0) {
-    injectedThisTurn = new Set()
     return null
   }
-  injectedThisTurn = new Set(hits.map((hit) => hit.entry.id))
   return `${BLOCK_HEADER}\n\n${sections.join('\n\n')}`
 }
 
@@ -315,7 +308,42 @@ export const editMemoryFromPage = async (
   }
 }
 
-/** 改写一条已存记忆：只接受本轮注入过的 id，改完必须重算向量 */
+/**
+ * 按描述定位一条记忆：id 查不到时，把这个 id 当一句话算向量，在全库里找最像的一条。
+ *
+ * 门槛是 top1 ≥ 0.90 且 top1 − top2 ≥ 0.05——既要够像，又要明显比第二名像，
+ * 否则宁可不改，把最多 3 条候选带回去让模型重挑。改错一条记忆比不改更糟。
+ */
+const locateByDescription = async (
+  text: string
+): Promise<{ entry: db.MemoryEntry } | { candidates: { id: string; content: string }[] } | { failed: string }> => {
+  let vec: Float32Array
+  let dim: number
+  try {
+    const result = await embedTexts([text], 5000)
+    vec = toVector(result.vectors[0])
+    dim = result.dim
+  } catch (error) {
+    if (error instanceof EmbeddingsUnavailable) {
+      return { failed: '记忆功能还没有配置，这次没有改动' }
+    }
+    return { failed: '向量计算失败，这次没有改动' }
+  }
+  const entries = await db.loadMemories()
+  const ranked = entries
+    .filter((entry) => entry.dim === dim)
+    .map((entry) => ({ entry, score: cosine(vec, entry.vec) }))
+    .sort((left, right) => right.score - left.score)
+  const [first, second] = ranked
+  if (first && first.score >= 0.9 && first.score - (second?.score ?? 0) >= 0.05) {
+    return { entry: first.entry }
+  }
+  return {
+    candidates: ranked.slice(0, 3).map((hit) => ({ id: hit.entry.id, content: hit.entry.content })),
+  }
+}
+
+/** 改写一条已存记忆：id 可以直接给，也可以给一句描述来定位；改完必须重算向量 */
 export const editMemory = async (input: {
   id: string
   content: string
@@ -323,21 +351,34 @@ export const editMemory = async (input: {
 }): Promise<ToolResult> => {
   const id = input.id.trim()
   const content = input.content.trim()
-  if (!injectedThisTurn.has(id)) {
-    return {
-      ok: false,
-      message: `没有这条记忆（${id} 不在本轮上下文里）。要新增请用 memory_save。`,
-    }
-  }
   if (!content) {
     return { ok: false, message: '内容为空，没有改动' }
   }
   if ([...content].length > MEMORY_ITEM_LIMIT) {
     return { ok: false, message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试` }
   }
-  const entry = await db.loadMemory(id)
+  let entry = await db.loadMemory(id)
   if (!entry) {
-    return { ok: false, message: `没有这条记忆（${id}），要新增请用 memory_save。` }
+    // 用户不让我们限制「只能改本轮出现过的记忆」：id 不是编号时按描述定位
+    if (!id) {
+      return { ok: false, message: '请给出记忆编号或一句描述' }
+    }
+    const located = await locateByDescription(id)
+    if ('failed' in located) {
+      return { ok: false, message: located.failed }
+    }
+    if ('candidates' in located) {
+      const list = located.candidates
+        .map((candidate) => `[${candidate.id}] ${[...candidate.content].slice(0, 40).join('')}`)
+        .join('\n')
+      return {
+        ok: false,
+        message: list
+          ? `没有找到明确对应的记忆，这 ${located.candidates.length} 条最接近，请用编号重试：\n${list}`
+          : '没有找到明确对应的记忆，要新增请用 memory_save。',
+      }
+    }
+    entry = located.entry
   }
   let vec: Float32Array
   let dim: number
@@ -363,7 +404,7 @@ export const editMemory = async (input: {
     updatedAt: Date.now(),
     prevContent: entry.content,
   })
-  return { ok: true, message: `已改写 [${id}]：${entry.content} → ${clip(content)}` }
+  return { ok: true, message: `已改写 [${entry.id}]：${entry.content} → ${clip(content)}` }
 }
 
 export const updateProfile = async (fullText: string): Promise<ToolResult> => {

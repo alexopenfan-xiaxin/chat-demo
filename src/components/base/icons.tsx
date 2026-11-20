@@ -416,6 +416,41 @@ export const IconRightUpOutline14 = () => (
 )
 
 /** 返回：/memory 顶部栏左侧，与侧边栏导航项同一套线性图标 */
+/**
+ * 记忆入口的大脑图标。
+ *
+ * 来源：lucide-static v1.77.0, ISC（path 原样 vendor，未改动数据）。
+ * 选它是因为 16px 真实像素下它仍能读成大脑，之前手画的几版都读成锁扣/贝壳。
+ *
+ * 线宽按 24 网格换算：rendered × 24 / size，rendered 取 16px→1.45、14px→1.65、≥20px→1.2，
+ * 也就是 16→2.2、14→2.8、20→1.44。这三个数在真实像素下看过。
+ */
+export const IconBrainOutline = ({ size = 16 }: { size?: number }) => {
+  const rendered = size >= 20 ? 1.2 : size >= 16 ? 1.45 : 1.65
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={(rendered * 24) / size}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 18V5" />
+      <path d="M15 13a4.17 4.17 0 01-3-4 4.17 4.17 0 01-3 4" />
+      <path d="M17.707 6.294A3 3 0 1012 5a3 3 0 10-5.707 1.294" />
+      <path d="M17.996 5.125a4 4 0 012.526 5.77" />
+      <path d="M18 18a4 4 0 002-7.465" />
+      <path d="M19.967 17.482a4 4 0 11-7.967.517 4 4 0 11-7.967-.517" />
+      <path d="M6 18a4 4 0 01-2-7.465" />
+      <path d="M6.004 5.125a4 4 0 00-2.526 5.77" />
+    </svg>
+  )
+}
+
 export const IconArrowLeftOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

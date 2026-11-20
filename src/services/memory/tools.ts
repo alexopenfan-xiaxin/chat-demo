@@ -49,11 +49,14 @@ export const memoryTools = (): NonNullable<CreateMessageRequest['tools']> => [
       name: 'memory_edit',
       description:
         '改写一条已经存在的记忆，用于同一件事发生变化的情况（例如「爱吃草莓蛋糕」后来变成「爱吃芒果布丁」）。' +
-        'id 必须是这一轮上下文里出现过的记忆编号；看不到的条目改不了，要新增请用 memory_save。',
+        'id 可传记忆编号（如 m3），也可传一句描述来定位；定位不准会返回候选让你重试。',
       parameters: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: '要改写的记忆 id，形如 m3' },
+          id: {
+            type: 'string',
+            description: '要改写的记忆编号（如 m3），或一句能定位它的话',
+          },
           content: { type: 'string', description: '改写后的整条内容，最多 200 字' },
           tags: { type: 'array', description: '可选标签，字符串数组' },
         },

@@ -115,7 +115,6 @@ describe('注入块', () => {
     expect(block).toContain('【用户画像】')
     expect(block).toContain('偏好短句回复')
     expect(block).toContain('[m3] 服务器 IP 是 1.2.3.4')
-    expect(memory.injectedIds().has('m3')).toBe(true)
   })
 
   it('命中正文合计不超过 1200 字', () => {
