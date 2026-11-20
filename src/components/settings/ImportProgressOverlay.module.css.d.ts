@@ -8,6 +8,7 @@ declare const styles: {
   readonly "track": string;
   readonly "fill": string;
   readonly "indeterminate": string;
+  readonly "hidden": string;
   readonly "hint": string;
 }
 export default styles

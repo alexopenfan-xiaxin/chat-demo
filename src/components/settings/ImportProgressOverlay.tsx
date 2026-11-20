@@ -105,22 +105,21 @@ export const ImportProgressOverlay = () => {
                   : t('historyImportCount', { count: done })}
           </span>
         </div>
-        {preparing ? null : (
-          <div
-            className={styles.track}
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={determinate ? (total ?? undefined) : undefined}
-            aria-valuenow={percent ?? undefined}
-          >
-            {determinate ? (
-              <div className={styles.fill} style={{ width: `${percent}%` }} />
-            ) : (
-              <div className={clsx(styles.fill, styles.indeterminate)} />
-            )}
-          </div>
-        )}
-        {preparing ? null : <div className={styles.hint}>{t('historyImportKeepOpen')}</div>}
+        <div
+          className={clsx(styles.track, preparing && styles.hidden)}
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={determinate ? (total ?? undefined) : undefined}
+          aria-valuenow={percent ?? undefined}
+        >
+          {determinate ? (
+            <div className={styles.fill} style={{ width: `${percent}%` }} />
+          ) : preparing ? null : (
+            <div className={clsx(styles.fill, styles.indeterminate)} />
+          )}
+        </div>
+        {/* 准备态隐藏而不是不渲染：卡片高度固定，标题不会在切换时跳一下 */}
+        <div className={clsx(styles.hint, preparing && styles.hidden)}>{t('historyImportKeepOpen')}</div>
       </div>
     </div>,
     document.body

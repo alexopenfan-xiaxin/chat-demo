@@ -10,7 +10,7 @@
   justify-content: center;
   padding: 16px;
   /* 第二层遮罩比 Modal 浅：两层都是 .36/.6 时叠起来几乎是纯黑 */
-  background: rgba(0, 0, 0, 0.24);
+  background: rgba(0, 0, 0, 0.32);
   animation: overlayIn 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -23,6 +23,8 @@
   box-sizing: border-box;
   width: 340px;
   max-width: calc(100vw - 32px);
+  /* 锁死到确定态的高度：准备态若矮一截，抽屉居中会让上下各长 16px、标题跳一下 */
+  min-height: 121px;
   padding: 24px;
   border-radius: 20px;
   background: var(--dsw-alias-bg-layer-2);
@@ -77,9 +79,15 @@
   position: absolute;
   inset: 0;
   width: 100%;
-  background: linear-gradient(90deg, transparent, rgba(43, 99, 240, 0.35), transparent) 0 0 / 40% 100%
+  /* 32% 而不是 40%：太宽静态看像「进度到 40% 了」，用户会拿它当进度读 */
+  background: linear-gradient(90deg, transparent, rgba(43, 99, 240, 0.55), transparent) 0 0 / 32% 100%
     no-repeat;
-  animation: indeterminate 1200ms ease-in-out infinite;
+  animation: indeterminate 1100ms ease-in-out infinite;
+}
+
+/* 准备态用占位保住高度与位置，不是不渲染 */
+.hidden {
+  visibility: hidden;
 }
 
 .hint {
@@ -111,10 +119,10 @@
 
 @keyframes indeterminate {
   from {
-    background-position: -40% 0;
+    background-position: -32% 0;
   }
   to {
-    background-position: 140% 0;
+    background-position: 132% 0;
   }
 }
 
@@ -133,7 +141,7 @@
 }
 
 [data-ds-dark-theme] .indeterminate {
-  background: linear-gradient(90deg, transparent, rgba(76, 126, 255, 0.4), transparent) 0 0 / 40% 100%
+  background: linear-gradient(90deg, transparent, rgba(76, 126, 255, 0.6), transparent) 0 0 / 32% 100%
     no-repeat;
 }
 
