@@ -1,0 +1,249 @@
+/* 记忆空间：二级页面，内容宽 720 居中；数值先按现有界面节奏给一版，等画眉的正式数字再对齐 */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  overflow-y: auto;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: #6b6b70;
+}
+
+.warn {
+  color: #c0332e;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #f7f7f8;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.cardSubtitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: #8a8a8e;
+}
+
+.meta {
+  font-size: 12px;
+  color: #8a8a8e;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid #e9e9e9;
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  color: #1a1a1a;
+  resize: vertical;
+}
+
+.input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e9e9e9;
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.itemHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.itemFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.itemActions {
+  display: flex;
+  gap: 8px;
+}
+
+.idTag {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(43, 99, 240, 0.1);
+  font: 500 12px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #2b63f0;
+}
+
+.tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 12px;
+  color: #3a3a3c;
+}
+
+.content {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+  color: #1a1a1a;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.prev {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: #8a8a8e;
+  text-decoration: line-through;
+  text-decoration-color: rgba(0, 0, 0, 0.2);
+}
+
+.addBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #e9e9e9;
+}
+
+.queryRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .title,
+  .cardTitle,
+  .cardSubtitle,
+  .content,
+  .textarea,
+  .input {
+    color: #ededed;
+  }
+
+  .card {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .item {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .textarea,
+  .input {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .addBox {
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .idTag {
+    background: rgba(76, 126, 255, 0.16);
+    color: #4c7eff;
+  }
+
+  .tag {
+    background: rgba(255, 255, 255, 0.08);
+    color: #c7c7cc;
+  }
+}

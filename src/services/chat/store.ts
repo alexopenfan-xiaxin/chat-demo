@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest, ToolExchangeItem } from '../api/types.js'
+import type { ChatModel, ToolExchangeItem } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
@@ -15,6 +15,17 @@ import {
   prepareDraftMessage,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
+import { serverTools } from '../memory/tools.js'
+import {
+  buildBlock,
+  editMemory,
+  loadProfile,
+  markHits,
+  saveMemory,
+  searchMemory,
+  updateProfile,
+} from '../memory/store.js'
+import { deleteMemoriesBySession } from './db.js'
 import type { TextPart } from './types.js'
 import {
   applyEvent,
@@ -48,48 +59,6 @@ const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
 
-/**
- * 工具声明统一用标准 function schema。
- *
- * 旧写法 `{type:'deepseek_web_search', name}` 只给名字不给参数结构，模型收到之后
- * arguments 恒为 `{}`，工具永远执行不起来——那是这套联网能力的根本原因，不是补充。
- * 阅读链接常开；智能搜索关着时不声明搜索工具。
- */
-const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
-  const tools: CreateMessageRequest['tools'] = [
-    {
-      type: 'function',
-      function: {
-        name: 'read_url',
-        description: '读取一个网页的正文内容，返回标题和正文纯文本',
-        parameters: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: '要读取的完整网址，以 http 或 https 开头' },
-          },
-          required: ['url'],
-        },
-      },
-    },
-  ]
-  if (search) {
-    tools.push({
-      type: 'function',
-      function: {
-        name: 'web_search',
-        description: '搜索互联网，返回若干条结果的标题、链接和摘要',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: '搜索关键词' },
-          },
-          required: ['query'],
-        },
-      },
-    })
-  }
-  return tools
-}
 
 /** 工具调用最多连做 3 轮；模型还想调就收敛成一句说明，不静默丢弃 */
 const MAX_TOOL_ROUNDS = 3
@@ -105,7 +74,16 @@ const toolStatusText = (call: ToolCall): string => {
   } catch {
     query = ''
   }
-  const name = call.name === 'web_search' ? '正在搜索' : '正在读取网页'
+  const name =
+    call.name === 'web_search'
+      ? '正在搜索'
+      : call.name === 'read_url'
+        ? '正在读取网页'
+        : call.name === 'memory_save'
+          ? '正在记住'
+          : call.name === 'memory_edit'
+            ? '正在更新记忆'
+            : '正在更新画像'
   return query ? `${name}「${query}」…` : `${name}…`
 }
 
@@ -117,7 +95,8 @@ const toolStatusText = (call: ToolCall): string => {
  */
 const runToolCall = async (
   call: ToolCall,
-  signal: AbortSignal
+  signal: AbortSignal,
+  sessionId: string
 ): Promise<{ output: string; blocks: ReplyBlock[] }> => {
   let args: Record<string, unknown> = {}
   try {
@@ -179,6 +158,29 @@ const runToolCall = async (
         output: `${head}正文：\n${payload.content ?? ''}${tail}`,
         blocks: fetchBlocks(call.callId, url, { title: payload.title ?? null }),
       }
+    }
+    // 记忆工具：全部在本机执行，除了算向量不产生任何网络请求
+    if (call.name === 'memory_update_profile') {
+      const fullText = typeof args.full_text === 'string' ? args.full_text : ''
+      const result = await updateProfile(fullText)
+      return { output: JSON.stringify(result), blocks: [] }
+    }
+    if (call.name === 'memory_save') {
+      const content = typeof args.content === 'string' ? args.content : ''
+      const tags = Array.isArray(args.tags)
+        ? args.tags.filter((tag): tag is string => typeof tag === 'string')
+        : undefined
+      const result = await saveMemory({ content, tags, sessionId })
+      return { output: JSON.stringify(result), blocks: [] }
+    }
+    if (call.name === 'memory_edit') {
+      const id = typeof args.id === 'string' ? args.id : ''
+      const content = typeof args.content === 'string' ? args.content : ''
+      const tags = Array.isArray(args.tags)
+        ? args.tags.filter((tag): tag is string => typeof tag === 'string')
+        : undefined
+      const result = await editMemory({ id, content, tags })
+      return { output: JSON.stringify(result), blocks: [] }
     }
     return { output: JSON.stringify({ error: `未知工具：${call.name}` }), blocks: [] }
   } catch (error) {
@@ -752,6 +754,8 @@ const removeSessionData = async (id: string): Promise<DeleteOutcome> => {
       return 'blocked'
     }
     await db.deleteSession(id)
+    // 会话没了，它产生的记忆条目一起清掉；手动新增的（sessionId 为 null）不受影响
+    await deleteMemoriesBySession(id)
     if (epoch !== historyEpoch) {
       return 'deleted'
     }
@@ -1223,6 +1227,18 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   }
   streamFlushes.set(sessionId, flush)
 
+  // 记忆开关在整轮里取一次：关闭时不声明工具、不检索、不注入
+  const memoryEnabled = useSettings.getState().memory
+  let memoryBlock: string | null = null
+  if (memoryEnabled) {
+    // 每轮只算一次：工具往返可能发多次请求，块必须逐字节一致，否则前缀缓存全废
+    const profile = await loadProfile()
+    const hits = await searchMemory(request.question.content, sessionId)
+    memoryBlock = buildBlock(profile, hits ?? [])
+    if (hits && hits.length > 0) {
+      void markHits(hits)
+    }
+  }
   try {
     // 工具往返：模型发起调用 → 我们执行 → 结果回传 → 它接着说完，最多 MAX_TOOL_ROUNDS 轮
     const exchanges: ToolExchangeItem[] = []
@@ -1251,7 +1267,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           prepared.question,
           prepared.prefix,
           initial.thinking ?? false,
-          latestReminder
+          latestReminder,
+          memoryBlock ?? undefined
         )
         const events = streamMessage(
           '',
@@ -1261,7 +1278,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
             safety_check: SAFETY_CHECK,
-            tools: serverTools(initial.search ?? false),
+            tools: serverTools(initial.search ?? false, memoryEnabled),
             toolExchange: exchanges.length > 0 ? [...exchanges] : undefined,
           },
           controller.signal
@@ -1361,7 +1378,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       let toolFailure: unknown = null
       try {
         for (const call of calls) {
-          const run = await runToolCall(call, controller.signal)
+          const run = await runToolCall(call, controller.signal, sessionId)
           outputs.push(run.output)
           runs.push(...run.blocks)
           if (controller.signal.aborted) {

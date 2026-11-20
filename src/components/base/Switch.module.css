@@ -1,0 +1,48 @@
+/* 开关：44×24 轨道 + 18 圆点。尺寸取常见移动端命中区，视觉不抢设置项文字 */
+.switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.16);
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.on {
+  background: #2b63f0;
+}
+
+.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 160ms ease;
+}
+
+.on .knob {
+  transform: translateX(20px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .switch {
+    background: rgba(255, 255, 255, 0.24);
+  }
+
+  .on {
+    background: #4c7eff;
+  }
+}

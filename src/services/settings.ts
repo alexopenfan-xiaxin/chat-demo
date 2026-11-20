@@ -21,6 +21,8 @@ type Settings = {
   thinking: boolean
   search: boolean
   siderCollapsed: boolean
+  /** 记忆功能：默认关闭，关闭时不声明工具、不检索、不注入，请求体与没有这个功能时一致 */
+  memory: boolean
 }
 
 const KEYS = {
@@ -31,6 +33,7 @@ const KEYS = {
   thinking: 'chat-demo:thinking',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
+  memory: 'chat-demo:memory',
 } as const
 
 const read = (key: string) => {
@@ -117,6 +120,8 @@ export const useSettings = create<Settings>(() => ({
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
+  // 默认关闭：记忆要用户自己打开才开始采集与召回
+  memory: read(KEYS.memory) === 'true',
 }))
 
 export const setLocale = (locale: Locale) => {
@@ -157,6 +162,11 @@ export const setThinking = (thinking: boolean) => {
 export const setSearch = (search: boolean) => {
   write(KEYS.search, String(search))
   useSettings.setState({ search })
+}
+
+export const setMemory = (memory: boolean) => {
+  write(KEYS.memory, String(memory))
+  useSettings.setState({ memory })
 }
 
 export const setSiderCollapsed = (siderCollapsed: boolean) => {

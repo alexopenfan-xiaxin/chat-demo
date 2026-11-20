@@ -305,7 +305,8 @@ export const toRequestMessages = (
   question: UserMessage,
   prefix?: AssistantMessage,
   thinking = prefix?.thinking ?? false,
-  latestReminder?: string
+  latestReminder?: string,
+  memoryBlock?: string
 ): MessageParam[] => {
   const messages: MessageParam[] = []
   let previousReminder: string | undefined
@@ -325,6 +326,11 @@ export const toRequestMessages = (
     messages.push(toUserParam(user), toAssistantParam(reply))
   }
   appendReminder(latestReminder)
+  // 记忆块固定在「历史之后、当前提问之前」：前缀（system + 历史）逐字节不变，
+  // 缓存命中不受影响；变化的只有本来就每轮重算的尾部。
+  if (memoryBlock) {
+    messages.push({ role: 'latest_reminder', content: memoryBlock })
+  }
   messages.push(toUserParam(question))
   if (prefix?.prefix) {
     const assistant = toAssistantParam(prefix, true, thinking)

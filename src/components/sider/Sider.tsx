@@ -15,32 +15,24 @@ import { IconButton } from '../base/IconButton.js'
 import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
 import { openSettings } from '../settings/settingsDialogState.js'
+import { MEMORY_PATH, navigateTo } from '../../app/route.js'
 import { closeMobileSider, useMobileSider } from './mobileSiderState.js'
 import { SessionItem } from './SessionItem.js'
 import styles from './Sider.module.css'
 
-const IconSignOut16 = () => (
+const IconMemory16 = () => (
   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
     <path
-      d="M9.5 2.5H4.2c-.66 0-1.2.54-1.2 1.2v8.6c0 .66.54 1.2 1.2 1.2h5.3"
+      d="M4 2.8h8v10.4l-4-2.6-4 2.6z"
       stroke="currentColor"
       strokeWidth="1.3"
-      strokeLinecap="round"
+      strokeLinejoin="round"
     />
-    <path d="M7.5 8h6M11 5.6 13.4 8 11 10.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
 /** 展开的侧边栏：名称与收起按钮、开启新对话、按时间分组的会话列表、底部账号与设置；移动端放在抽屉里，收起按钮关闭抽屉 */
-export const Sider = ({
-  mobile = false,
-  user,
-  onLogout,
-}: {
-  mobile?: boolean
-  user: AuthUser
-  onLogout: () => void
-}) => {
+export const Sider = ({ mobile = false, user }: { mobile?: boolean; user: AuthUser }) => {
   const t = useTranslate()
   const sessions = useChatStore((state) => state.sessions)
   const activeId = useChatStore((state) => state.activeId)
@@ -123,14 +115,21 @@ export const Sider = ({
         <span className={styles.accountEmail} title={user.email}>
           {user.email}
         </span>
-        <button type="button" className={styles.logout} onClick={onLogout}>
-          <span className={styles.logoutIcon}>
-            <IconSignOut16 />
-          </span>
-          <span className={styles.logoutLabel}>{t('authLogout')}</span>
-        </button>
       </div>
       <div className={styles.bottom}>
+        <button
+          type="button"
+          className={styles.settings}
+          onClick={() => {
+            navigateTo(MEMORY_PATH)
+            closeMobileSider()
+          }}
+        >
+          <span className={styles.settingsIcon}>
+            <IconMemory16 />
+          </span>
+          <span className={styles.settingsLabel}>{t('memory')}</span>
+        </button>
         <button type="button" className={styles.settings} onClick={openCredits}>
           <span className={styles.settingsIcon}>
             <IconWallet16 />
@@ -197,7 +196,7 @@ export const Sider = ({
 }
 
 /** 移动端抽屉：浮在页面上方，点空白区域关闭。 */
-export const MobileSider = ({ user, onLogout }: { user: AuthUser; onLogout: () => void }) => {
+export const MobileSider = ({ user }: { user: AuthUser }) => {
   const open = useMobileSider((state) => state.open)
   if (!open) {
     return null
@@ -206,7 +205,7 @@ export const MobileSider = ({ user, onLogout }: { user: AuthUser; onLogout: () =
     <>
       <div className={styles.drawerMask} onClick={closeMobileSider} />
       <div className={styles.drawer}>
-        <Sider mobile user={user} onLogout={onLogout} />
+        <Sider mobile user={user} />
       </div>
     </>
   )

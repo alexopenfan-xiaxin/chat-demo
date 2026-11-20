@@ -2,13 +2,38 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
 
 /** IndexedDB 存储结构版本；新增或调整存储、索引时递增。 */
-const DB_VERSION = 11
+const DB_VERSION = 12
 
 /** 文件原件按附件的本地 id 存储，所有引用同一 id 的消息共用一份；用于缩略图、打开查看，以及没有 serverId 时补传。 */
 export type StoredFile = {
   id: string
   blob: Blob
 }
+
+/**
+ * 记忆条目：内容与向量都只存在这个浏览器里，服务端一张表都没有。
+ * 短 id 形如 m3，注入上下文时要带上，模型据此调用 memory_edit。
+ */
+export type MemoryEntry = {
+  id: string
+  content: string
+  tags: string[]
+  vec: Float32Array
+  dim: number
+  /** 算这条向量的模型名；换模型后旧条目按 dim / model 判失效，不参与检索 */
+  model: string
+  createdAt: number
+  updatedAt: number
+  /** 上一版文本，供记忆空间里追溯「已从…改为…」 */
+  prevContent: string | null
+  /** 来源会话；手动新增的为 null */
+  sessionId: string | null
+  hitCount: number
+  lastUsedAt: number | null
+}
+
+/** 用户画像：纯文本，无条件注入上下文；整块重写 */
+export type MemoryProfile = { id: 'profile'; text: string; updatedAt: number }
 
 /** 文件引用留在摘要中，删除会话时通过索引判断原件是否仍被引用。 */
 type StoredSessionSummary = SessionSummary & { fileIds: string[] }
@@ -29,6 +54,14 @@ interface ChatDB extends DBSchema {
    */
   sessionsStaging: { key: string; value: Session }
   filesStaging: { key: string; value: StoredFile }
+  /** 记忆条目：带向量，检索就在这个 store 上做点积 */
+  memories: {
+    key: string
+    value: MemoryEntry
+    indexes: { bySessionId: string; byCreatedAt: number }
+  }
+  /** 画像单条记录，key 固定为 profile */
+  memoryProfile: { key: string; value: MemoryProfile }
 }
 
 let dbPromise: Promise<IDBPDatabase<ChatDB>> | null = null
@@ -61,6 +94,15 @@ const getDB = () =>
         if (!db.objectStoreNames.contains(name)) {
           db.createObjectStore(name, { keyPath: 'id' })
         }
+      }
+      // 记忆：条目按会话和时间建索引，删除会话时要按会话级联清理
+      if (!db.objectStoreNames.contains('memories')) {
+        const memories = db.createObjectStore('memories', { keyPath: 'id' })
+        memories.createIndex('bySessionId', 'sessionId')
+        memories.createIndex('byCreatedAt', 'createdAt')
+      }
+      if (!db.objectStoreNames.contains('memoryProfile')) {
+        db.createObjectStore('memoryProfile', { keyPath: 'id' })
       }
       const summaries = db.objectStoreNames.contains('sessionSummaries')
         ? tx.objectStore('sessionSummaries')
@@ -263,4 +305,47 @@ export const commitStaging = async (): Promise<SessionSummary[]> => {
 export const reportStorageError = (action: string) => (error: unknown) => {
   // eslint-disable-next-line no-console
   console.error(`[storage] ${action} failed`, error)
+}
+
+/* ---- 记忆：全部只在本机 IndexedDB，没有任何网络写入 ---- */
+
+export const loadMemories = async (): Promise<MemoryEntry[]> =>
+  (await getDB()).getAll('memories')
+
+export const loadMemory = async (id: string): Promise<MemoryEntry | undefined> =>
+  (await getDB()).get('memories', id)
+
+export const putMemory = async (entry: MemoryEntry): Promise<void> => {
+  await (await getDB()).put('memories', entry)
+}
+
+export const deleteMemory = async (id: string): Promise<void> => {
+  await (await getDB()).delete('memories', id)
+}
+
+/** 删除会话时级联清掉它产生的记忆条目（手动新增的条目 sessionId 为 null，不受影响） */
+export const deleteMemoriesBySession = async (sessionId: string): Promise<void> => {
+  const db = await getDB()
+  const tx = db.transaction('memories', 'readwrite')
+  await Promise.all([
+    (async () => {
+      for (const key of await tx.store.index('bySessionId').getAllKeys(sessionId)) {
+        await tx.store.delete(key)
+      }
+    })(),
+    tx.done,
+  ])
+}
+
+export const clearMemories = async (): Promise<void> => {
+  const db = await getDB()
+  const tx = db.transaction(['memories', 'memoryProfile'], 'readwrite')
+  await Promise.all([tx.objectStore('memories').clear(), tx.objectStore('memoryProfile').clear(), tx.done])
+}
+
+export const loadMemoryProfile = async (): Promise<MemoryProfile | undefined> =>
+  (await getDB()).get('memoryProfile', 'profile')
+
+export const saveMemoryProfile = async (profile: MemoryProfile): Promise<void> => {
+  await (await getDB()).put('memoryProfile', profile)
 }

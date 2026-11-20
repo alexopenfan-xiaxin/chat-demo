@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+import { MEMORY_PATH, useRoute } from './route.js'
+import { setLogoutHandler } from './sessionActions.js'
+import { MemoryPage } from '../components/memory/MemoryPage.js'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
@@ -120,6 +123,8 @@ export const App = () => {
     ensureApiKey()
   }, [user])
 
+  const route = useRoute()
+
   const onLogout = useCallback(async () => {
     try {
       await logoutRequest()
@@ -130,6 +135,12 @@ export const App = () => {
       showToast({ key: 'authNetwork', type: 'error' })
     }
   }, [])
+
+  // 退出登录的入口在设置页（侧边栏不再有），这里把动作登记给设置页调用
+  useEffect(() => {
+    setLogoutHandler(onLogout)
+    return () => setLogoutHandler(null)
+  }, [onLogout])
 
   if (user === undefined) {
     return <div className={authStyles.gateLoading}>正在检查登录状态…</div>
@@ -155,9 +166,9 @@ export const App = () => {
     <>
       <div ref={frameRef} className={styles.frame}>
         {isMobile ? (
-          <MobileSider user={user} onLogout={onLogout} />
+          <MobileSider user={user} />
         ) : siderCollapsed ? null : (
-          <Sider user={user} onLogout={onLogout} />
+          <Sider user={user} />
         )}
         <main className={styles.main}>
           {sessionExpired ? (
@@ -189,8 +200,10 @@ export const App = () => {
             </div>
           ) : null}
           <div className={styles.content}>
-            {siderCollapsed ? <CollapsedSider onLogout={onLogout} /> : null}
-            {importingHistory ? (
+            {siderCollapsed ? <CollapsedSider /> : null}
+            {route === MEMORY_PATH ? (
+              <MemoryPage />
+            ) : importingHistory ? (
               <div className={styles.loadingView}>
                 {isMobile ? <MobileHeader /> : null}
                 <div className={styles.loadingState} role="status" aria-live="polite">

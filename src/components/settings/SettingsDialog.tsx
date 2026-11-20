@@ -29,6 +29,10 @@ import {
 } from '../../services/settings.js'
 import { useTranslate, type TranslationKey, type TranslationMessage } from '../../i18n/index.js'
 import { Button } from '../base/Button.js'
+import { Switch } from '../base/Switch.js'
+import { useMemoryStatus } from '../../services/memory/api.js'
+import { setMemory } from '../../services/settings.js'
+import { performLogout } from '../../app/sessionActions.js'
 import { copyText } from '../../utils/clipboard.js'
 import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
@@ -101,6 +105,8 @@ const SettingsContent = () => {
               <LocaleSetting />
               <TtsVoiceSetting />
               <LocationSetting />
+              <MemorySetting />
+              <LogoutSetting />
             </>
           ) : (
             <>
@@ -203,6 +209,78 @@ const useHistoryDelete = () => {
     },
     confirm,
   }
+}
+
+/** 记忆开关：默认关闭；服务端没配向量服务时置灰并说明原因 */
+const MemorySetting = () => {
+  const t = useTranslate()
+  const enabled = useSettings((state) => state.memory)
+  const available = useMemoryStatus((state) => state.available)
+  const unavailable = available === false
+  return (
+    <SettingCell
+      label={t('settingsMemory')}
+      status={{ key: unavailable ? 'settingsMemoryUnavailable' : 'settingsMemoryHint' }}
+      action={
+        <Switch
+          checked={enabled && !unavailable}
+          disabled={unavailable}
+          label={t('settingsMemory')}
+          onChange={(next) => {
+            setMemory(next)
+            if (next) {
+              showToast({ key: 'settingsMemory' })
+            }
+          }}
+        />
+      }
+    />
+  )
+}
+
+/** 退出登录：从侧边栏挪到这里，点一下先二次确认 */
+const LogoutSetting = () => {
+  const t = useTranslate()
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <>
+      <SettingCell
+        label={t('settingsLogout')}
+        status={{ key: 'settingsLogoutHint' }}
+        action={
+          <Button variant="dangerOutlined" size="m" onClick={() => setConfirming(true)}>
+            {t('authLogout')}
+          </Button>
+        }
+      />
+      {confirming ? (
+        <Modal
+          title={t('logoutConfirmTitle')}
+          className={styles.deleteConfirm}
+          onClose={() => setConfirming(false)}
+          footer={
+            <div className={styles.deleteActions}>
+              <Button variant="outlined" autoFocus onClick={() => setConfirming(false)}>
+                {t('cancel')}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setConfirming(false)
+                  closeSettings()
+                  void performLogout()
+                }}
+              >
+                {t('logoutConfirmAction')}
+              </Button>
+            </div>
+          }
+        >
+          <p className={styles.importConfirmText}>{t('logoutConfirmText')}</p>
+        </Modal>
+      ) : null}
+    </>
+  )
 }
 
 const LocationSetting = () => {
