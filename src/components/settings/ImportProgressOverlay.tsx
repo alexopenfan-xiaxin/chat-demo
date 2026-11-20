@@ -2,16 +2,37 @@ import clsx from 'clsx'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
+import { copyText } from '../../utils/clipboard.js'
+import { readImportReports, type ImportRunReport } from '../../services/chat/history/importReport.js'
 import type { ImportPhase } from '../../services/chat/history/progress.js'
 import { useChatStore } from '../../services/chat/store.js'
 import styles from './ImportProgressOverlay.module.css'
 
 /** 还没拿到总数时先不画条；超过这个时间才退到不确定态，避免「先扫动再跳 0%」 */
 const PREPARE_GRACE_MS = 600
-/** 结束后浮层淡出的时长，和 CSS 的 leaving 过渡一致 */
-const LEAVE_MS = 160
 
 type View = { done: number; total: number | null; stage: ImportPhase }
+
+/** 导入结束后的停留态：完成或失败都留在这里，用户点「关闭」才走 */
+type Result = { report: ImportRunReport; ok: boolean }
+
+const PHASES: ImportPhase[] = ['listing', 'checking', 'writing', 'committing', 'rebuilding']
+
+const formatBytes = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '0 B'
+  }
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`
+}
+
+const pad = (text: string, width: number) => (text.length >= width ? text : text + ' '.repeat(width - text.length))
 
 /**
  * 导入历史对话的进度浮层。
@@ -19,12 +40,14 @@ type View = { done: number; total: number | null; stage: ImportPhase }
  * 为什么是独立浮层：导入是从设置弹窗里发起的，主区域那条进度被弹窗整个盖住，
  * 而写在某一栏里的那行小字看起来跟说明文字没有区别，用户看不出「它正在动」。
  *
- * 三种形态（数值见 /root/work/ds-chat-import-progress-design.md）：
- *   准备态   还在数文件、且没超过 600ms —— 只有标题与「正在准备…」，不画条
+ * 进行中三种形态（数值见 /root/work/ds-chat-import-progress-design.md）：
+ *   准备态   还在数文件、且没超过 600ms —— 不画条，只显示阶段与秒数
  *   不确定态 数文件超过 600ms（或拿不到总数）—— 高光横扫，不摆假分母
  *   确定态   开始写入 —— 按 done/total 走，右侧显示 48 / 76
  *
- * 结束时不在这里显示结果：直接淡出，结果落到设置弹窗，少一次闪烁。
+ * 结束后**不再自动消失**：转成完成态/失败态，把分阶段明细摊开给用户自己看、自己选，
+ * 点「关闭」才走。原因很实际：浏览器不信任页面时剪贴板会被拒，
+ * 而这份数据正是我们要拿来定位真机瓶颈的，不能只留一条复制按钮。
  */
 export const ImportProgressOverlay = () => {
   const t = useTranslate()
@@ -34,11 +57,14 @@ export const ImportProgressOverlay = () => {
   const [mounted, setMounted] = useState(active)
   const [slow, setSlow] = useState(false)
   const [view, setView] = useState<View | null>(null)
+  const [result, setResult] = useState<Result | null>(null)
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'failed'>('idle')
   const startedAt = useRef<number>(Date.now())
+  const wasActive = useRef(active)
   /** 秒数单独走 200ms 的心跳，不跟着导入进度刷新，免得把节流又冲掉 */
   const [nowAt, setNowAt] = useState(() => Date.now())
 
-  // 浮层显示期间记下最后一次形态：淡出那 160ms 不能又跳回「已处理 0 个对话」
+  // 浮层显示期间记下最后一次形态：结束时不能又跳回「已处理 0 个对话」
   useEffect(() => {
     if (progress !== null) {
       setView({ done: progress.done, total: progress.total, stage: progress.stage ?? 'writing' })
@@ -46,12 +72,12 @@ export const ImportProgressOverlay = () => {
   }, [progress])
 
   useEffect(() => {
-    if (!mounted) {
+    if (!mounted || result !== null) {
       return
     }
     const timer = window.setInterval(() => setNowAt(Date.now()), 200)
     return () => window.clearInterval(timer)
-  }, [mounted])
+  }, [mounted, result])
 
   useEffect(() => {
     if (active) {
@@ -59,29 +85,32 @@ export const ImportProgressOverlay = () => {
       setNowAt(Date.now())
       setMounted(true)
       setSlow(false)
+      wasActive.current = true
       return
     }
-    if (!mounted) {
+    if (!wasActive.current) {
       return
     }
-    const timer = window.setTimeout(() => {
+    // 导入刚结束：把这一轮的明细摊开，等用户看完点关闭
+    wasActive.current = false
+    const [report] = readImportReports()
+    if (report) {
+      setResult({ report, ok: report.outcome === 'ok' })
+      setCopyState('idle')
+    } else {
       setMounted(false)
       setView(null)
-    }, LEAVE_MS)
-    return () => window.clearTimeout(timer)
-  }, [active, mounted])
-
-  // 写入阶段按 done/total 走；提交与整理阶段写入已到齐，条也该是满的，不能退回不确定态
-  const determinate =
-    view !== null &&
-    view.total !== null &&
-    view.total > 0 &&
-    (view.stage === 'writing' || view.done >= view.total)
-  const waiting = !determinate
+    }
+  }, [active])
 
   // 只有真的慢（>600ms）才从准备态退到不确定态
   useEffect(() => {
-    if (!mounted || determinate) {
+    if (!mounted || result !== null) {
+      return
+    }
+    const determinate =
+      view !== null && view.total !== null && view.total > 0 && (view.stage === 'writing' || view.done >= view.total)
+    if (determinate) {
       return
     }
     const left = PREPARE_GRACE_MS - (Date.now() - startedAt.current)
@@ -91,16 +120,114 @@ export const ImportProgressOverlay = () => {
     }
     const timer = window.setTimeout(() => setSlow(true), left)
     return () => window.clearTimeout(timer)
-  }, [mounted, determinate, view])
+  }, [mounted, result, view])
+
+  // 终态补上键盘用户唯一的出口；进行中仍然全挡
+  useEffect(() => {
+    if (result === null) {
+      return
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        close()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [result])
 
   if (!mounted) {
     return null
   }
 
+  const close = () => {
+    setResult(null)
+    setMounted(false)
+    setView(null)
+  }
+
+
+  if (result !== null) {
+    const { report, ok } = result
+    const lines: string[] = []
+    lines.push(`${pad(t('historyReportTotal'), 10)}${(report.totalMs / 1000).toFixed(1)}s`)
+    lines.push(
+      `${pad(t('historyReportEntries'), 10)}${report.entries} · ${t('historyReportSessions')} ${report.sessionsWritten} / ${report.sessionsExpected}`
+    )
+    lines.push(`${pad(t('historyReportZip'), 10)}${formatBytes(report.zipBytes)}`)
+    lines.push('')
+    lines.push(t('historyReportPhases'))
+    for (const phase of PHASES) {
+      const ms = report.phases[phase]
+      if (ms === undefined) {
+        continue
+      }
+      const share = Math.round((ms / Math.max(1, report.totalMs)) * 100)
+      lines.push(`  ${pad(phase, 11)}${pad(`${ms} ms`, 9)}${share}%`)
+    }
+    lines.push('')
+    // UA 是一长串，跟标签挤在一行会被折断、把两列对齐搞乱，单独起一行
+    lines.push(t('historyReportDevice'))
+    lines.push(report.environment.ua)
+    lines.push(
+      `${pad(t('historyReportMemory'), 10)}${report.environment.deviceMemory ?? '?'} GB · ${t('historyReportCores')} ${report.environment.hardwareConcurrency ?? '?'}`
+    )
+    lines.push(
+      `${pad(t('historyReportStorage'), 10)}${formatBytes(report.environment.storageUsage ?? 0)} / ${formatBytes(report.environment.storageQuota ?? 0)}`
+    )
+    const details = lines.join('\n')
+
+    return createPortal(
+      <div className={styles.overlay}>
+        <div className={clsx(styles.card, styles.cardResult)} role="dialog" aria-modal="true" aria-live="polite">
+          <div className={styles.resultHead}>
+            <span className={clsx(styles.resultTitle, !ok && styles.resultTitleFailed)}>
+              {ok
+                ? t(report.sessionsWritten === 1 ? 'historyImportedOne' : 'historyImported', {
+                    count: report.sessionsWritten,
+                  })
+                : t(report.outcome as 'historyImportFailed')}
+            </span>
+          </div>
+          <div className={styles.resultRow}>
+            <div className={styles.resultSubtitle}>
+              {t('historyImportElapsed', { seconds: (report.totalMs / 1000).toFixed(2) })}
+              {' · '}
+              {t('historyReportEntriesShort', { count: report.entries })}
+            </div>
+            <button
+              type="button"
+              className={styles.copyLink}
+              onClick={() => {
+                void copyText(details).then((copied) => setCopyState(copied ? 'done' : 'failed'))
+              }}
+            >
+              {copyState === 'done' ? t('historyImportCopyReportDone') : t('historyImportCopyReport')}
+            </button>
+          </div>
+          {copyState === 'failed' ? (
+            <div className={styles.copyFailed} role="status">
+              {t('historyCopyFailed')}
+            </div>
+          ) : null}
+          <pre className={styles.details} data-import-details="">
+            {details}
+          </pre>
+          <button type="button" className={styles.closeButton} onClick={close}>
+            {t('historyReportClose')}
+          </button>
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
   const done = view?.done ?? 0
   const total = view?.total ?? null
+  const determinate =
+    view !== null && view.total !== null && view.total > 0 && (view.stage === 'writing' || view.done >= view.total)
   const percent = determinate && total ? Math.min(100, Math.round((done / total) * 100)) : null
-  const preparing = waiting && !slow
+  const preparing = !determinate && !slow
   const stage = view?.stage ?? 'listing'
   const phaseTitle = t(
     stage === 'checking'

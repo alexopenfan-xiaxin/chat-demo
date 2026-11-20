@@ -469,7 +469,13 @@ const useHistoryImport = () => {
     }
   }
 
-  return { file, busy, status, reportCount, select: setFile, cancel: () => setFile(null), confirm }
+  /** 剪贴板被浏览器拒绝时不能静默：把「请手动选择」顶到状态行，4 秒后自己散掉 */
+  const copyFailed = () => {
+    setStatus({ key: 'historyCopyFailed', error: true })
+    window.setTimeout(() => setStatus((current) => (current?.key === 'historyCopyFailed' ? null : current)), 4000)
+  }
+
+  return { file, busy, status, reportCount, copyFailed, select: setFile, cancel: () => setFile(null), confirm }
 }
 
 /** 导入 = 覆盖：用选中文件替换本地全部会话与附件。 */
@@ -497,7 +503,11 @@ const ImportHistory = ({
               className={styles.reportLink}
               onClick={() => {
                 void copyText(formatImportReports(readImportReports())).then((ok) => {
-                  setCopied(ok)
+                  if (!ok) {
+                    historyImport.copyFailed()
+                    return
+                  }
+                  setCopied(true)
                   window.setTimeout(() => setCopied(false), 1600)
                 })
               }}

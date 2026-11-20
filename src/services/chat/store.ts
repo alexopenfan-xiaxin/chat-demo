@@ -670,7 +670,9 @@ export const replaceHistory = async (
     })
     return summaries.length
   } finally {
-    set({ importingHistory: false, importProgress: null })
+    // 只解除锁；清进度由调用方在写完成绩明细之后自己做 —— 先清进度会让浮层读不到结果，
+    // 完成态就永远出不来
+    set({ importingHistory: false })
     retrySaveSessions()
     const { activeId, ready } = get()
     // 替换失败时恢复被取消的详情读取，原有记录继续可用。
