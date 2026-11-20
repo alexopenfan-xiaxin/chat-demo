@@ -16,8 +16,17 @@ const EMBEDDINGS_SAME_ORIGIN = '/api/embeddings'
 /** 本机 emb-relay（隧道路由 emb-ds-chat → 127.0.0.1:18789），走它要先确认隧道质量 */
 export const EMBEDDINGS_VIA_TUNNEL = 'https://emb-ds-chat.openfan.dpdns.org/embeddings'
 
-/** 切换点：改成 EMBEDDINGS_VIA_TUNNEL 即走本机转发 */
-export const EMBEDDINGS_URL = EMBEDDINGS_SAME_ORIGIN
+/**
+ * 切换点：走本机转发。
+ *
+ * 预取把这一跳挪进了打字停顿，但同源那条要 4 秒才回来，等它到账时用户多半已经发出去了；
+ * 隧道这条 1.4 秒，命中率高得多。后台请求失败不影响任何东西（静默走兜底/降级），
+ * 所以代价只有「浪费一次后台调用」。要退回同源，把下面一行换成 EMBEDDINGS_SAME_ORIGIN。
+ */
+export const EMBEDDINGS_URL = EMBEDDINGS_VIA_TUNNEL
+
+/** 同源 Pages Function 这条备用，切回时用 */
+export { EMBEDDINGS_SAME_ORIGIN }
 
 /** 服务端有没有配 key：null 表示还不知道，false 时设置页把记忆开关置灰 */
 export const useMemoryStatus = create<{ available: boolean | null }>(() => ({ available: null }))

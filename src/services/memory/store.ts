@@ -1,5 +1,6 @@
 import * as db from '../chat/db.js'
 import { embedTexts, EmbeddingsUnavailable } from './api.js'
+import { fallbackVector, rememberVector, setLastQuery, takeVector } from './prefetch.js'
 
 /**
  * 记忆：内容与向量都只存在浏览器 IndexedDB，服务端一张表都没有。
@@ -127,27 +128,47 @@ export const buildBlock = (profile: string, hits: readonly MemoryHit[]): string 
 }
 
 /**
- * 发送前检索：拿这句话算向量、全库点积、取 top-4。
- * 失败或超时返回 null——只带画像那条分支由调用方处理，绝不让检索拖住发送。
+ * 发送前检索：全库点积、取 top-4。
+ *
+ * 向量来源按代价从低到高：预取缓存（打字停顿时已经算好，本地命中零网络）
+ * → 最后一条算成功的向量兜底（可能和这句无关，阈值会把它挡在召回之外）
+ * → 现算（预算 800ms）。全失败返回 null，调用方只带画像，绝不拖住发送。
+ *
+ * `fallback: false` 给记忆页的检索预览用：预览必须对应输入的那句话，
+ * 拿兜底向量会显示成另一个问题的结果。
  */
 export const searchMemory = async (
   question: string,
-  sessionId: string | null = null
+  sessionId: string | null = null,
+  options: { fallback?: boolean } = {}
 ): Promise<MemoryHit[] | null> => {
   const text = question.trim()
   if (!text) {
     return []
   }
-  try {
-    const { vectors, dim } = await embedTexts([text], RETRIEVAL_TIMEOUT_MS)
-    const entries = await db.loadMemories()
-    return rankMemories(toVector(vectors[0]), entries, {
+  const entries = await db.loadMemories()
+  if (entries.length === 0) {
+    return []
+  }
+  const rank = (vec: Float32Array, dim: number): MemoryHit[] =>
+    rankMemories(vec, entries, {
       threshold: MEMORY_THRESHOLD,
       topK: MEMORY_TOP_K,
       dim,
       // 当前会话最近几条本来就在上下文里，不再重复注入
       skip: recentIds(entries, sessionId),
     })
+
+  const ready = takeVector(text) ?? (options.fallback === false ? null : fallbackVector())
+  if (ready) {
+    return rank(ready.vec, ready.dim)
+  }
+  try {
+    const { vectors, dim } = await embedTexts([text], RETRIEVAL_TIMEOUT_MS)
+    const vec = toVector(vectors[0])
+    rememberVector(text, vectors[0], dim)
+    setLastQuery(vec, dim)
+    return rank(vec, dim)
   } catch {
     return null
   }

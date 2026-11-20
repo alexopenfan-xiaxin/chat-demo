@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { MEMORY_PATH, useRoute } from './route.js'
 import { setLogoutHandler } from './sessionActions.js'
+import { resetPrefetch } from '../services/memory/prefetch.js'
 import { MemoryPage } from '../components/memory/MemoryPage.js'
 import { useTranslate } from '../i18n/index.js'
 import { useSettings } from '../services/settings.js'
@@ -128,6 +129,8 @@ export const App = () => {
   const onLogout = useCallback(async () => {
     try {
       await logoutRequest()
+      // 预取的向量属于这个账号，换人登录不该复用
+      resetPrefetch()
       setSessionExpired(false)
       setUser(null)
       showToast({ key: 'authLoggedOut' })
