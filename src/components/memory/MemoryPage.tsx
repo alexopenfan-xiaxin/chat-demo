@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { navigateTo } from '../../app/route.js'
 import { useTranslate } from '../../i18n/index.js'
-import { useMemoryStatus } from '../../services/memory/api.js'
+import { EMBEDDINGS_MODEL, useMemoryStatus } from '../../services/memory/api.js'
 import { useReindex } from '../../services/memory/reindex.js'
 import {
   MEMORY_ITEM_LIMIT,
-  MEMORY_THRESHOLD,
+  memoryThreshold,
   MEMORY_TOP_K,
   PROFILE_LIMIT,
   addMemoryManually,
@@ -516,7 +516,7 @@ export const MemoryPage = () => {
               <div className={styles.sectionHead}>
                 <h3 className={styles.sectionTitle}>{t('memoryRetrievalTitle')}</h3>
                 <span className={styles.sectionMeta}>
-                  {t('memoryThresholdNote', { threshold: MEMORY_THRESHOLD.toFixed(2), count: MEMORY_TOP_K })}
+                  {t('memoryThresholdNote', { threshold: memoryThreshold(EMBEDDINGS_MODEL).toFixed(2), count: MEMORY_TOP_K })}
                 </span>
               </div>
               <div className={styles.searchWrap}>
@@ -538,14 +538,14 @@ export const MemoryPage = () => {
               </div>
               {hits === null ? null : hits.length === 0 ? (
                 <p className={styles.emptyHits}>
-                  {t('memoryNoHitAbove', { threshold: MEMORY_THRESHOLD.toFixed(2) })}
+                  {t('memoryNoHitAbove', { threshold: memoryThreshold(EMBEDDINGS_MODEL).toFixed(2) })}
                 </p>
               ) : (
                 <div className={styles.hits}>
                   {hits.map((hit) => (
                     <div
                       key={hit.entry.id}
-                      className={clsx(styles.hit, hit.score < MEMORY_THRESHOLD && styles.hitMiss)}
+                      className={clsx(styles.hit, hit.score < memoryThreshold(EMBEDDINGS_MODEL) && styles.hitMiss)}
                     >
                       <span className={styles.hitScore}>{hit.score.toFixed(2)}</span>
                       <span className={styles.hitBar} aria-hidden="true">

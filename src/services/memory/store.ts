@@ -15,8 +15,19 @@ import type { MemoryFailReason } from './reasons.js'
  * 模型没有删除权——删除只留给用户。
  */
 
-/** 实测值：这个模型不相关内容也有 0.47–0.58，相关才 0.74–0.86，所以卡 0.70 */
-export const MEMORY_THRESHOLD = 0.7
+/**
+ * 召回的相似度门槛按模型分开：两个模型的分数分布差得很远，共用一个数必然一边失效。
+ *
+ * - 讯飞 qwen（768 维）实测：相关 0.744 / 0.834 / 0.861，不相关 0.466 / 0.580 → 卡 0.70
+ * - bge-m3（1024 维）实测：相关 0.602 / 0.670 / 0.864 / 0.868，不相关 0.362–0.602
+ *   → 卡 0.55。bge 的分布整体被压窄，0.70 会把相关的一条都召不回来（2026-11-20 实测）。
+ */
+export const MEMORY_THRESHOLD_QWEN = 0.7
+export const MEMORY_THRESHOLD_BGE = 0.55
+
+/** 按模型名挑门槛：bge-m3 与 qwen 的分数不在一个尺度上 */
+export const memoryThreshold = (model: string): number =>
+  model.toLowerCase().includes('bge') ? MEMORY_THRESHOLD_BGE : MEMORY_THRESHOLD_QWEN
 export const MEMORY_TOP_K = 4
 /** 召回正文合计上限（画像不算在这里，它无条件带上） */
 export const MEMORY_BLOCK_LIMIT = 1200
@@ -66,7 +77,7 @@ export const rankMemories = (
     /** 只跟同一模型的条目比：换模型后旧条目在重算完成前静默跳过 */
     model?: string
   } = {
-    threshold: MEMORY_THRESHOLD,
+    threshold: MEMORY_THRESHOLD_QWEN,
     topK: MEMORY_TOP_K,
   }
 ): MemoryHit[] => {
@@ -164,7 +175,7 @@ export const searchMemory = async (
   }
   const rank = (vec: Float32Array, dim: number, model: string): MemoryHit[] =>
     rankMemories(vec, entries, {
-      threshold: MEMORY_THRESHOLD,
+      threshold: memoryThreshold(model),
       topK: MEMORY_TOP_K,
       dim,
       model,
