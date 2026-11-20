@@ -66,15 +66,14 @@ export const ReplyArea = memo(function ReplyArea({
   hasResponse: boolean
 }) {
   useTranslate()
-  const [open, setOpen] = useState(true)
+  // 初值跟 streaming 走：重开历史时直接就是收起的，不会先展开一帧再收回去
+  const [open, setOpen] = useState(streaming)
   const titleActive = streaming && !hasResponse
   useTicker(titleActive, 1000)
-  // 回复结束就收起一次，走的正是用户点标题的同一个 setter。
-  // 之后用户自己再点开，不会再有任何东西把它收回去（这条没有第二次 streaming → done）。
+  // 回复结束就收起，走的正是用户点标题的同一个 setter；开始生成（含重新生成）时再展开。
+  // 只在 streaming 变化时触发，所以用户事后自己点开不会被任何东西收回。
   useEffect(() => {
-    if (!streaming) {
-      setOpen(false)
-    }
+    setOpen(streaming)
   }, [streaming])
   if (view.steps.length === 0 && !(message.thinking && streaming)) {
     return null
