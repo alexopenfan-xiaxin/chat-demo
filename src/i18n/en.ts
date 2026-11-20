@@ -167,6 +167,7 @@ export const en = {
   memorySubtitle: 'All of it stays on this device',
   memoryStatCountLabel: 'Memories',
   memoryStatSizeLabel: 'On device',
+  memoryReindexProgress: 'Upgrading the index of {done}/{total} memories',
   memoryStatHitsLabel: 'Recalls',
   memoryGuideTitle: 'Memory is off',
   memoryGuideText: 'Turn it on and the assistant will keep long-term facts on this device. Nothing is uploaded.',

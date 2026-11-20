@@ -4,6 +4,7 @@ import { setLogoutHandler } from './sessionActions.js'
 import { MemoryPage } from '../components/memory/MemoryPage.js'
 import { useTranslate } from '../i18n/index.js'
 import { tokenFingerprint, warmupEmbeddings } from '../services/memory/api.js'
+import { startReindex } from '../services/memory/reindex.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
 import {
@@ -151,6 +152,35 @@ export const App = () => {
       warmedFor.current = null
     }
   }, [memoryOn])
+
+  /**
+   * 索引升级：开记忆、且浏览器空闲时才跑，一次页面只起一轮。
+   * 开关还是讯飞时 `startReindex` 直接返回，连一次请求都不发。
+   */
+  useEffect(() => {
+    if (!user || !memoryOn) {
+      return
+    }
+    let cancelled = false
+    const run = () => {
+      if (!cancelled) {
+        void startReindex()
+      }
+    }
+    const idle = window.requestIdleCallback
+    if (typeof idle === 'function') {
+      const handle = idle(run, { timeout: 5000 })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback(handle)
+      }
+    }
+    const timer = window.setTimeout(run, 3000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [user, memoryOn])
 
   // 登录之后才碰聊天数据：未登录时不该读本地会话，也不该弹 API Key 设置
   useEffect(() => {

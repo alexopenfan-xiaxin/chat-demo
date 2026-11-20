@@ -115,6 +115,15 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* 索引升级进度：一行字，不做交互，也不占固定高度 */
+.reindex {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

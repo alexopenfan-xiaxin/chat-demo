@@ -16,6 +16,18 @@ import { ensureAccessToken } from '../auth.js'
  */
 const EMBEDDINGS_SAME_ORIGIN = '/api/embeddings'
 
+/** Workers AI 的 bge-m3：同源 `/api/embed`，1024 维 */
+const EMBEDDINGS_CF = '/api/embed'
+
+/**
+ * 向量模型开关。默认仍是讯飞（qwen）；队长给一句「切」就改成 'cf-bge-m3' 并发版。
+ *
+ * 两个模型的向量空间不通用：换过去以后旧条目按 `model` 判失效、静默跳过，
+ * 由 `reindex.ts` 分批重算。**别在有旧条目的库上只改这一行就上线**，
+ * 要先确认重算任务跟着跑起来。
+ */
+export const EMBEDDINGS_MODEL: EmbeddingModel = 'qwen'
+
 /** 本机 emb-relay（隧道路由 emb-ds-chat → 127.0.0.1:18789），保留当备份 */
 export const EMBEDDINGS_VIA_TUNNEL = 'https://emb-ds-chat.openfan.dpdns.org/embeddings'
 
@@ -95,7 +107,10 @@ export class EmbeddingsUnavailable extends Error {
 }
 
 /** 两条通道：公网直连是主路，同源 Pages Function 只给写入当回退 */
-export type EmbeddingChannel = 'public' | 'tunnel' | 'same-origin'
+export type EmbeddingChannel = 'public' | 'tunnel' | 'same-origin' | 'cf'
+
+/** 能用哪家的向量：讯飞 qwen（768 维）与 Workers AI bge-m3（1024 维） */
+export type EmbeddingModel = 'qwen' | 'cf-bge-m3'
 
 /**
  * 失败原因：只用来在 console 里一眼分清是哪一段坏了，界面文案仍然走
@@ -227,49 +242,74 @@ const logEmbeddingFailure = (
   )
 }
 
-/** 换路的选项：主路（同源）失败后换隧道再试一次，给这一跳单独的超时 */
+/** 换路的选项：主路失败后换一条再试一次，给这一跳单独的超时 */
 export type EmbedOptions = {
   /** 换路预算；不传就不换路（只打主路一次）。写入与召回各自传自己的值 */
   tunnelFallbackTimeoutMs?: number
 }
 
+/** 一个模型对应的主路地址与通道名 */
+const routeOf = (model: EmbeddingModel): { url: string; channel: EmbeddingChannel } =>
+  model === 'cf-bge-m3'
+    ? { url: EMBEDDINGS_CF, channel: 'cf' }
+    : { url: EMBEDDINGS_SAME_ORIGIN, channel: 'same-origin' }
+
+/** 主路失败后换的那条：bge-m3 换回讯飞同源，讯飞换隧道 */
+const fallbackOf = (model: EmbeddingModel): { url: string; channel: EmbeddingChannel } =>
+  model === 'cf-bge-m3'
+    ? { url: EMBEDDINGS_SAME_ORIGIN, channel: 'same-origin' }
+    : { url: EMBEDDINGS_VIA_TUNNEL, channel: 'tunnel' }
+
 /**
- * 算向量。主路是同源 Pages Function，失败后按 `options` 决定要不要换隧道。
+ * 算向量。主路由 `model` 决定，失败按 `options` 换一条再试一次。
  *
  * 为什么主路是同源：用户在手机上打开 `emb.openfan.dpdns.org` 直接 ERR_CONNECTION_RESET，
  * 直连那条被中途重置；同源跟聊天同一条腿（进 Cloudflare 边缘），手机上必然可达。
  *
- * 为什么还要换隧道：同源那跳由 Cloudflare 出口打讯飞，实测 4 秒级，召回那 800ms 常常不够，
- * 而隧道这跳本机推理只要 0.1 秒，端到端 p50 约 1.5 秒。换路只给 2.5 秒，不叠加无限等待。
+ * 为什么 bge-m3 的降级是讯飞同源：relay 那侧只有讯飞模型，换过去也拿不到 bge；
+ * 宁可用另一个模型的向量（条目会记上它自己的 model，召回时按 model 隔离），
+ * 也比这次彻底失败强。
  *
  * 401 与协议错误不换路：换个域名同一张票也一样是 401。
  */
-export const embedTexts = async (
+export const embedTextsAs = async (
+  model: EmbeddingModel,
   texts: string[],
   timeoutMs: number,
   options: EmbedOptions = {}
 ): Promise<EmbeddingResult> => {
+  const route = routeOf(model)
   try {
-    const result = await request(EMBEDDINGS_URL, 'same-origin', texts, timeoutMs)
+    const result = await request(route.url, route.channel, texts, timeoutMs)
     useMemoryStatus.setState({ available: true })
     return result
   } catch (error) {
     const budget = options.tunnelFallbackTimeoutMs ?? 0
     const retry = budget > 0 && error instanceof EmbeddingsRequestError && RETRIABLE.has(error.reason)
-    logEmbeddingFailure(error, 'same-origin', texts.length, timeoutMs, retry)
+    logEmbeddingFailure(error, route.channel, texts.length, timeoutMs, retry)
     if (!retry) {
       throw error
     }
+    const fallback = fallbackOf(model)
     try {
-      const result = await request(EMBEDDINGS_VIA_TUNNEL, 'tunnel', texts, budget)
+      const result = await request(fallback.url, fallback.channel, texts, budget)
       useMemoryStatus.setState({ available: true })
       // eslint-disable-next-line no-console
-      console.warn(`[memory] 向量请求换路成功 channel=tunnel texts=${texts.length} timeout=${budget}ms`)
+      console.warn(
+        `[memory] 向量请求换路成功 channel=${fallback.channel} model=${result.model || 'unknown'} timeout=${budget}ms`
+      )
       return result
-    } catch (tunnelError) {
+    } catch (fallbackError) {
       // 换路也失败时抛换路那条的错：它更接近用户这次真正撞上的墙
-      logEmbeddingFailure(tunnelError, 'tunnel', texts.length, budget, false)
-      throw tunnelError
+      logEmbeddingFailure(fallbackError, fallback.channel, texts.length, budget, false)
+      throw fallbackError
     }
   }
 }
+
+/** 按开关当前选的模型算向量；调用方不用关心是哪一家 */
+export const embedTexts = (
+  texts: string[],
+  timeoutMs: number,
+  options: EmbedOptions = {}
+): Promise<EmbeddingResult> => embedTextsAs(EMBEDDINGS_MODEL, texts, timeoutMs, options)

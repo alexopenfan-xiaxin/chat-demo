@@ -163,6 +163,7 @@ export const zh = {
   memorySubtitle: '全部存在这台设备上',
   memoryStatCountLabel: '记忆条数',
   memoryStatSizeLabel: '本机占用',
+  memoryReindexProgress: '正在升级 {done}/{total} 条记忆的索引',
   memoryStatHitsLabel: '被召回',
   memoryGuideTitle: '记忆还没打开',
   memoryGuideText: '打开后，助手会把长期有用的事实存在这台设备上，不会上传。',

@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { navigateTo } from '../../app/route.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useMemoryStatus } from '../../services/memory/api.js'
+import { useReindex } from '../../services/memory/reindex.js'
 import {
   MEMORY_ITEM_LIMIT,
   MEMORY_THRESHOLD,
@@ -162,6 +163,8 @@ export const MemoryPage = () => {
     element.addEventListener('scroll', onScroll, { passive: true })
     return () => element.removeEventListener('scroll', onScroll)
   }, [])
+
+  const reindex = useReindex()
 
   const sessionTitle = useMemo(() => {
     const map = new Map(sessions.map((session) => [session.id, session.title || '']))
@@ -343,6 +346,11 @@ export const MemoryPage = () => {
                   <span className={styles.statLabel}>{t('memoryStatHitsLabel')}</span>
                 </div>
               </div>
+              {reindex.running && reindex.total > 0 ? (
+                <p className={styles.reindex}>
+                  {t('memoryReindexProgress', { done: reindex.done, total: reindex.total })}
+                </p>
+              ) : null}
             </section>
 
             <section className={styles.field}>

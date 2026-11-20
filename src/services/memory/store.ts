@@ -58,7 +58,14 @@ export const cosine = (a: Float32Array, b: Float32Array): number => {
 export const rankMemories = (
   query: Float32Array,
   entries: readonly db.MemoryEntry[],
-  options: { threshold: number; topK: number; skip?: ReadonlySet<string>; dim?: number } = {
+  options: {
+    threshold: number
+    topK: number
+    skip?: ReadonlySet<string>
+    dim?: number
+    /** 只跟同一模型的条目比：换模型后旧条目在重算完成前静默跳过 */
+    model?: string
+  } = {
     threshold: MEMORY_THRESHOLD,
     topK: MEMORY_TOP_K,
   }
@@ -67,6 +74,10 @@ export const rankMemories = (
   const hits: MemoryHit[] = []
   for (const entry of entries) {
     if (entry.dim !== dim || entry.vec.length !== dim) {
+      continue
+    }
+    // 空 model 是更早版本写下的条目：按维度放行，别让老记忆在换模型前直接消失
+    if (options.model !== undefined && entry.model !== options.model && entry.model !== '') {
       continue
     }
     if (options.skip?.has(entry.id)) {
@@ -126,7 +137,7 @@ export const buildBlock = (profile: string, hits: readonly MemoryHit[]): string 
 }
 
 /** 上一次算成功的向量：只在本轮请求失败时兜底，不当常态用 */
-let lastVector: { vec: Float32Array; dim: number } | null = null
+let lastVector: { vec: Float32Array; dim: number; model: string } | null = null
 
 /**
  * 发送前检索：点发送时算一次向量、全库点积、取 top-4。
@@ -151,27 +162,28 @@ export const searchMemory = async (
   if (entries.length === 0) {
     return []
   }
-  const rank = (vec: Float32Array, dim: number): MemoryHit[] =>
+  const rank = (vec: Float32Array, dim: number, model: string): MemoryHit[] =>
     rankMemories(vec, entries, {
       threshold: MEMORY_THRESHOLD,
       topK: MEMORY_TOP_K,
       dim,
+      model,
       // 当前会话最近几条本来就在上下文里，不再重复注入
       skip: recentIds(entries, sessionId),
     })
 
   try {
-    const { vectors, dim } = await embedTexts([text], RETRIEVAL_TIMEOUT_MS, {
+    const { vectors, dim, model } = await embedTexts([text], RETRIEVAL_TIMEOUT_MS, {
       tunnelFallbackTimeoutMs: RECALL_FALLBACK_TIMEOUT_MS,
     })
     const vec = toVector(vectors[0])
-    lastVector = { vec, dim }
-    return rank(vec, dim)
+    lastVector = { vec, dim, model }
+    return rank(vec, dim, model)
   } catch {
     if (options.staleFallback === false || !lastVector) {
       return null
     }
-    return rank(lastVector.vec, lastVector.dim)
+    return rank(lastVector.vec, lastVector.dim, lastVector.model)
   }
 }
 
@@ -198,14 +210,17 @@ const nowId = (entries: readonly db.MemoryEntry[]): string => {
 
 const clip = (text: string) => [...text].slice(0, MEMORY_ITEM_LIMIT).join('')
 
+/** 只跟同一模型的条目比：跨模型的余弦没有意义 */
 const similar = (
   vec: Float32Array,
   dim: number,
   entries: readonly db.MemoryEntry[],
-  threshold: number
+  threshold: number,
+  model?: string
 ): { entry: db.MemoryEntry; score: number }[] =>
   entries
     .filter((entry) => entry.dim === dim)
+    .filter((entry) => model === undefined || entry.model === model)
     .map((entry) => ({ entry, score: cosine(vec, entry.vec) }))
     .filter((hit) => hit.score >= threshold)
     .sort((left, right) => right.score - left.score)
@@ -251,7 +266,7 @@ export const saveMemory = async (input: {
     }
     return { ok: false, message: '向量计算失败，这次没有保存', reason: 'embed_failed' }
   }
-  const candidates = similar(vec, dim, entries, CONFLICT_MIN).slice(0, 3)
+  const candidates = similar(vec, dim, entries, CONFLICT_MIN, model).slice(0, 3)
   const blocked = blockedBy(candidates)
   if (blocked) {
     return {
@@ -334,10 +349,12 @@ const locateByDescription = async (
 > => {
   let vec: Float32Array
   let dim: number
+  let model: string
   try {
     const result = await embedTexts([text], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
     vec = toVector(result.vectors[0])
     dim = result.dim
+    model = result.model
   } catch (error) {
     if (error instanceof EmbeddingsUnavailable) {
       return { failed: '记忆功能还没有配置，这次没有改动', reason: 'not_configured' }
@@ -346,7 +363,7 @@ const locateByDescription = async (
   }
   const entries = await db.loadMemories()
   const ranked = entries
-    .filter((entry) => entry.dim === dim)
+    .filter((entry) => entry.dim === dim && entry.model === model)
     .map((entry) => ({ entry, score: cosine(vec, entry.vec) }))
     .sort((left, right) => right.score - left.score)
   const [first, second] = ranked
