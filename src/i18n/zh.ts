@@ -220,6 +220,8 @@ export const zh = {
   ttsStop: '停止朗读',
   ttsUnavailable: '这条回答暂时无法朗读',
   ttsFailed: '朗读失败，请稍后再试',
+  ttsTooLong: '这段回复太长，语音朗读最多支持两万字',
+  ttsEmpty: '这条回复里没有可以朗读的文字',
   retry: '重试',
   latestReminderLanguage: '中文',
   settingsLocaleZhCN: '简体中文',

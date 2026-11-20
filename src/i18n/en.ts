@@ -228,6 +228,8 @@ export const en = {
   ttsStop: 'Stop reading',
   ttsUnavailable: 'This answer cannot be read aloud right now',
   ttsFailed: 'Failed to read aloud. Please try again later.',
+  ttsTooLong: 'This answer is too long to read aloud (20,000 characters max)',
+  ttsEmpty: 'This answer has no text that can be read aloud',
   retry: 'Retry',
   latestReminderLanguage: 'English',
   settingsLocaleZhCN: 'Simplified Chinese',
