@@ -9,7 +9,8 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.36);
+  /* 第二层遮罩比 Modal 浅：两层都是 .36/.6 时叠起来几乎是纯黑 */
+  background: rgba(0, 0, 0, 0.24);
   animation: overlayIn 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -119,7 +120,7 @@
 
 /* 深色：轨道与填充各换一档，数值来自设计规格第 3、7 节 */
 [data-ds-dark-theme] .overlay {
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 [data-ds-dark-theme] .track {
