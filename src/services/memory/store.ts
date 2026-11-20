@@ -1,5 +1,10 @@
 import * as db from '../chat/db.js'
-import { embedTexts, EmbeddingsUnavailable } from './api.js'
+import {
+  embedTexts,
+  EmbeddingsUnavailable,
+  RECALL_FALLBACK_TIMEOUT_MS,
+  WRITE_TIMEOUT_MS,
+} from './api.js'
 import type { MemoryFailReason } from './reasons.js'
 
 /**
@@ -156,7 +161,9 @@ export const searchMemory = async (
     })
 
   try {
-    const { vectors, dim } = await embedTexts([text], RETRIEVAL_TIMEOUT_MS)
+    const { vectors, dim } = await embedTexts([text], RETRIEVAL_TIMEOUT_MS, {
+      tunnelFallbackTimeoutMs: RECALL_FALLBACK_TIMEOUT_MS,
+    })
     const vec = toVector(vectors[0])
     lastVector = { vec, dim }
     return rank(vec, dim)
@@ -234,7 +241,7 @@ export const saveMemory = async (input: {
   let dim: number
   let model: string
   try {
-    const result = await embedTexts([content], 5000)
+    const result = await embedTexts([content], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
     vec = toVector(result.vectors[0])
     dim = result.dim
     model = result.model
@@ -294,7 +301,7 @@ export const editMemoryFromPage = async (
     return false
   }
   try {
-    const result = await embedTexts([text], 5000)
+    const result = await embedTexts([text], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
     await db.putMemory({
       ...entry,
       content: clip(text),
@@ -328,7 +335,7 @@ const locateByDescription = async (
   let vec: Float32Array
   let dim: number
   try {
-    const result = await embedTexts([text], 5000)
+    const result = await embedTexts([text], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
     vec = toVector(result.vectors[0])
     dim = result.dim
   } catch (error) {
@@ -398,7 +405,7 @@ export const editMemory = async (input: {
   let dim: number
   let model: string
   try {
-    const result = await embedTexts([content], 5000)
+    const result = await embedTexts([content], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
     vec = toVector(result.vectors[0])
     dim = result.dim
     model = result.model
@@ -451,7 +458,7 @@ export const addMemoryManually = async (content: string, tags: string[]): Promis
   let dim: number
   let model: string
   try {
-    const result = await embedTexts([text], 5000)
+    const result = await embedTexts([text], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
     vec = toVector(result.vectors[0])
     dim = result.dim
     model = result.model
