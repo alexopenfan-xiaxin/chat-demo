@@ -26,5 +26,8 @@ declare const styles: {
   readonly "addBox": string;
   readonly "queryRow": string;
   readonly "foot": string;
+  readonly "countWarn": string;
+  readonly "countOver": string;
+  readonly "textareaOver": string;
 }
 export = styles;

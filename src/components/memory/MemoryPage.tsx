@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import clsx from 'clsx'
 import { navigateTo } from '../../app/route.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useMemoryStatus } from '../../services/memory/api.js'
@@ -51,6 +52,11 @@ export const MemoryPage = () => {
   const [hits, setHits] = useState<MemoryHit[] | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
   const [clearing, setClearing] = useState(false)
+
+  /** 画像字数三态：≥720（90%）预警、到 800 变色并描边 */
+  const profileCount = [...profile].length
+  const countState =
+    profileCount >= PROFILE_LIMIT ? 'over' : profileCount >= Math.round(PROFILE_LIMIT * 0.9) ? 'warn' : 'normal'
 
   const reload = async () => {
     const [text, list] = await Promise.all([loadProfile(), listMemories()])
@@ -167,14 +173,23 @@ export const MemoryPage = () => {
       <section className={styles.card}>
         <div className={styles.cardHead}>
           <h2 className={styles.cardTitle}>{t('memoryProfileTitle')}</h2>
-          <span className={styles.meta}>
-            {[...profile].length} / {PROFILE_LIMIT}
+          <span
+            className={clsx(
+              styles.meta,
+              countState === 'warn' && styles.countWarn,
+              countState === 'over' && styles.countOver
+            )}
+          >
+            {profileCount} / {PROFILE_LIMIT}
           </span>
         </div>
         <p className={styles.hint}>{t('memoryProfileHint')}</p>
         <textarea
-          className={styles.textarea}
+          className={clsx(styles.textarea, countState === 'over' && styles.textareaOver)}
           value={profile}
+          // 画像上限就是 800 且在注入时整段带上、不做截断，留余量只会让用户写到 801 再被保存拒掉，
+          // 所以输入框直接卡在 800，让边界在打字时就能看见。
+          maxLength={PROFILE_LIMIT}
           placeholder={t('memoryProfilePlaceholder')}
           onChange={(event) => setProfile(event.target.value)}
         />

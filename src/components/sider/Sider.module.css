@@ -129,8 +129,8 @@
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
-  /* 两个入口（额度 + 设置）上下并列 */
-  height: 88px;
+  /* 三个入口（记忆 + 额度 + 设置）上下并列：写死高度会把第三个挤出去，交给内容撑开 */
+  height: auto;
 }
 
 .settings {

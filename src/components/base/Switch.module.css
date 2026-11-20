@@ -1,4 +1,5 @@
-/* 开关：44×24 轨道 + 18 圆点。尺寸取常见移动端命中区，视觉不抢设置项文字 */
+/* 开关：44×24 轨道 + 18 圆点。尺寸取常见移动端命中区，视觉不抢设置项文字。
+   颜色全部走别名 token：深色由 body[data-ds-dark-theme] 驱动，跟随设置里的主题开关 */
 .switch {
   position: relative;
   width: 44px;
@@ -7,13 +8,13 @@
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--dsw-alias-interactive-bg-hover-accent);
   cursor: pointer;
   transition: background 160ms ease;
 }
 
 .on {
-  background: #2b63f0;
+  background: var(--dsw-alias-brand-primary);
 }
 
 .disabled {
@@ -28,21 +29,11 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--dsw-alias-label-primary-foreground);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   transition: transform 160ms ease;
 }
 
 .on .knob {
   transform: translateX(20px);
-}
-
-@media (prefers-color-scheme: dark) {
-  .switch {
-    background: rgba(255, 255, 255, 0.24);
-  }
-
-  .on {
-    background: #4c7eff;
-  }
 }
