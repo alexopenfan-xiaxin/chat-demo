@@ -20,8 +20,10 @@ import {
   type MemoryHit,
 } from '../../services/memory/store.js'
 import { useChatStore } from '../../services/chat/store.js'
+import { useSettings } from '../../services/settings.js'
 import type { MemoryEntry } from '../../services/chat/db.js'
 import { Button } from '../base/Button.js'
+import { Modal } from '../base/Modal.js'
 import { showToast } from '../base/toastState.js'
 import styles from './MemoryPage.module.css'
 
@@ -52,6 +54,11 @@ export const MemoryPage = () => {
   const [hits, setHits] = useState<MemoryHit[] | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
   const [clearing, setClearing] = useState(false)
+  /** 关闭记忆时这一页不发任何请求：新增与预览一律禁用 */
+  const memoryOn = useSettings((state) => state.memory)
+  /** 删除前要确认：删除不可撤销（prevContent 只覆盖编辑） */
+  const [pendingDelete, setPendingDelete] = useState<MemoryEntry | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   /** 画像字数三态：≥720（90%）预警、到 800 变色并描边 */
   const profileCount = [...profile].length
@@ -91,7 +98,29 @@ export const MemoryPage = () => {
     }
   }
 
+  const confirmRemove = async () => {
+    const entry = pendingDelete
+    if (!entry) {
+      return
+    }
+    setDeleting(true)
+    try {
+      await removeMemory(entry.id)
+      setPendingDelete(null)
+      await reload()
+      showToast({ key: 'memoryDeleted' })
+    } catch {
+      // 删失败必须如实说，别让用户以为已经删掉了
+      showToast({ key: 'memoryDeleteFailed', type: 'error' })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const add = async () => {
+    if (!memoryOn) {
+      return
+    }
     const tags = draftTags
       .split(/[,，]/)
       .map((tag) => tag.trim())
@@ -118,7 +147,7 @@ export const MemoryPage = () => {
   }
 
   const preview = async () => {
-    if (!query.trim()) {
+    if (!memoryOn || !query.trim()) {
       return
     }
     setPreviewBusy(true)
@@ -277,10 +306,7 @@ export const MemoryPage = () => {
                       <Button
                         variant="dangerOutlined"
                         size="s"
-                        onClick={() => {
-                          void removeMemory(entry.id).then(reload)
-                          showToast({ key: 'memoryDeleted' })
-                        }}
+                        onClick={() => setPendingDelete(entry)}
                       >
                         {t('memoryDelete')}
                       </Button>
@@ -294,9 +320,11 @@ export const MemoryPage = () => {
 
         <div className={styles.addBox}>
           <h3 className={styles.cardSubtitle}>{t('memoryAddTitle')}</h3>
+          {memoryOn ? null : <p className={styles.hint}>{t('memoryDisabledHint')}</p>}
           <textarea
             className={styles.textarea}
             value={draft}
+            disabled={!memoryOn}
             maxLength={MEMORY_ITEM_LIMIT}
             placeholder={t('memoryAddPlaceholder')}
             onChange={(event) => setDraft(event.target.value)}
@@ -304,11 +332,17 @@ export const MemoryPage = () => {
           <input
             className={styles.input}
             value={draftTags}
+            disabled={!memoryOn}
             placeholder={t('memoryTagsPlaceholder')}
             onChange={(event) => setDraftTags(event.target.value)}
           />
           <div className={styles.actions}>
-            <Button variant="primary" size="m" disabled={!draft.trim()} onClick={() => void add()}>
+            <Button
+              variant="primary"
+              size="m"
+              disabled={!memoryOn || !draft.trim()}
+              onClick={() => void add()}
+            >
               {t('memorySave')}
             </Button>
           </div>
@@ -322,11 +356,14 @@ export const MemoryPage = () => {
             {MEMORY_THRESHOLD.toFixed(2)} · top {MEMORY_TOP_K}
           </span>
         </div>
-        <p className={styles.hint}>{t('memoryRetrievalHint')}</p>
+        <p className={styles.hint}>
+          {memoryOn ? t('memoryRetrievalHint') : t('memoryDisabledHint')}
+        </p>
         <div className={styles.queryRow}>
           <input
             className={styles.input}
             value={query}
+            disabled={!memoryOn}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
@@ -337,7 +374,7 @@ export const MemoryPage = () => {
           <Button
             variant="outlined"
             size="m"
-            disabled={previewBusy || !query.trim()}
+            disabled={!memoryOn || previewBusy || !query.trim()}
             onClick={() => void preview()}
           >
             {t('memoryRetrievalTitle')}
@@ -380,6 +417,26 @@ export const MemoryPage = () => {
           </Button>
         )}
       </footer>
+
+      {pendingDelete ? (
+        <Modal
+          title={t('memoryDeleteConfirmTitle')}
+          onClose={() => setPendingDelete(null)}
+          footer={
+            <>
+              <Button variant="outlined" size="m" autoFocus onClick={() => setPendingDelete(null)}>
+                {t('cancel')}
+              </Button>
+              <Button variant="danger" size="m" disabled={deleting} onClick={() => void confirmRemove()}>
+                {t('memoryDelete')}
+              </Button>
+            </>
+          }
+        >
+          <p className={styles.hint}>{t('memoryDeleteConfirm')}</p>
+          <p className={styles.content}>{pendingDelete.content}</p>
+        </Modal>
+      ) : null}
     </div>
   )
 }

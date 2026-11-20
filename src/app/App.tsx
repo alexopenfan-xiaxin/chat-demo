@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MEMORY_PATH, useRoute } from './route.js'
 import { setLogoutHandler } from './sessionActions.js'
 import { MemoryPage } from '../components/memory/MemoryPage.js'
@@ -110,14 +110,32 @@ export const App = () => {
         setUser(null)
         return
       }
-      const valid = (await ensureAccessToken()) !== null
-      setUser(valid ? me : null)
-      // 票已就位：顺手把向量接口那一跳验掉，首条消息的召回就不用再等验票
-      if (valid && useSettings.getState().memory) {
-        void warmupEmbeddings()
-      }
+      setUser((await ensureAccessToken()) !== null ? me : null)
     })()
   }, [])
+
+  // 票就绪、且记忆开关是开的：把向量接口那一跳先验掉，首条消息的召回不用再等验票。
+  // 用 warmedFor 记住「这个账号在这个开关状态上已经预热过」，避免每次渲染重复发；
+  // 用户在设置里中途打开开关时 key 会变，于是补一次预热。
+  const memoryOn = useSettings((state) => state.memory)
+  useEffect(() => {
+    if (!user || !memoryOn) {
+      return
+    }
+    const key = user.id
+    if (warmedFor.current === key) {
+      return
+    }
+    warmedFor.current = key
+    void warmupEmbeddings()
+  }, [user, memoryOn])
+
+  // 关掉开关再打开时要重新预热一次，所以关闭时把标记清掉
+  useEffect(() => {
+    if (!memoryOn) {
+      warmedFor.current = null
+    }
+  }, [memoryOn])
 
   // 登录之后才碰聊天数据：未登录时不该读本地会话，也不该弹 API Key 设置
   useEffect(() => {
@@ -128,6 +146,9 @@ export const App = () => {
     // 首次打开先在设置里输入 API Key
     ensureApiKey()
   }, [user])
+
+  /** 已经预热过的账号：避免重复请求，关闭开关时清掉以便再打开时补一次 */
+  const warmedFor = useRef<string | null>(null)
 
   const route = useRoute()
 
