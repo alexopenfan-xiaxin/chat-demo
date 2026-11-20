@@ -12,8 +12,12 @@ export type ImportRunReport = {
   sessionsWritten: number
   /** 各阶段毫秒数，键缺省表示没走到那一阶段 */
   phases: Partial<Record<ImportPhase, number>>
-  /** writing 内部细分：读+解压、JSON.parse、schema 校验、转本地、真正写库 */
-  detail?: Partial<Record<ImportWritingStage, number>>
+  /** writing 内部细分；other 是 writing 总时长减去其余各项后的未解释缺口 */
+  detail?: Partial<Record<ImportWritingStage | 'other', number>>
+  /** 主线程长任务：安卓上 GC / 布局这类不归属任何 await 的停顿会落在这里 */
+  longTasks?: { count: number; totalMs: number; maxMs: number }
+  /** 结束时 JS 堆占用，配合长任务判断是不是 GC 在压 */
+  jsHeapBytes?: number | null
   environment: {
     ua: string
     hardwareConcurrency: number | null
@@ -81,6 +85,39 @@ export const createImportRun = (startedAt: number) => {
 }
 
 /** 落盘 + 控制台明细；控制台不可用时也能让用户从界面复制出去 */
+/** 长任务观察器：只统计，不做事；环境不支持时静默返回 null */
+export const observeLongTasks = () => {
+  const supported =
+    typeof PerformanceObserver !== 'undefined' &&
+    Array.isArray(PerformanceObserver.supportedEntryTypes) &&
+    PerformanceObserver.supportedEntryTypes.includes('longtask')
+  if (!supported) {
+    return null
+  }
+  let count = 0
+  let totalMs = 0
+  let maxMs = 0
+  const observer = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      count += 1
+      totalMs += entry.duration
+      maxMs = Math.max(maxMs, entry.duration)
+    }
+  })
+  observer.observe({ entryTypes: ['longtask'] })
+  return {
+    stop: () => {
+      observer.disconnect()
+      return { count, totalMs: Math.round(totalMs), maxMs: Math.round(maxMs) }
+    },
+  }
+}
+
+export const readJsHeap = (): number | null => {
+  const memory = (performance as { memory?: { usedJSHeapSize?: number } }).memory
+  return memory?.usedJSHeapSize ?? null
+}
+
 export const saveImportReport = (report: ImportRunReport): void => {
   const rows = Object.entries(report.phases).map(([phase, ms]) => ({
     阶段: phase,

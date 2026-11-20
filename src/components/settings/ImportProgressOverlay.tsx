@@ -17,7 +17,9 @@ type View = { done: number; total: number | null; stage: ImportPhase }
 type Result = { report: ImportRunReport; ok: boolean }
 
 const PHASES: ImportPhase[] = ['listing', 'checking', 'writing', 'committing', 'rebuilding']
-const WRITING_STAGES = ['read', 'parse', 'schema', 'toLocal', 'write'] as const
+const WRITING_STAGES = ['read', 'parse', 'schema', 'toLocal', 'write', 'scan', 'image', 'progress', 'other'] as const
+/** 解压与 CRC 是 read 内部的拆分，缩进更深一层，只作说明，不参与加总 */
+const READ_PARTS = ['crc', 'inflate'] as const
 
 const formatBytes = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -173,6 +175,15 @@ export const ImportProgressOverlay = () => {
             continue
           }
           lines.push(`      ${pad(stage, 11)}${pad(`${stageMs} ms`, 9)}${Math.round((stageMs / Math.max(1, ms)) * 100)}%`)
+          if (stage === 'read' && report.detail) {
+            for (const part of READ_PARTS) {
+              const partMs = report.detail[part]
+              if (partMs === undefined) {
+                continue
+              }
+              lines.push(`          ${pad(part, 8)}${pad(`${partMs} ms`, 9)}${Math.round((partMs / Math.max(1, stageMs)) * 100)}%`)
+            }
+          }
         }
       }
     }
@@ -186,6 +197,14 @@ export const ImportProgressOverlay = () => {
     lines.push(
       `${pad(t('historyReportStorage'), 10)}${formatBytes(report.environment.storageUsage ?? 0)} / ${formatBytes(report.environment.storageQuota ?? 0)}`
     )
+    if (report.longTasks) {
+      lines.push(
+        `${pad(t('historyReportLongTasks'), 10)}${report.longTasks.count} · ${(report.longTasks.totalMs / 1000).toFixed(1)}s · ${t('historyReportLongest', { ms: report.longTasks.maxMs })}`
+      )
+    }
+    if (report.jsHeapBytes) {
+      lines.push(`${pad(t('historyReportHeap'), 10)}${formatBytes(report.jsHeapBytes)}`)
+    }
     const details = lines.join('\n')
 
     return createPortal(

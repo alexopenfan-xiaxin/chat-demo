@@ -16,6 +16,16 @@ export class ArchiveError extends Error {
   }
 }
 
+/**
+ * 解压与校验的细分计时：CRC 是纯 JS 逐字节算的，安卓上到底占多少只能实测。
+ * 由调用方临时挂上，导入结束摘掉；不挂时开销为零。
+ */
+export type StreamTiming = (kind: 'crc' | 'inflate', ms: number) => void
+let streamTiming: StreamTiming | null = null
+export const setStreamTiming = (timing: StreamTiming | null) => {
+  streamTiming = timing
+}
+
 /** 中央目录解析进度：已解析条数 / 总条数（总数来自 EOCD，一开始就知道） */
 export type DirectoryProgress = (parsed: number, total: number) => void
 
@@ -308,8 +318,12 @@ export async function* readArchive(archive: Archive): AsyncGenerator<ArchiveEntr
         if (written > entry.size) {
           invalid()
         }
+        const crcStarted = streamTiming ? performance.now() : 0
         for (const byte of chunk) {
           crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 0xff]
+        }
+        if (streamTiming) {
+          streamTiming('crc', performance.now() - crcStarted)
         }
         if (chunk.length) {
           pending.push(chunk)
@@ -329,7 +343,11 @@ export async function* readArchive(archive: Archive): AsyncGenerator<ArchiveEntr
         }
         for (let cursor = 0; cursor < chunk.length; cursor += INFLATE_CHUNK_BYTES) {
           const end = Math.min(cursor + INFLATE_CHUNK_BYTES, chunk.length)
+          const inflateStarted = streamTiming ? performance.now() : 0
           inflate.push(chunk.subarray(cursor, end), offset + end === entry.compressedSize)
+          if (streamTiming) {
+            streamTiming('inflate', performance.now() - inflateStarted)
+          }
           // yield 暂停解压，等待调用方完成异步写入；不缓存整个条目。
           yield* pending.splice(0)
         }

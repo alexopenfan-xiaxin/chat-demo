@@ -19,8 +19,22 @@ import {
 /** 导入进度：总数取不到时为 null，界面据此退化成不带计数的文案 */
 export type ImportProgress = (done: number, total: number | null) => void
 
-/** writing 阶段内部的细分耗时（毫秒），只用于真机定位 */
-export type ImportWritingStage = 'read' | 'parse' | 'schema' | 'toLocal' | 'write'
+/**
+ * writing 阶段内部的细分耗时（毫秒），只用于真机定位。
+ * scan / image / progress / crc / inflate 是把「原本没人管的时间」拆出来；
+ * other 由调用方用 writing 总时长减去这些得到，专门用来暴露还没被解释的缺口。
+ */
+export type ImportWritingStage =
+  | 'read'
+  | 'parse'
+  | 'schema'
+  | 'toLocal'
+  | 'write'
+  | 'scan'
+  | 'image'
+  | 'progress'
+  | 'crc'
+  | 'inflate'
 export type ImportWritingTiming = (stage: ImportWritingStage, ms: number) => void
 
 /** 每批写入的会话数：安卓上事务数决定落盘次数，但一批太大又占内存 */
@@ -132,10 +146,22 @@ export const importArchive = async (
       await skipEntry(entry)
       return
     }
+    const started = performance.now()
     const data = await readEntryBlob(entry)
     const type = imageType(new Uint8Array(await data.slice(0, 16).arrayBuffer()))
     await db.saveStagingFiles([{ id, blob: new Blob([data], { type }) }])
+    onTiming?.('image', performance.now() - started)
     stored.set(id, type)
+  }
+
+  /** 进度回调会把 setState 交给 React，这段开销落在循环里，得单独记账 */
+  const report = (done: number) => {
+    if (!onProgress) {
+      return
+    }
+    const started = performance.now()
+    onProgress(done, total)
+    onTiming?.('progress', performance.now() - started)
   }
 
   /** 待写会话：攒够一批再开事务，减少安卓上的落盘次数 */
@@ -150,8 +176,11 @@ export const importArchive = async (
     batch = []
   }
 
+  // 两次迭代之间是读条目头 + 推动生成器的时间，安卓上一次 slice 读就可能几毫秒
+  let iterationStarted = performance.now()
   try {
     for await (const entry of readArchive(archive)) {
+      onTiming?.('scan', performance.now() - iterationStarted)
       const { path } = entry
       const sessionId = parseSessionPath(path)
       if (!manifest) {
@@ -202,7 +231,7 @@ export const importArchive = async (
         if (batch.length >= WRITE_BATCH) {
           await flush()
         }
-        onProgress?.(imported.size, total)
+        report(imported.size)
       } else if (path === INDEX_PATH && !index) {
         index = readSessionIndex(await readJson(entry))
       } else if (isAttachmentEntry(path)) {
@@ -212,6 +241,7 @@ export const importArchive = async (
       } else {
         fail('backupIncomplete')
       }
+      iterationStarted = performance.now()
     }
     await flush()
   } catch (error) {
