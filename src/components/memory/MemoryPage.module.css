@@ -274,6 +274,15 @@
    * offsetHeight / getBoundingClientRect / offsetTop，都要先想清楚它会不会拿到估算值。
    * 现有三处不受影响：轨道是容器级绝对定位（跟容器高度走）、统计条数与占用来自数据层、
    * 导出 JSON 也不读 DOM。
+   *
+   * 已知代价（有意保留，不是没做完）：估算值无论如何都追不上条目真实高度（带不带标签
+   * 差 25px），200 条时总高约偏 0.3%、滚动条略短，滚一遍后浏览器记住真实高度即自我修正。
+   * 要彻底消除只能上虚拟滚动，已评估过不值得：放弃 content-visibility 换来的是 ×4 降速下
+   * 139ms 的首屏，比 80px 的滚动条偏差明显得多。
+   *
+   * 另：本人踩过的回归——`.page` 少了 height:100% 时，长列表在外层 overflow:hidden 的
+   * frame 里无处可滚（200 条时页面高 24299px、scrollTop 恒为 0）。tests/memory-page-layout
+   * 里有一条守着它的用例。
    */
   content-visibility: auto;
   /* 估算值由页面在首屏渲染后按实测均值写进 --entry-estimate（见 MemoryPage.tsx 的校准 effect），
