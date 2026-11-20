@@ -4,6 +4,9 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+
+  /* 思考区收起时高度从上百 px 掉到 0，靠锚点保住下方内容的位置 */
+  overflow-anchor: auto;
   scrollbar-gutter: stable both-edges;
   scrollbar-color: var(--scroll-color) transparent;
 }
@@ -25,6 +28,7 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior-y: contain;
+    overflow-anchor: auto;
     scrollbar-color: var(--scroll-color) transparent;
   }
 }
