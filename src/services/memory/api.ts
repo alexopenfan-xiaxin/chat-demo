@@ -1,5 +1,12 @@
 import { create } from 'zustand'
 import { ApiError } from '../api/client.js'
+import { ensureAccessToken } from '../auth.js'
+
+/**
+ * 向量接口地址：默认走同源 Pages Function。
+ * 若为了把延迟压进召回预算而改走自建隧道，这里换成一个地址即可，调用方不用动。
+ */
+export const EMBEDDINGS_URL = '/api/embeddings'
 
 /** 服务端有没有配 key：null 表示还不知道，false 时设置页把记忆开关置灰 */
 export const useMemoryStatus = create<{ available: boolean | null }>(() => ({ available: null }))
@@ -53,9 +60,15 @@ export const embedTexts = async (texts: string[], timeoutMs: number): Promise<Em
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch('/api/embeddings', {
+    // 同源时靠 cookie；换成另一个域名时靠这张票，两种部署都能用
+    const token = await ensureAccessToken()
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) {
+      headers['X-DS-Chat-Auth'] = token
+    }
+    const response = await fetch(EMBEDDINGS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ texts }),
       credentials: 'same-origin',
       signal: controller.signal,
