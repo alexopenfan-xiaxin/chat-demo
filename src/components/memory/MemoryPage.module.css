@@ -276,7 +276,10 @@
    * 导出 JSON 也不读 DOM。
    */
   content-visibility: auto;
-  contain-intrinsic-size: auto 102px;
+  /* 估算值由页面在首屏渲染后按实测均值写进 --entry-estimate（见 MemoryPage.tsx 的校准 effect），
+     没有校准时退回 102px。条目高度随「有没有标签」在 100/125 之间跳，单个常数必然有偏差，
+     所以这里允许运行时校准。 */
+  contain-intrinsic-size: auto var(--entry-estimate, 102px);
 }
 
 .item:last-child {

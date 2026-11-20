@@ -85,6 +85,7 @@ export const MemoryPage = () => {
   const [scrolled, setScrolled] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const profileRef = useRef<HTMLTextAreaElement>(null)
+  const timelineRef = useRef<HTMLDivElement>(null)
   /** 「3 天前」这类相对时间在进页面时定一次基准，不用定时器重算 */
   const [now] = useState(() => Date.now())
 
@@ -116,6 +117,27 @@ export const MemoryPage = () => {
     element.style.height = 'auto'
     element.style.height = `${element.scrollHeight}px`
   }, [profile, memoryOn])
+
+  /**
+   * content-visibility 的高度估算校准：拿首屏已布局的条目实测高度取均值，
+   * 反算出「内容盒」高度写进 --entry-estimate。条目带不带标签差 25px，
+   * 单个常数按任何一组数据调都会被另一组数据带偏，所以按当前这批记忆校准一次。
+   */
+  useEffect(() => {
+    const element = timelineRef.current
+    if (!element || entries.length < 3) {
+      return
+    }
+    const sample = [...element.querySelectorAll<HTMLElement>('[data-memory-entry]')].slice(0, 8)
+    const heights = sample.map((item) => item.getBoundingClientRect().height).filter((height) => height > 40)
+    if (heights.length < 3) {
+      return
+    }
+    const average = heights.reduce((total, height) => total + height, 0) / heights.length
+    // 减掉条目自己的 padding-bottom(20)，contain-intrinsic-size 填的是内容盒
+    const estimate = Math.max(40, Math.round(average - 20))
+    element.style.setProperty('--entry-estimate', `${estimate}px`)
+  }, [entries])
 
   useEffect(() => {
     const element = scrollRef.current
@@ -363,7 +385,7 @@ export const MemoryPage = () => {
                   <div className={styles.emptyAdd}>{renderAdd(true)}</div>
                 </div>
               ) : (
-                <div className={styles.timeline}>
+                <div className={styles.timeline} ref={timelineRef}>
                   <span className={styles.track} data-memory-track="" aria-hidden="true" />
                   {entries.map((entry) => (
                     <article key={entry.id} className={styles.item} data-memory-entry="">
