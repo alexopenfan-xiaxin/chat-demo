@@ -2,9 +2,14 @@
  * OpenAI Responses 格式（POST /v1/responses）的请求转换与流事件解析。
  *
  * 本应用内部沿用内容块 + 流事件的结构，这层只做协议翻译：
- * 请求方向把 Messages 风格的消息列表拍平成 input 数组，思考开关映射成 thinking.type，
- * 而 reasoning.effort 固定 low（用户 11-20 要求思考别太费，开与关同一强度）；
+ * 请求方向把 Messages 风格的消息列表拍平成 input 数组，reasoning.effort 固定 low
+ * （用户 11-20 要求思考别太费）；
  * 响应方向把 Responses 的输出项与增量事件翻译成本地事件，交给上层的 applyEvent 合并。
+ *
+ * 注意：「显示思考过程」开关**不进请求体**。实测上游既不认 thinking.type=disabled、
+ * 也不认 reasoning.enabled=false，两种写法 reasoning_tokens 都还在 74~104（与 effort=low
+ * 的 66~95 同一噪声区间），所以这个开关只决定界面要不要展示思考块（见 client.ts 的
+ * showThinking），不改变上游的思考量。
  */
 
 import type { CreateMessageRequest, MessageParam, MessageUsage } from './types.js'
@@ -57,7 +62,7 @@ const append = (input: ResponsesInputItem[], role: ResponsesInputItem['role'], t
  * 把请求体转成 Responses 格式：
  * - system 走 instructions，latest_reminder 拼进紧随其后的那条提问；
  * - 历史回答只回传正文，思考与工具块不下发（服务端不接受这类结构）；
- * - 深度思考开启时用 high 档，关闭时用 low 档，服务端推理档位只影响长度。
+ * - 思考强度恒为 low，与界面开关无关（上游不认关闭字段，详见文件头）。
  */
 export const toResponsesBody = (body: CreateMessageRequest) => {
   const input: ResponsesInputItem[] = []
