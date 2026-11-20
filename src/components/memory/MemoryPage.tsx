@@ -364,11 +364,12 @@ export const MemoryPage = () => {
                 </div>
               ) : (
                 <div className={styles.timeline}>
-                  <span className={styles.track} aria-hidden="true" />
+                  <span className={styles.track} data-memory-track="" aria-hidden="true" />
                   {entries.map((entry) => (
-                    <article key={entry.id} className={styles.item}>
+                    <article key={entry.id} className={styles.item} data-memory-entry="">
                       <span
                         className={clsx(styles.node, entry.hitCount > 0 && styles.nodeUsed)}
+                        data-memory-node=""
                         aria-hidden="true"
                       />
                       {/* 元信息左、操作右，同一行：每条各占一行放「编辑/删除」在长列表里是噪音 */}
