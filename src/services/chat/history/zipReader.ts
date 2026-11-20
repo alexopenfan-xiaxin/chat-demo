@@ -8,11 +8,27 @@ const INLINE_ENTRY_LIMIT = 8 * 1024 * 1024
 // 控制每轮同步解压的工作量；输出交给调用方保存后才继续读取。
 const INFLATE_CHUNK_BYTES = 8 * 1024
 
+/**
+ * 整包读进内存的上限。超过就退回按块读文件。
+ * 128MB 的依据：读入时 Blob → ArrayBuffer 会短暂占两份，加上解压出一个条目的副本，
+ * 峰值约 3 倍文件大小；8GB 内存机型上仍留在几百 MB 以内，不会把标签页顶崩。
+ * 正常导出（含图片）通常几 MB，76 个会话的样本包只有 948KB。
+ */
+export const MEMORY_ARCHIVE_LIMIT = 128 * 1024 * 1024
+
 /** ZIP 结构损坏或使用了不支持的特性 */
 export class ArchiveError extends Error {
   constructor() {
     super('Invalid or unsupported history archive')
     this.name = 'ArchiveError'
+  }
+}
+
+/** 连 ZIP 签名都不对：格式根本不匹配，跟「内容不完整」要分开报 */
+export class ArchiveFormatError extends ArchiveError {
+  constructor() {
+    super()
+    this.name = 'ArchiveFormatError'
   }
 }
 
@@ -33,11 +49,35 @@ const invalid = (): never => {
   throw new ArchiveError()
 }
 
+/** PK\x03\x04：本地文件头签名，用来区分 ZIP 与其他文件 */
+const zipSignature = (bytes: Uint8Array) =>
+  bytes.length === 4 && [0x50, 0x4b, 3, 4].every((byte, index) => bytes[index] === byte)
+
 /** 本地文件头签名 PK\x03\x04，用于在解析前区分 ZIP 与其他文件。 */
-export const isZipFile = async (file: File) => {
-  const bytes = new Uint8Array(await file.slice(0, 4).arrayBuffer())
-  return bytes.length === 4 && bytes.every((byte, index) => byte === [0x50, 0x4b, 3, 4][index])
+export const isZipFile = async (file: File) => zipSignature(new Uint8Array(await file.slice(0, 4).arrayBuffer()))
+
+/**
+ * 归档的数据源：整包内存或原始文件。
+ *
+ * 真机数据（V2452A / Android 16）表明 `File.slice().arrayBuffer()` 在安卓上单次极慢：
+ * 80 个条目每条读三次小片段就积成 30.7 秒，read 里另有 11.3 秒同样来自反复切片。
+ * 所以正常大小整包一次读进内存，之后所有切片都是内存操作，不再产生 I/O。
+ */
+export type ArchiveSource = {
+  readonly size: number
+  read(start: number, length: number): Uint8Array | Promise<Uint8Array>
 }
+
+/** 返回视图而不是副本：解压只读这块数据，复制一份等于把整包内存翻倍 */
+const memorySource = (bytes: Uint8Array): ArchiveSource => ({
+  size: bytes.length,
+  read: (start, length) => bytes.subarray(start, start + length),
+})
+
+const fileSource = (file: File): ArchiveSource => ({
+  size: file.size,
+  read: async (start, length) => new Uint8Array(await file.slice(start, start + length).arrayBuffer()),
+})
 
 const viewOf = (bytes: Uint8Array) => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
 
@@ -49,11 +89,11 @@ const crcTable = Uint32Array.from({ length: 256 }, (_, value) => {
   return crc >>> 0
 })
 
-const readBytes = async (file: File, start: number, length: number) => {
-  if (start < 0 || length < 0 || start + length > file.size) {
+const readBytes = async (source: ArchiveSource, start: number, length: number) => {
+  if (start < 0 || length < 0 || start + length > source.size) {
     invalid()
   }
-  const bytes = new Uint8Array(await file.slice(start, start + length).arrayBuffer())
+  const bytes = await source.read(start, length)
   if (bytes.length !== length) {
     invalid()
   }
@@ -109,14 +149,14 @@ export type Entry = {
  * 手机上每次 slice 都要过一次主线程调度，几百个条目就积成几秒。
  */
 const readDirectory = async (
-  file: File,
+  source: ArchiveSource,
   onProgress?: DirectoryProgress
 ): Promise<{ entries: Entry[]; offset: number }> => {
-  if (file.size < 22) {
+  if (source.size < 22) {
     invalid()
   }
-  const tailStart = Math.max(0, file.size - 22 - 0xffff)
-  const tail = await readBytes(file, tailStart, file.size - tailStart)
+  const tailStart = Math.max(0, source.size - 22 - 0xffff)
+  const tail = await readBytes(source, tailStart, source.size - tailStart)
   const tailView = viewOf(tail)
   let end = tail.length - 22
   while (
@@ -146,7 +186,7 @@ const readDirectory = async (
   const entries: Entry[] = []
   const paths = new Set<string>()
   // 整段读一次：中央目录通常几十 KB，读进内存后逐条解析不再有 I/O
-  const directory = await readBytes(file, offset, size)
+  const directory = await readBytes(source, offset, size)
   onProgress?.(0, count)
   let cursor = 0
   for (let index = 0; index < count; index++) {
@@ -210,11 +250,11 @@ const readDirectory = async (
   return { entries: entries.sort((a, b) => a.offset - b.offset), offset }
 }
 
-const readEntryOffset = async (file: File, entry: Entry, boundary: number) => {
+const readEntryOffset = async (source: ArchiveSource, entry: Entry, boundary: number) => {
   if (entry.offset + 30 > boundary) {
     invalid()
   }
-  const view = viewOf(await readBytes(file, entry.offset, 30))
+  const view = viewOf(await readBytes(source, entry.offset, 30))
   const nameLength = view.getUint16(26, true)
   const extraLength = view.getUint16(28, true)
   const start = entry.offset + 30 + nameLength + extraLength
@@ -239,7 +279,7 @@ const readEntryOffset = async (file: File, entry: Entry, boundary: number) => {
     }
   }
   // 名字与 extra 一次读完（原来分两次 slice）；descriptor 在压缩数据之后，只能单独读
-  const metadata = await readBytes(file, entry.offset + 30, nameLength + extraLength)
+  const metadata = await readBytes(source, entry.offset + 30, nameLength + extraLength)
   if (entry.name.some((byte, index) => byte !== metadata[index])) {
     invalid()
   }
@@ -248,7 +288,7 @@ const readEntryOffset = async (file: File, entry: Entry, boundary: number) => {
     if (end + 12 > boundary) {
       invalid()
     }
-    const descriptor = viewOf(await readBytes(file, end, Math.min(16, boundary - end)))
+    const descriptor = viewOf(await readBytes(source, end, Math.min(16, boundary - end)))
     const shift = descriptor.getUint32(0, true) === 0x08074b50 ? 4 : 0
     if (
       shift + 12 > descriptor.byteLength ||
@@ -263,24 +303,53 @@ const readEntryOffset = async (file: File, entry: Entry, boundary: number) => {
 }
 
 /**
- * 打开归档：读一次中央目录，之后所有步骤复用同一个对象。
+ * 打开归档：整包读一次、目录解析一次，之后所有步骤复用同一个对象。
  *
  * 类型上强制「只读一次」——`checkFormat` 与 `import` 都只接受 Archive，
  * 想再扫一遍目录只能重新 openArchive，调用方一眼能看出来。
  */
 export type Archive = {
   readonly file: File
+  /** 唯一数据源：正常是整包内存，超过上限时退回原始文件 */
+  readonly source: ArchiveSource
   readonly entries: readonly Entry[]
   /** 中央目录的起始偏移，也是最后一个条目数据的边界 */
   readonly boundary: number
 }
 
-export const openArchive = async (file: File, onProgress?: DirectoryProgress): Promise<Archive> => {
-  if (!(await isZipFile(file))) {
-    invalid()
+/**
+ * `onLoad` 只报整包读入的毫秒数：它在安卓上是不是同样慢必须单独有一个数，
+ * 否则又会出现「某段耗时没人认领」的缺口。
+ *
+ * `memoryLimit` 只给测试用，把流式分支跑出来；生产调用不传。
+ */
+export const openArchive = async (
+  file: File,
+  onProgress?: DirectoryProgress,
+  onLoad?: (ms: number) => void,
+  memoryLimit = MEMORY_ARCHIVE_LIMIT
+): Promise<Archive> => {
+  let source: ArchiveSource
+  if (file.size <= memoryLimit) {
+    const started = performance.now()
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    onLoad?.(performance.now() - started)
+    if (bytes.length !== file.size) {
+      invalid()
+    }
+    // 签名在内存里看，不再为这 4 个字节单独读一次盘
+    if (!zipSignature(bytes.subarray(0, 4))) {
+      throw new ArchiveFormatError()
+    }
+    source = memorySource(bytes)
+  } else {
+    if (!(await isZipFile(file))) {
+      throw new ArchiveFormatError()
+    }
+    source = fileSource(file)
   }
-  const { entries, offset } = await readDirectory(file, onProgress)
-  return { file, entries, boundary: offset }
+  const { entries, offset } = await readDirectory(source, onProgress)
+  return { file, source, entries, boundary: offset }
 }
 
 /**
@@ -301,10 +370,10 @@ export type ArchiveEntry = {
  * 调用方必须消费完当前条目的数据，再请求下一个条目。
  */
 export async function* readArchive(archive: Archive): AsyncGenerator<ArchiveEntry> {
-  const { file, entries } = archive
+  const { source, entries } = archive
   for (const [index, entry] of entries.entries()) {
     const boundary = entries[index + 1]?.offset ?? archive.boundary
-    const start = await readEntryOffset(file, entry, boundary)
+    const start = await readEntryOffset(source, entry, boundary)
     if (entry.path.endsWith('/')) {
       continue
     }
@@ -332,7 +401,7 @@ export async function* readArchive(archive: Archive): AsyncGenerator<ArchiveEntr
       const inflate = entry.method === 8 ? new Inflate(append) : null
       for (let offset = 0; offset < entry.compressedSize; offset += READ_CHUNK_BYTES) {
         const chunk = await readBytes(
-          file,
+          source,
           start + offset,
           Math.min(READ_CHUNK_BYTES, entry.compressedSize - offset)
         )
@@ -398,6 +467,10 @@ export const readEntryText = async (entry: ArchiveEntry): Promise<string> => {
 /**
  * 大条目退回按块收集：附件可能几十 MB，整块进 JS 堆会顶内存上限。
  * 最后一次性建 Blob，不嵌套 Blob。
+ *
+ * 注意 Blob 构造按规范要快照一份字节，所以这里对分块是复制而不是引用；
+ * 整包内存源的分块是原文件缓冲上的视图，复制出去的只有这个附件本身，
+ * 不会把整包滞留到 Blob 里。
  */
 export const readEntryBlob = async (entry: ArchiveEntry): Promise<Blob> => {
   const parts: Uint8Array[] = []

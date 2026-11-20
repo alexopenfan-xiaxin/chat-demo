@@ -167,6 +167,13 @@ export const ImportProgressOverlay = () => {
       }
       const share = Math.round((ms / Math.max(1, report.totalMs)) * 100)
       lines.push(`  ${pad(phase, 11)}${pad(`${ms} ms`, 9)}${share}%`)
+      // 整包读入是 listing 里最重的一步（安卓上可能比目录解析慢一个量级），单独列出来
+      if (phase === 'listing' && report.detail?.load !== undefined) {
+        const loadMs = report.detail.load
+        lines.push(
+          `      ${pad('load', 11)}${pad(`${loadMs} ms`, 9)}${Math.round((loadMs / Math.max(1, ms)) * 100)}%`
+        )
+      }
       // writing 内部再拆五段：真机上到底卡在读、解析还是写库，一眼能看出来
       if (phase === 'writing' && report.detail) {
         for (const stage of WRITING_STAGES) {

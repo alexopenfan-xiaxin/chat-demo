@@ -57,7 +57,9 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
 export const importHistory = (file: File): Promise<number> =>
   enqueueBackup(async () => {
     const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
-    const { isZipFile, openArchive, setStreamTiming, ArchiveError } = await import('./history/zipReader.js')
+    const { openArchive, setStreamTiming, ArchiveError, ArchiveFormatError } = await import(
+      './history/zipReader.js'
+    )
     const { parseSessionPath } = await import('./history/paths.js')
     // 从点确认那一刻起算，报告与浮层的秒数用同一个起点
     const startedAt = performance.now()
@@ -107,13 +109,18 @@ export const importHistory = (file: File): Promise<number> =>
     run.enter('listing')
     stage(0, null, 'listing', true)
     try {
-      if (!(await isZipFile(file))) {
-        throw new BackupError('backupUnrecognized')
-      }
       try {
-        // 目录只读这一次：后面校验与导入都复用它（见 zipReader 的 Archive）
-        archive = await openArchive(file, (parsed) => stage(parsed, null, 'listing'))
+        // 整包读一次、目录解析一次：后面校验与导入都复用它（见 zipReader 的 Archive）
+        archive = await openArchive(
+          file,
+          (parsed) => stage(parsed, null, 'listing'),
+          (ms) => run.addDetail('load', ms)
+        )
       } catch (error) {
+        // 签名不对是「格式不匹配」，其余结构错误才算「内容不完整」，两者不能并成一句话
+        if (error instanceof ArchiveFormatError) {
+          throw new BackupError('backupUnrecognized')
+        }
         throw error instanceof ArchiveError ? new BackupError('backupIncomplete') : error
       }
       run.enter('checking')

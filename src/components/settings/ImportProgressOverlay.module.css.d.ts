@@ -21,4 +21,4 @@ declare const styles: {
   readonly "closeButton": string;
   readonly "hint": string;
 }
-export default styles
+export = styles;

@@ -1,6 +1,12 @@
 import type { ImportWritingStage } from './importArchive.js'
 import type { ImportPhase } from './progress.js'
 
+/**
+ * 报告里单独记账的细分。
+ * load 是整包读入（发生在 listing，不算在 writing 里），其余都在 writing 内部。
+ */
+export type ImportDetailStage = ImportWritingStage | 'load'
+
 /** 一次导入的分阶段实测数据：给真机定位用，别拿桌面或 CPU 节流的数字推真机 */
 export type ImportRunReport = {
   startedAt: string
@@ -13,7 +19,7 @@ export type ImportRunReport = {
   /** 各阶段毫秒数，键缺省表示没走到那一阶段 */
   phases: Partial<Record<ImportPhase, number>>
   /** writing 内部细分；other 是 writing 总时长减去其余各项后的未解释缺口 */
-  detail?: Partial<Record<ImportWritingStage | 'other', number>>
+  detail?: Partial<Record<ImportDetailStage | 'other', number>>
   /** 主线程长任务：安卓上 GC / 布局这类不归属任何 await 的停顿会落在这里 */
   longTasks?: { count: number; totalMs: number; maxMs: number }
   /** 结束时 JS 堆占用，配合长任务判断是不是 GC 在压 */
@@ -52,7 +58,7 @@ export const formatImportReports = (reports: ImportRunReport[]): string =>
 /** 分阶段计时：每次 enter 结束上一段、开始下一段；finish 收尾把当前段封口 */
 export const createImportRun = (startedAt: number) => {
   const phases: Partial<Record<ImportPhase, number>> = {}
-  const detail: Partial<Record<ImportWritingStage, number>> = {}
+  const detail: Partial<Record<ImportDetailStage, number>> = {}
   let current: ImportPhase | null = null
   let since = startedAt
   const close = (at: number) => {
@@ -72,7 +78,7 @@ export const createImportRun = (startedAt: number) => {
       current = null
     },
     /** writing 内部的细分累计 */
-    addDetail(stage: ImportWritingStage, ms: number) {
+    addDetail(stage: ImportDetailStage, ms: number) {
       detail[stage] = (detail[stage] ?? 0) + ms
     },
     /** 总计到此刻为止的耗时，phase 里不含还没结束的那一段 */
