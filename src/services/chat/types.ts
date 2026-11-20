@@ -1,4 +1,5 @@
 import type { TranslationMessage } from '../../i18n/index.js'
+import type { MemoryFailReason } from '../memory/reasons.js'
 import type { ApiErrorKind } from '../api/client.js'
 import type {
   ChatModel,
@@ -75,7 +76,9 @@ export type MemoryActionPart = {
   action: 'save' | 'edit' | 'profile'
   /** 本次影响几条：成功 1，失败 0 */
   count: number
-  /** 失败原因的短文案键（本地 i18n key），成功时没有 */
+  /** 失败原因枚举（写入口直接给出），成功时没有 */
+  failureReason?: MemoryFailReason
+  /** 旧数据里的 i18n key：只为读得懂历史消息，新写入不再产生 */
   failureKey?: string
 }
 

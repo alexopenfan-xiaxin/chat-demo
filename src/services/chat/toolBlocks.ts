@@ -3,6 +3,7 @@ import type {
   WebFetchToolResultBlock,
   WebSearchToolResultBlock,
 } from '../api/types.js'
+import type { MemoryFailReason } from '../memory/reasons.js'
 import type { ReplyBlock } from './types.js'
 import { isWebUrl } from '../../utils/url.js'
 
@@ -110,18 +111,22 @@ export const memoryActionBlocks = (
   callId: string,
   action: 'save' | 'edit' | 'profile',
   ok: boolean,
-  failureKey?: string
+  failureReason?: MemoryFailReason
 ): ReplyBlock[] => [
   {
     type: 'memory_action',
     id: `memory-${callId}`,
     action,
     count: ok ? 1 : 0,
-    ...(ok ? {} : { failureKey: failureKey ?? 'memoryActionFailedUnknown' }),
+    // 只写枚举：界面上不可能出现任何自由文本，正文自然漏不进去
+    ...(ok ? {} : { failureReason: failureReason ?? 'embed_failed' }),
   },
 ]
 
-/** 把记忆工具的失败信息归到几个固定文案上，避免正文从错误信息里漏进界面 */
+/**
+ * 历史兼容：旧消息块里存的是 i18n key，这里只为读得懂老数据保留。
+ * 新写入一律走 `failureReason` 枚举，不再从文案反推。
+ */
 export const memoryFailureKey = (message: string): string => {
   if (message.includes('没有那么配置') || message.includes('还没有配置')) {
     return 'memoryActionFailedUnavailable'

@@ -34,7 +34,7 @@ import {
   settleReply,
   toRequestMessages,
 } from './reply.js'
-import { fetchBlocks, memoryActionBlocks, memoryFailureKey, searchBlocks } from './toolBlocks.js'
+import { fetchBlocks, memoryActionBlocks, searchBlocks } from './toolBlocks.js'
 import {
   toSessionSummary,
   type AssistantMessage,
@@ -170,7 +170,7 @@ const runToolCall = async (
       const result = await updateProfile(fullText)
       return {
         output: JSON.stringify(result),
-        blocks: memoryActionBlocks(call.callId, 'profile', result.ok, memoryFailureKey(result.message)),
+        blocks: memoryActionBlocks(call.callId, 'profile', result.ok, result.reason),
       }
     }
     if (call.name === 'memory_save') {
@@ -181,7 +181,7 @@ const runToolCall = async (
       const result = await saveMemory({ content, tags, sessionId })
       return {
         output: JSON.stringify(result),
-        blocks: memoryActionBlocks(call.callId, 'save', result.ok, memoryFailureKey(result.message)),
+        blocks: memoryActionBlocks(call.callId, 'save', result.ok, result.reason),
       }
     }
     if (call.name === 'memory_edit') {
@@ -193,7 +193,7 @@ const runToolCall = async (
       const result = await editMemory({ id, content, tags })
       return {
         output: JSON.stringify(result),
-        blocks: memoryActionBlocks(call.callId, 'edit', result.ok, memoryFailureKey(result.message)),
+        blocks: memoryActionBlocks(call.callId, 'edit', result.ok, result.reason),
       }
     }
     return { output: JSON.stringify({ error: `未知工具：${call.name}` }), blocks: [] }

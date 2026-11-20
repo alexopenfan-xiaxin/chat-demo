@@ -1,5 +1,6 @@
 import * as db from '../chat/db.js'
 import { embedTexts, EmbeddingsUnavailable } from './api.js'
+import type { MemoryFailReason } from './reasons.js'
 
 /**
  * 记忆：内容与向量都只存在浏览器 IndexedDB，服务端一张表都没有。
@@ -202,7 +203,7 @@ const similar = (
     .filter((hit) => hit.score >= threshold)
     .sort((left, right) => right.score - left.score)
 
-export type ToolResult = { ok: boolean; message: string }
+export type ToolResult = { ok: boolean; message: string; reason?: MemoryFailReason }
 
 /**
  * 写入侧冲突判定：最相近的一条 ≥0.90 时硬拦，强制先走 memory_edit。
@@ -223,10 +224,10 @@ export const saveMemory = async (input: {
 }): Promise<ToolResult> => {
   const content = input.content.trim()
   if (!content) {
-    return { ok: false, message: '内容为空，没有保存' }
+    return { ok: false, message: '内容为空，没有保存', reason: 'empty' }
   }
   if ([...content].length > MEMORY_ITEM_LIMIT) {
-    return { ok: false, message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试` }
+    return { ok: false, message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试`, reason: 'too_long' }
   }
   const entries = await db.loadMemories()
   let vec: Float32Array
@@ -239,15 +240,16 @@ export const saveMemory = async (input: {
     model = result.model
   } catch (error) {
     if (error instanceof EmbeddingsUnavailable) {
-      return { ok: false, message: '记忆功能还没有配置，这次没有保存' }
+      return { ok: false, message: '记忆功能还没有配置，这次没有保存', reason: 'not_configured' }
     }
-    return { ok: false, message: '向量计算失败，这次没有保存' }
+    return { ok: false, message: '向量计算失败，这次没有保存', reason: 'embed_failed' }
   }
   const candidates = similar(vec, dim, entries, CONFLICT_MIN).slice(0, 3)
   const blocked = blockedBy(candidates)
   if (blocked) {
     return {
       ok: false,
+      reason: 'too_close',
       message:
         `已有一条相近的记忆 [${blocked.entry.id}]「${blocked.entry.content}」（相似度 ${blocked.score.toFixed(2)}）。` +
         '如果这是同一件事发生了变化，请用 memory_edit 改写原条；确实是不同的事再考虑新建。',
@@ -318,7 +320,11 @@ export const editMemoryFromPage = async (
  */
 const locateByDescription = async (
   text: string
-): Promise<{ entry: db.MemoryEntry } | { candidates: { id: string; content: string }[] } | { failed: string }> => {
+): Promise<
+  | { entry: db.MemoryEntry }
+  | { candidates: { id: string; content: string }[] }
+  | { failed: string; reason: MemoryFailReason }
+> => {
   let vec: Float32Array
   let dim: number
   try {
@@ -327,9 +333,9 @@ const locateByDescription = async (
     dim = result.dim
   } catch (error) {
     if (error instanceof EmbeddingsUnavailable) {
-      return { failed: '记忆功能还没有配置，这次没有改动' }
+      return { failed: '记忆功能还没有配置，这次没有改动', reason: 'not_configured' }
     }
-    return { failed: '向量计算失败，这次没有改动' }
+    return { failed: '向量计算失败，这次没有改动', reason: 'embed_failed' }
   }
   const entries = await db.loadMemories()
   const ranked = entries
@@ -359,20 +365,20 @@ export const editMemory = async (input: {
   const id = input.id.trim()
   const content = input.content.trim()
   if (!content) {
-    return { ok: false, message: '内容为空，没有改动' }
+    return { ok: false, message: '内容为空，没有改动', reason: 'empty' }
   }
   if ([...content].length > MEMORY_ITEM_LIMIT) {
-    return { ok: false, message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试` }
+    return { ok: false, message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试`, reason: 'too_long' }
   }
   let entry = await db.loadMemory(id)
   if (!entry) {
     // 用户不让我们限制「只能改本轮出现过的记忆」：id 不是编号时按描述定位
     if (!id) {
-      return { ok: false, message: '请给出记忆编号或一句描述' }
+      return { ok: false, message: '请给出记忆编号或一句描述', reason: 'not_found' }
     }
     const located = await locateByDescription(id)
     if ('failed' in located) {
-      return { ok: false, message: located.failed }
+      return { ok: false, message: located.failed, reason: located.reason }
     }
     if ('candidates' in located) {
       const list = located.candidates
@@ -383,6 +389,7 @@ export const editMemory = async (input: {
         message: list
           ? `没有找到明确对应的记忆，这 ${located.candidates.length} 条最接近，请用编号重试：\n${list}`
           : '没有找到明确对应的记忆，要新增请用 memory_save。',
+        reason: 'ambiguous',
       }
     }
     entry = located.entry
@@ -397,9 +404,9 @@ export const editMemory = async (input: {
     model = result.model
   } catch (error) {
     if (error instanceof EmbeddingsUnavailable) {
-      return { ok: false, message: '记忆功能还没有配置，这次没有改动' }
+      return { ok: false, message: '记忆功能还没有配置，这次没有改动', reason: 'not_configured' }
     }
-    return { ok: false, message: '向量计算失败，这次没有改动' }
+    return { ok: false, message: '向量计算失败，这次没有改动', reason: 'embed_failed' }
   }
   await db.putMemory({
     ...entry,
@@ -419,6 +426,7 @@ export const updateProfile = async (fullText: string): Promise<ToolResult> => {
   if ([...text].length > PROFILE_LIMIT) {
     return {
       ok: false,
+      reason: 'too_long',
       message: `画像最多 ${PROFILE_LIMIT} 字，现在是 ${[...text].length} 字，请压缩后整块重写`,
     }
   }
@@ -437,7 +445,7 @@ export const addMemoryManually = async (content: string, tags: string[]): Promis
   const entries = await db.loadMemories()
   const text = content.trim()
   if (!text) {
-    return { ok: false, message: '内容为空' }
+    return { ok: false, message: '内容为空', reason: 'empty' }
   }
   let vec: Float32Array
   let dim: number
@@ -448,7 +456,7 @@ export const addMemoryManually = async (content: string, tags: string[]): Promis
     dim = result.dim
     model = result.model
   } catch {
-    return { ok: false, message: '向量计算失败，没有保存' }
+    return { ok: false, message: '向量计算失败，没有保存', reason: 'embed_failed' }
   }
   const now = Date.now()
   await db.putMemory({

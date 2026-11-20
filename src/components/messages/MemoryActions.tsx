@@ -1,5 +1,6 @@
 import { memo } from 'react'
 import { isTranslationKey, useTranslate } from '../../i18n/index.js'
+import { MEMORY_REASON_KEYS } from '../../services/memory/reasons.js'
 import { IconBrainOutline } from '../base/icons.js'
 import type { AssistantMessage, MemoryActionPart } from '../../services/chat/types.js'
 import styles from './MemoryActions.module.css'
@@ -13,9 +14,15 @@ import styles from './MemoryActions.module.css'
 export const MemoryActions = memo(function MemoryActions({ message }: { message: AssistantMessage }) {
   const t = useTranslate()
   const actions = message.blocks.filter((block): block is MemoryActionPart => block.type === 'memory_action')
-  // 失败原因只认本地固定文案：block 里存的是 i18n key，不是模型给的字符串
-  const reasonText = (key: string | undefined) =>
-    isTranslationKey(key) ? t(key) : t('memoryActionFailedUnknown')
+  // 失败原因只认枚举；旧消息里存的是 i18n key，兜底再认它，绝不接受自由文本
+  const reasonText = (action: MemoryActionPart) => {
+    if (action.failureReason) {
+      return t(MEMORY_REASON_KEYS[action.failureReason] ?? 'memoryActionFailedUnknown')
+    }
+    return isTranslationKey(action.failureKey)
+      ? t(action.failureKey)
+      : t('memoryActionFailedUnknown')
+  }
   if (actions.length === 0) {
     return null
   }
@@ -28,7 +35,7 @@ export const MemoryActions = memo(function MemoryActions({ message }: { message:
           </span>
           <span>
             {action.count === 0
-              ? t('memoryActionFailed', { reason: reasonText(action.failureKey) })
+              ? t('memoryActionFailed', { reason: reasonText(action) })
               : action.action === 'profile'
                 ? t('memoryActionProfile')
                 : action.action === 'edit'
