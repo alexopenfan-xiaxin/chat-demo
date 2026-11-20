@@ -311,8 +311,10 @@ export const editMemoryFromPage = async (
 /**
  * 按描述定位一条记忆：id 查不到时，把这个 id 当一句话算向量，在全库里找最像的一条。
  *
- * 门槛是 top1 ≥ 0.90 且 top1 − top2 ≥ 0.05——既要够像，又要明显比第二名像，
- * 否则宁可不改，把最多 3 条候选带回去让模型重挑。改错一条记忆比不改更糟。
+ * 门槛（用户按实测分数分布定，11-20）：相关对 0.744 / 0.834 / 0.861，不相关对 0.466 / 0.580。
+ * - 只有一条候选：top1 ≥ 0.80 就改——0.90 连相关对的上限都够不到，等于描述式定位总被拦；
+ * - 有多条候选：top1 ≥ 0.85 且 top1 − top2 ≥ 0.05，别误改隔壁那条。
+ * 不满足就把最多 3 条候选带回去让模型重挑。真改错了还有 prevContent 留底、记忆页能看见改前值。
  */
 const locateByDescription = async (
   text: string
@@ -335,7 +337,12 @@ const locateByDescription = async (
     .map((entry) => ({ entry, score: cosine(vec, entry.vec) }))
     .sort((left, right) => right.score - left.score)
   const [first, second] = ranked
-  if (first && first.score >= 0.9 && first.score - (second?.score ?? 0) >= 0.05) {
+  const sure = first
+    ? second
+      ? first.score >= 0.85 && first.score - second.score >= 0.05
+      : first.score >= 0.8
+    : false
+  if (first && sure) {
     return { entry: first.entry }
   }
   return {

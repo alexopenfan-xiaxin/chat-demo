@@ -7,7 +7,8 @@ vi.hoisted(() => {
 /**
  * editMemory 的两种定位方式：
  * 1. 直接给编号——不再要求「本轮注入过」，任何已存记忆都能改；
- * 2. 给一句描述——算向量在全库找，top1 ≥0.90 且拉开第二名 0.05 才改，否则回候选。
+ * 2. 给一句描述——算向量在全库找：只有一条候选时 top1 ≥0.80 就改；多条候选要
+ *    top1 ≥0.85 且拉开第二名 0.05，否则回最多 3 条候选。
  *
  * 用内存里的假库和假 embedding 覆盖这两条，不引额外依赖。
  */
@@ -76,7 +77,16 @@ describe('editMemory 定位', () => {
     expect(saved.updatedAt).toBeGreaterThan(before)
   })
 
-  it('id 查不到时当描述定位：足够像且拉开第二名就改', async () => {
+  it('库里只有一条时，描述够像（≥0.80）就直接改，不再回候选', async () => {
+    rows.clear()
+    put('m5', '最爱吃芒果布丁', unit(1, 0))
+    embeddings.set('我最爱吃的那道甜点', unit(0.83, 0.56))   // 0.83：压过不相关上限 0.58，低于 0.85
+    const result = await editMemory({ id: '我最爱吃的那道甜点', content: '其实最爱吃提拉米苏' })
+    expect(result.ok).toBe(true)
+    expect((rows.get('m5') as { content: string }).content).toBe('其实最爱吃提拉米苏')
+  })
+
+  it('多条候选时要求 ≥0.85 且拉开 0.05 才改', async () => {
     rows.clear()
     put('m5', '最爱吃芒果布丁', unit(1, 0))
     put('m6', '周末常去爬山', unit(0, 1))
@@ -87,7 +97,7 @@ describe('editMemory 定位', () => {
     expect((rows.get('m6') as { content: string }).content).toBe('周末常去爬山')
   })
 
-  it('描述定位不准时回候选、不改任何记忆', async () => {
+  it('多条候选且领先不足时回候选、不改任何记忆', async () => {
     rows.clear()
     put('m5', '最爱吃芒果布丁', unit(1, 0))
     put('m6', '最爱吃草莓蛋糕', unit(0.99, 0.02))
