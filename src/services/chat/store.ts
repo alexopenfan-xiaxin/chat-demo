@@ -279,8 +279,12 @@ type ChatState = {
   activeId: string | null
   /** 正在生成回复的会话 */
   streaming: Record<string, AbortController>
-  /** 导入进度：会话数已处理 / 总数（总数取不到时为 null） */
-  importProgress: { done: number; total: number | null } | null
+  /**
+   * 导入进度：会话数已处理 / 总数（总数取不到时为 null）。
+   * checking 是「还在数文件、没开始写」的阶段：这时候连总数都没有，
+   * 浮层据此显示准备态 / 不确定态，而不是摆一个假的 0 / 0。
+   */
+  importProgress: { done: number; total: number | null; stage?: 'checking' | 'writing' } | null
 }
 
 export const useChatStore = create<ChatState>(() => ({

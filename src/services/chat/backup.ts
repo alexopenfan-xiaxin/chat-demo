@@ -46,12 +46,19 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
 export const importHistory = (file: File): Promise<number> =>
   enqueueBackup(async () => {
     const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
-    await checkArchiveFormat(file)
-    return replaceHistory(async () => {
-      await importArchive(file, (done, total) => {
-        useChatStore.setState({ importProgress: { done, total } })
+    // 先置 checking：数一个几万条目的包要几秒，这段空窗里界面什么都不显示，
+    // 用户会以为点击没生效。浮层靠这个标记提前出现（准备态 / 不确定态）。
+    useChatStore.setState({ importProgress: { done: 0, total: null, stage: 'checking' } })
+    try {
+      await checkArchiveFormat(file)
+      return await replaceHistory(async () => {
+        await importArchive(file, (done, total) => {
+          useChatStore.setState({ importProgress: { done, total, stage: 'writing' } })
+        })
       })
-    })
+    } finally {
+      useChatStore.setState({ importProgress: null })
+    }
   })
 
 /** 确认删除后调用：以空历史原子替换全部本地会话与附件，保留 API Key 和其他设置。 */
