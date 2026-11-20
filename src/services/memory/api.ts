@@ -26,7 +26,7 @@ const EMBEDDINGS_CF = '/api/embed'
  * 由 `reindex.ts` 分批重算。**别在有旧条目的库上只改这一行就上线**，
  * 要先确认重算任务跟着跑起来。
  */
-export const EMBEDDINGS_MODEL: EmbeddingModel = 'qwen'
+export const EMBEDDINGS_MODEL: EmbeddingModel = 'cf-bge-m3'
 
 /** 本机 emb-relay（隧道路由 emb-ds-chat → 127.0.0.1:18789），保留当备份 */
 export const EMBEDDINGS_VIA_TUNNEL = 'https://emb-ds-chat.openfan.dpdns.org/embeddings'
