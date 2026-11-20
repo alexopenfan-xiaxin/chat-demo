@@ -3,6 +3,7 @@ import { MEMORY_PATH, useRoute } from './route.js'
 import { setLogoutHandler } from './sessionActions.js'
 import { MemoryPage } from '../components/memory/MemoryPage.js'
 import { useTranslate } from '../i18n/index.js'
+import { warmupEmbeddings } from '../services/memory/api.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
 import {
@@ -109,7 +110,12 @@ export const App = () => {
         setUser(null)
         return
       }
-      setUser((await ensureAccessToken()) ? me : null)
+      const valid = (await ensureAccessToken()) !== null
+      setUser(valid ? me : null)
+      // 票已就位：顺手把向量接口那一跳验掉，首条消息的召回就不用再等验票
+      if (valid && useSettings.getState().memory) {
+        void warmupEmbeddings()
+      }
     })()
   }, [])
 

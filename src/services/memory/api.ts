@@ -33,6 +33,34 @@ export const EMBEDDINGS_URL = EMBEDDINGS_PUBLIC
 /** 同源 Pages Function 这条备用，切回时用 */
 export { EMBEDDINGS_SAME_ORIGIN }
 
+/**
+ * 预热地址：把 /embeddings 换成 /warmup。
+ * 同源模式（/api/embeddings）那边没有这个 Function，预热会 404，静默跳过即可。
+ */
+export const EMBEDDINGS_WARMUP_URL = EMBEDDINGS_URL.replace(/\/embeddings$/, '/warmup')
+
+/**
+ * 预热：登录、换票之后调一次，把这张票在向量接口那一侧验掉。
+ *
+ * 只验票：不发用户内容、不算向量。失败静默——最坏情况就是首轮检索按老样子
+ * 撞上 800ms 超时，降级成只带画像。
+ */
+export const warmupEmbeddings = async (): Promise<void> => {
+  try {
+    const token = await ensureAccessToken()
+    if (!token) {
+      return
+    }
+    await fetch(EMBEDDINGS_WARMUP_URL, {
+      method: 'GET',
+      headers: { 'X-DS-Chat-Auth': token },
+      credentials: 'same-origin',
+    })
+  } catch {
+    // 预热失败不影响任何功能
+  }
+}
+
 /** 服务端有没有配 key：null 表示还不知道，false 时设置页把记忆开关置灰 */
 export const useMemoryStatus = create<{ available: boolean | null }>(() => ({ available: null }))
 
