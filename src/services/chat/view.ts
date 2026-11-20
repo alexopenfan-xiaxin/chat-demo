@@ -7,7 +7,7 @@ import type {
   WebSearchResult,
   WebSearchToolResultBlock,
 } from '../api/types.js'
-import type { AssistantMessage, ThinkingPart } from './types.js'
+import type { AssistantMessage, MemoryActionPart, ThinkingPart } from './types.js'
 
 /**
  * 由回复的内容块推导界面需要的结构：思考与工具步骤的时间线、带引用角标的正文、可引用的来源列表。
@@ -64,10 +64,23 @@ export type ReadLinkStep = { type: 'read_link'; links: PageItem[] }
 
 export type ThinkingStep = { type: 'thinking'; key: string; blocks: ThinkingPart[] }
 
+/**
+ * 记忆工具的动作记录：和搜索、读取一样是过程的一部分，按调用顺序插在思考段之间。
+ * 它不携带记忆正文（块里本来就没有），渲染时也只报动作与条数。
+ */
+export type MemoryStep = { type: 'memory'; key: string; part: MemoryActionPart }
+
 /** 工具调用前输出的说明文字 */
 export type PreambleStep = { type: 'text'; key: string; markdown: string }
 
-export type Step = SearchStep | OpenStep | FindStep | ReadLinkStep | ThinkingStep | PreambleStep
+export type Step =
+  | SearchStep
+  | OpenStep
+  | FindStep
+  | ReadLinkStep
+  | ThinkingStep
+  | MemoryStep
+  | PreambleStep
 
 export type ReplyView = {
   steps: Step[]
@@ -251,6 +264,12 @@ export const buildReplyView = (reply: AssistantMessage, streaming: boolean): Rep
         mergedThinking = { type: 'thinking', key: `thinking-${index}`, blocks: [block] }
         steps.push(mergedThinking)
       }
+      return
+    }
+    if (block.type === 'memory_action') {
+      // 与搜索、读取同一套位置语义：出现在哪段思考之后，就留在哪段之后。
+      // 不 flush pendingText：正文块即便被工具调用隔开，仍属于同一条正文。
+      steps.push({ type: 'memory', key: block.id, part: block })
       return
     }
     if (block.type !== 'server_tool_use') {

@@ -1,17 +1,8 @@
 /*
- * 记忆动作记录：一行一个动作。
+ * 记忆动作记录：思考过程里的一行。
  * 与「参考了 N 条记忆」胶囊的区别靠圆角——胶囊 28 高 + 999 圆角 + 有箭头（能点开），
  * 这一行 24 高 + 6 圆角 + 无箭头（只是说明）。比只靠「更轻」更容易让人摸索出来。
  */
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
 .row,
 .rowFailed {
   display: inline-flex;
