@@ -286,14 +286,29 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
 }
 
+/* 元信息左、操作右同一行：24 条时若每条单独占一行，操作重复 24 次会变成噪音 */
 .itemMeta {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   font-size: 11px;
   line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.itemMetaText {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.itemLinks {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 14px;
+  margin-left: auto;
 }
 
 .idTag {
@@ -348,15 +363,11 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.itemActions {
-  display: flex;
-  gap: 14px;
-  margin-top: 6px;
-}
 
 /* §14.4：可点击的必须可读——tertiary 3.71:1 不达 AA，用 secondary（5.80:1） */
 .textButton {
-  padding: 0;
+  /* 12px 文字配上 6px 纵向内边距，命中区抬到 30px（Apple/Android 建议 ≥24/32） */
+  padding: 6px 0;
   border: 0;
   background: none;
   font: inherit;

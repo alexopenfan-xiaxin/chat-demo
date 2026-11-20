@@ -28,13 +28,14 @@ declare const styles: {
   readonly "node": string;
   readonly "nodeUsed": string;
   readonly "itemMeta": string;
+  readonly "itemMetaText": string;
+  readonly "itemLinks": string;
   readonly "idTag": string;
   readonly "metaText": string;
   readonly "content": string;
   readonly "prev": string;
   readonly "tags": string;
   readonly "tag": string;
-  readonly "itemActions": string;
   readonly "textButton": string;
   readonly "textButtonDanger": string;
   readonly "itemEditor": string;

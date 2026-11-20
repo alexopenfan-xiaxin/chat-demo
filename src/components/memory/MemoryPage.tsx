@@ -371,30 +371,54 @@ export const MemoryPage = () => {
                         className={clsx(styles.node, entry.hitCount > 0 && styles.nodeUsed)}
                         aria-hidden="true"
                       />
+                      {/* 元信息左、操作右，同一行：每条各占一行放「编辑/删除」在长列表里是噪音 */}
                       <div className={styles.itemMeta}>
-                        <span className={styles.idTag}>{entry.id}</span>
-                        <span>·</span>
-                        <span className={styles.metaText}>
-                          {entry.sessionId ? sessionTitle(entry.sessionId) : t('memoryManual')}
-                        </span>
-                        <span>·</span>
-                        <span>
-                          {(() => {
-                            const relative = relativeTimeKey(entry.updatedAt, now)
-                            if (!relative) {
-                              return new Date(entry.updatedAt).toLocaleDateString()
-                            }
-                            return relative.key === 'memoryTimeJustNow'
-                              ? t('memoryTimeJustNow')
-                              : t(relative.key, { count: relative.count })
-                          })()}
-                        </span>
-                        {entry.hitCount > 0 ? (
-                          <>
-                            <span>·</span>
-                            <span>{t('memoryHits', { count: entry.hitCount })}</span>
-                          </>
-                        ) : null}
+                        <div className={styles.itemMetaText}>
+                          <span className={styles.idTag}>{entry.id}</span>
+                          <span>·</span>
+                          <span className={styles.metaText}>
+                            {entry.sessionId ? sessionTitle(entry.sessionId) : t('memoryManual')}
+                          </span>
+                          <span>·</span>
+                          <span>
+                            {(() => {
+                              const relative = relativeTimeKey(entry.updatedAt, now)
+                              if (!relative) {
+                                return new Date(entry.updatedAt).toLocaleDateString()
+                              }
+                              return relative.key === 'memoryTimeJustNow'
+                                ? t('memoryTimeJustNow')
+                                : t(relative.key, { count: relative.count })
+                            })()}
+                          </span>
+                          {entry.hitCount > 0 ? (
+                            <>
+                              <span>·</span>
+                              <span>{t('memoryHits', { count: entry.hitCount })}</span>
+                            </>
+                          ) : null}
+                        </div>
+                        {editing === entry.id ? null : (
+                          <div className={styles.itemLinks}>
+                            <button
+                              type="button"
+                              className={styles.textButton}
+                              onClick={() => {
+                                setEditing(entry.id)
+                                setEditingText(entry.content)
+                              }}
+                            >
+                              {t('memoryEdit')}
+                            </button>
+                            <button
+                              type="button"
+                              className={clsx(styles.textButton, styles.textButtonDanger)}
+                              onClick={() => setPendingDelete(entry)}
+                            >
+                              {t('memoryDelete')}
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {editing === entry.id ? (
@@ -434,27 +458,6 @@ export const MemoryPage = () => {
                         </div>
                       ) : null}
 
-                      {editing === entry.id ? null : (
-                        <div className={styles.itemActions}>
-                          <button
-                            type="button"
-                            className={styles.textButton}
-                            onClick={() => {
-                              setEditing(entry.id)
-                              setEditingText(entry.content)
-                            }}
-                          >
-                            {t('memoryEdit')}
-                          </button>
-                          <button
-                            type="button"
-                            className={clsx(styles.textButton, styles.textButtonDanger)}
-                            onClick={() => setPendingDelete(entry)}
-                          >
-                            {t('memoryDelete')}
-                          </button>
-                        </div>
-                      )}
                     </article>
                   ))}
 

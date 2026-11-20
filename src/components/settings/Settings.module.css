@@ -407,10 +407,27 @@
  * 从 /memory 引导态跳进来时的定位高亮：滚到记忆开关并短暂加一圈淡色描边，
  * 1.6 秒后自动淡掉（由组件里的 clearSettingsFocus 触发）。
  */
+/**
+ * 从 /memory 引导态跳进来时指给用户看的那一行（文档 §16.3）：
+ * 2px brand 光环 + 圆角 12 + interactive-bg-hover 底，外扩 8px。
+ * 用光环而不是纯换底色，跟项目既有的 focus-visible 语言一致，不会被读成「已选中」；
+ * 不做呼吸/脉冲——pulse 读起来像错误提示，还要在 reduced-motion 下单独降级。
+ */
 .settingFocus {
+  margin: 0 -8px;
+  padding: 12px 8px;
   border-radius: 12px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 35%, transparent);
-  transition: box-shadow 240ms ease;
+  background: var(--dsw-alias-interactive-bg-hover);
+  box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary);
+  transition:
+    box-shadow 300ms ease,
+    background-color 300ms ease;
+}
+
+/* 1.6 秒后先退到透明（300ms 过渡），再把状态清掉，别让高亮「啪」地消失 */
+.settingFocusOff {
+  background-color: transparent;
+  box-shadow: 0 0 0 2px transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

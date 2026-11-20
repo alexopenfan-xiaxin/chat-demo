@@ -224,20 +224,33 @@ const MemorySetting = () => {
   const focus = useSettingsDialog((state) => state.focus)
   const unavailable = available === false
   const rowRef = useRef<HTMLDivElement>(null)
+  const [fading, setFading] = useState(false)
 
-  // 从 /memory 的引导态点「去设置打开」进来时，滚到这一行并短暂高亮，
+  // 从 /memory 的引导态点「去设置打开」进来时，滚到这一行并高亮 1.6 秒，
   // 否则用户看到一个通用设置列表还得自己找开关。
+  // reduced-motion 下不滚动画，也不做淡出过渡。
   useEffect(() => {
     if (focus !== 'memory') {
+      setFading(false)
       return
     }
-    rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    const timer = window.setTimeout(clearSettingsFocus, 1600)
-    return () => window.clearTimeout(timer)
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    rowRef.current?.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' })
+    const fade = window.setTimeout(() => setFading(true), 1600)
+    const clear = window.setTimeout(clearSettingsFocus, 1900)
+    return () => {
+      window.clearTimeout(fade)
+      window.clearTimeout(clear)
+    }
   }, [focus])
 
   return (
-    <div ref={rowRef} className={focus === 'memory' ? styles.settingFocus : undefined}>
+    <div
+      ref={rowRef}
+      className={
+        focus === 'memory' ? clsx(styles.settingFocus, fading && styles.settingFocusOff) : undefined
+      }
+    >
     <SettingCell
       label={t('settingsMemory')}
       status={{ key: unavailable ? 'settingsMemoryUnavailable' : 'settingsMemoryHint' }}
