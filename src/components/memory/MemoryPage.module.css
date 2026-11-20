@@ -10,6 +10,12 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  /*
+   * height:100% 不能省：外层 .frame 是固定高度 + overflow:hidden，如果这一页按内容长高，
+   * 整页会被裁掉且无处可滚（200 条时实测页面高 24299px、scrollTop 永远是 0，
+   * 第二屏之后的内容根本到不了）。占满父容器高度后自己滚，sticky 左栏才有参照。
+   */
+  height: 100%;
   width: 100%;
   min-width: 0;
   max-width: 960px;
