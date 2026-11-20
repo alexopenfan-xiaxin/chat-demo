@@ -8,6 +8,7 @@ declare const styles: {
   readonly "withLine": string;
   readonly "content": string;
   readonly "thinkingStream": string;
+  readonly "thinkingBlock": string;
   readonly "lastItem": string;
   readonly "dot": string;
   readonly "dotInner": string;

@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import type { Source } from '../../services/chat/view.js'
 import { toMdAst } from '../../services/markdown/parse.js'
 import { useScrollToBottom } from '../messages/scrollContext.js'
@@ -27,11 +27,18 @@ export const Markdown = memo(function Markdown({
   sources?: Source[]
 }) {
   const scrollToBottom = useScrollToBottom()
-  const throttledMarkdown = useThrottleMarkdownRender(content, loading)
-  const ast = useMemo(
-    () => (throttledMarkdown ? toMdAst(throttledMarkdown, { sources, disableLink }) : null),
-    [throttledMarkdown, sources, disableLink]
-  )
+  /** 上一次 toMdAst 的实测耗时，节流窗口按它算；解析本身不在这里做 */
+  const parseCostRef = useRef(0)
+  const throttledMarkdown = useThrottleMarkdownRender(content, loading, parseCostRef)
+  const ast = useMemo(() => {
+    if (!throttledMarkdown) {
+      return null
+    }
+    const started = performance.now()
+    const tree = toMdAst(throttledMarkdown, { sources, disableLink })
+    parseCostRef.current = performance.now() - started
+    return tree
+  }, [throttledMarkdown, sources, disableLink])
   return ast ? (
     <MarkdownAstRenderer
       key={cacheKey}

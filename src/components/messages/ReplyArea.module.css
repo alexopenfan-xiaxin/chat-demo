@@ -60,6 +60,36 @@
 /* 流式思考：纯文本直出，不解析 Markdown。
    每帧只改一个 text 节点，比整段重新解析 AST 便宜一个量级；
    思考里本来就少有格式，等这段结束后再按 Markdown 渲染一次即可。 */
+/* 思考块从纯文本切到 Markdown 时的高度对齐（画眉实测值）：
+   段落间距 24（相邻 p 的 12+12 折叠后只有 12）、列表 6、容器外边距与 .thinkingStream 一致。
+   只管 .thinkingBlock，正文的段落间距一个字都不动。 */
+.thinkingBlock {
+  :global(.ds-markdown) {
+    margin: 12px 0;
+  }
+
+  :global(.ds-markdown) :global(.ds-markdown-paragraph) {
+    margin: 0 0 24px;
+  }
+
+  :global(.ds-markdown) > :global(:first-child) {
+    margin-top: 0;
+  }
+
+  :global(.ds-markdown) > :global(:last-child) {
+    margin-bottom: 0;
+  }
+
+  :global(.ds-markdown) :global(ul),
+  :global(.ds-markdown) :global(ol) {
+    margin: 6px 0;
+  }
+
+  :global(.ds-markdown) :global(li) {
+    margin: 0;
+  }
+}
+
 .thinkingStream {
   margin: 12px 0;
   font: var(--dsw-font-markdown-small);

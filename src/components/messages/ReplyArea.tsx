@@ -130,7 +130,7 @@ const StepItem = ({
         streaming && lastBlock?.startedAt !== undefined && lastBlock.endedAt === undefined
       const text = step.blocks.map((block) => block.thinking).join('')
       return (
-        <ContentItem isLast={isLast} active={thinking}>
+        <ContentItem isLast={isLast} active={thinking} className={styles.thinkingBlock}>
           {thinking ? (
             <ThinkingStream text={text} />
           ) : (
@@ -189,12 +189,14 @@ const ContentItem = ({
   children,
   active,
   isLast,
+  className,
 }: {
   children: ReactNode
   active: boolean
   isLast: boolean
+  className?: string
 }) => (
-  <div className={clsx(styles.content, 'ds-think-content', isLast && styles.lastItem)}>
+  <div className={clsx(styles.content, 'ds-think-content', className, isLast && styles.lastItem)}>
     <span className={styles.dot}>
       <span className={clsx(styles.dotInner, !active && styles.inactive)} />
     </span>

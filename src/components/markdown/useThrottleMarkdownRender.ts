@@ -1,34 +1,38 @@
 import { useEffect, useRef, useState } from 'react'
 
-/** 两次更新的最长间隔 */
-const MAX_WAIT = 2000
-/** 上次渲染耗时的倍数，过了这段时间才允许下次更新 */
-const TIME_CONSUMING_RATE = 2
+/** 两次更新之间最少等这么久：再快也没有意义，屏幕上一帧就是这么长 */
+const MIN_STEP = 33
+/** 两次更新之间最多等这么久：解析再贵也不能让人等到两秒才见字 */
+const MAX_WAIT = 250
 
 /**
- * 流式过程中按渲染耗时节流 Markdown 内容的更新：
- * 更新输出时记录开始时间，提交后按耗时 × TIME_CONSUMING_RATE（不超过 MAX_WAIT）
- * 算出下次允许更新的时间点；新内容在到期时更新，连续输入合并为最新内容。
- * 关闭节流时直接返回最新内容。
+ * 流式过程中按「真实解析耗时」节流 Markdown 内容的更新。
+ *
+ * 窗口 = clamp(上次 `toMdAst` 的实测耗时 × 2, 33ms, 250ms)：
+ * 解析便宜时贴着帧率走，解析变贵（长文本）时自动放宽，但封顶 250ms。
+ *
+ * 这里曾经用「距上次更新开始的时间 × 2」当窗口，那个量会随每次更新自己翻倍、
+ * 一路涨到 2000ms，表现就是「隔一会儿突然冒一串字」。
  */
-export const useThrottleMarkdownRender = (content: string, enable: boolean) => {
-  // 首次渲染从挂载时开始计时
-  const startRef = useRef(performance.now())
+export const useThrottleMarkdownRender = (
+  content: string,
+  enable: boolean,
+  costRef: { current: number }
+) => {
   const updatableAtRef = useRef(0)
   const [output, setOutput] = useState(content)
 
   useEffect(() => {
-    const now = performance.now()
-    updatableAtRef.current =
-      now + Math.min(MAX_WAIT, (now - startRef.current) * TIME_CONSUMING_RATE)
-  }, [output])
+    const cost = costRef.current
+    const window = Math.min(MAX_WAIT, Math.max(MIN_STEP, cost * 2))
+    updatableAtRef.current = performance.now() + window
+  }, [output, costRef])
 
   useEffect(() => {
     if (!enable) {
       return
     }
     const update = () => {
-      startRef.current = performance.now()
       setOutput(content)
     }
     const delay = updatableAtRef.current - performance.now()
