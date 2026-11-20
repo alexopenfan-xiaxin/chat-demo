@@ -110,11 +110,14 @@ export const importArchive = async (file: File, onProgress?: ImportProgress): Pr
   }
   // 总数只数会话文件：中心目录里就有，不需要解压；数不出来就不显示"几分之几"，
   // 免得把一个猜出来的分母摆给用户看。
-  let total: number | null = null
+  // 总数只数会话文件：中心目录里就有，不需要解压。
+  // 数不出来说明中心目录读不了，后面逐条读取会撞上同一处损坏，所以这里不吞异常：
+  // 静默退化成「大约需要几秒」会让用户以为导入在正常进行，实际马上就会失败。
+  let total: number
   try {
     total = (await listArchivePaths(file)).filter((path) => parseSessionPath(path) !== null).length
-  } catch {
-    total = null
+  } catch (error) {
+    throw error instanceof ArchiveError ? new BackupError('backupIncomplete') : error
   }
   onProgress?.(0, total)
   const imported = new Set<string>()

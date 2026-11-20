@@ -32,6 +32,7 @@ import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import { ImportProgressOverlay } from './ImportProgressOverlay.js'
 import styles from './Settings.module.css'
 
 /**
@@ -122,6 +123,7 @@ const SettingsContent = () => {
           )}
         </div>
       </Modal>
+      <ImportProgressOverlay />
       {historyImport.file ? <ImportConfirm historyImport={historyImport} /> : null}
       {historyDelete.opened ? <DeleteAllConfirm historyDelete={historyDelete} /> : null}
     </>
@@ -407,15 +409,12 @@ const SettingCell = ({
   label,
   description,
   status,
-  progress,
   action,
   className,
 }: {
   label: string
   description?: string
   status: Status
-  /** 进度这类需要单独一行、随导入实时刷新的提示 */
-  progress?: ReactNode
   action: ReactNode
   className?: string
 }) => {
@@ -429,11 +428,6 @@ const SettingCell = ({
             {status
               ? t(status.key, status.reason ? { message: t(status.reason) } : status.params)
               : description}
-          </div>
-        ) : null}
-        {progress ? (
-          <div className={styles.progress} role="status" aria-live="polite">
-            {progress}
           </div>
         ) : null}
       </div>
@@ -483,22 +477,11 @@ const ImportHistory = ({
 }) => {
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
-  // 导入是从这个弹窗发起的，主区域那条进度被弹窗整个盖住，所以这里显示同一份进度
-  const progress = useChatStore((state) => state.importProgress)
-  const importing = useChatStore((state) => state.importingHistory)
-
   return (
     <SettingCell
       label={t('historyImport')}
       description={t('historyImportDescription')}
-      status={importing ? { key: 'historyImporting' } : historyImport.status}
-      progress={
-        importing
-          ? progress !== null && progress.total !== null
-            ? t('historyImportProgress', { done: progress.done, total: progress.total })
-            : t('historyImportApprox')
-          : undefined
-      }
+      status={historyImport.status}
       action={
         <>
           <Button
