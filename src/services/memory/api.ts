@@ -3,10 +3,21 @@ import { ApiError } from '../api/client.js'
 import { ensureAccessToken } from '../auth.js'
 
 /**
- * 向量接口地址：默认走同源 Pages Function。
- * 若为了把延迟压进召回预算而改走自建隧道，这里换成一个地址即可，调用方不用动。
+ * 向量接口可以走两条路，切换只改文件末尾那一行，调用方不用动：
+ *
+ * - 同源 Pages Function：由 Cloudflare 出口打讯飞。实测上游往返 4 秒级，召回预算 800ms 打不住。
+ * - cloudflared 隧道到本机 emb-relay：本机打讯飞只要 0.1 秒，但隧道本身的往返
+ *   实测 TTFB p50 2.0 秒（min 0.97 / p90 3.26 / 偶发 6～25 秒），端到端 p50 2.3 秒。
+ *
+ * 两条路都带 X-DS-Chat-Auth 票（同源另有 cookie），异源部署同样能验。
  */
-export const EMBEDDINGS_URL = '/api/embeddings'
+const EMBEDDINGS_SAME_ORIGIN = '/api/embeddings'
+
+/** 本机 emb-relay（隧道路由 emb-ds-chat → 127.0.0.1:18789），走它要先确认隧道质量 */
+export const EMBEDDINGS_VIA_TUNNEL = 'https://emb-ds-chat.openfan.dpdns.org/embeddings'
+
+/** 切换点：改成 EMBEDDINGS_VIA_TUNNEL 即走本机转发 */
+export const EMBEDDINGS_URL = EMBEDDINGS_SAME_ORIGIN
 
 /** 服务端有没有配 key：null 表示还不知道，false 时设置页把记忆开关置灰 */
 export const useMemoryStatus = create<{ available: boolean | null }>(() => ({ available: null }))
