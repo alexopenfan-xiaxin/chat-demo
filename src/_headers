@@ -1,0 +1,15 @@
+# Cloudflare Pages 响应头。构建时由 CopyRspackPlugin 拷到 dist 根。
+#
+# 资源文件名带 contenthash（见 rspack.config.ts 的 filename / cssFilename），
+# 内容一变文件名就变，所以 /static/* 可以长缓存且不必回头校验；
+# 之前平台默认给的 max-age=14400 + must-revalidate 会让浏览器每四小时白跑一次 304。
+#
+# index.html 与任何 html 必须每次回源：它决定这一次加载引用哪一批带 hash 的资源。
+/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate

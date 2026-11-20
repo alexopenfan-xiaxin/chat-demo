@@ -111,7 +111,11 @@ export const createConfig = ({
       __HCAPTCHA_SITE_KEY__: JSON.stringify(process.env.HCAPTCHA_SITE_KEY ?? DEFAULT_HCAPTCHA_SITE_KEY),
     }),
     new rspack.CopyRspackPlugin({
-      patterns: [{ from: path.resolve(root, 'LICENSE'), to: 'LICENSE', toType: 'file' }],
+      patterns: [
+        { from: path.resolve(root, 'LICENSE'), to: 'LICENSE', toType: 'file' },
+        // Cloudflare Pages 从构建产物的根读 _headers：缓存策略跟代码放一起，别散在控制台里
+        { from: path.resolve(root, 'src/_headers'), to: '_headers', toType: 'file' },
+      ],
     }),
   ],
   performance: { hints: false },
