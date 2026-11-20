@@ -30,7 +30,6 @@ import {
 } from '../../services/chat/view.js'
 import { Tooltip } from '../base/Tooltip.js'
 import { Markdown } from '../markdown/Markdown.js'
-import { useScrollToBottom } from './scrollContext.js'
 import { SiteThumbnails } from '../search/SiteLogo.js'
 import { toggleSearchPanel, useSearchPanel } from '../search/searchPanelState.js'
 import styles from './ReplyArea.module.css'
@@ -105,14 +104,6 @@ export const ReplyArea = memo(function ReplyArea({
   )
 })
 
-/**
- * 思考块解析 Markdown 的字数上限：比这个长就整段纯文本直出。
- *
- * 实测 2–4k 字解析只要 3.4ms，但 66k 字一次性 parse + 渲染会卡掉 281ms 那一帧；
- * 超长思考本来也不需要格式，留着纯文本更稳。
- */
-const THINKING_MARKDOWN_LIMIT = 20000
-
 const stepKey = (step: Step, index: number) =>
   step.type === 'thinking' || step.type === 'text' || step.type === 'search'
     ? step.key
@@ -136,21 +127,14 @@ const StepItem = ({
       const lastBlock = step.blocks.at(-1)
       const thinking =
         streaming && lastBlock?.startedAt !== undefined && lastBlock.endedAt === undefined
-      const text = step.blocks.map((block) => block.thinking).join('')
-      // 超长思考不解析：一次性 parse 两万字以上只会卡住那一帧，留着纯文本更稳
-      const plain = thinking || [...text].length > THINKING_MARKDOWN_LIMIT
       return (
-        <ContentItem isLast={isLast} active={thinking} className="ds-think-block">
-          {plain ? (
-            <ThinkingStream text={text} />
-          ) : (
-            <Markdown
-              content={text}
-              loading={false}
-              cacheKey={`${message.id}-${step.key}`}
-              disableLink
-            />
-          )}
+        <ContentItem isLast={isLast} active={thinking}>
+          <Markdown
+            content={step.blocks.map((block) => block.thinking).join('')}
+            loading={thinking}
+            cacheKey={`${message.id}-${step.key}`}
+            disableLink
+          />
         </ContentItem>
       )
     }
@@ -179,34 +163,17 @@ const StepItem = ({
   }
 }
 
-/**
- * 流式思考：纯文本直出。
- *
- * 为什么不用 Markdown：整段思考每帧都在变长，交给 Markdown 就等于每帧重新解析一遍
- * AST；文本越长越慢，节流又会把更新攒成一批一批，看起来就是「卡一下冒一串字」。
- * 纯文本只改一个文本节点，一帧一次，肉眼上连续；这一段结束后再由 Markdown 渲染一次。
- */
-const ThinkingStream = ({ text }: { text: string }) => {
-  const scrollToBottom = useScrollToBottom()
-  useEffect(() => {
-    scrollToBottom()
-  }, [text, scrollToBottom])
-  return <div className={styles.thinkingStream}>{text}</div>
-}
-
 /** 思考或过程性文字：左侧圆点 + 竖线，小号 markdown */
 const ContentItem = ({
   children,
   active,
   isLast,
-  className,
 }: {
   children: ReactNode
   active: boolean
   isLast: boolean
-  className?: string
 }) => (
-  <div className={clsx(styles.content, 'ds-think-content', className, isLast && styles.lastItem)}>
+  <div className={clsx(styles.content, 'ds-think-content', isLast && styles.lastItem)}>
     <span className={styles.dot}>
       <span className={clsx(styles.dotInner, !active && styles.inactive)} />
     </span>

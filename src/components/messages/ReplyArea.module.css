@@ -57,17 +57,6 @@
 }
 
 .withLine,
-/* 流式思考：纯文本直出，不解析 Markdown。
-   每帧只改一个 text 节点，比整段重新解析 AST 便宜一个量级；
-   思考里本来就少有格式，等这段结束后再按 Markdown 渲染一次即可。 */
-.thinkingStream {
-  margin: 12px 0;
-  font: var(--dsw-font-markdown-small);
-  color: var(--dsw-alias-label-secondary);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .content {
   &::after {
     content: '';
