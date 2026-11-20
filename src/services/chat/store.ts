@@ -7,6 +7,7 @@ import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from 
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
+import { MAX_TOOL_ROUNDS, decideToolRound } from './toolRounds.js'
 import {
   clearAllDrafts,
   clearDraft,
@@ -60,8 +61,6 @@ const FILE_RETRY_LIMIT = 2
 const FILE_RETRY_BASE_DELAY = 1000
 
 
-/** 工具调用最多连做 3 轮；模型还想调就收敛成一句说明，不静默丢弃 */
-const MAX_TOOL_ROUNDS = 3
 
 type ToolCall = { callId: string; name: string; arguments: string }
 
@@ -1269,6 +1268,8 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     // 工具往返：模型发起调用 → 我们执行 → 结果回传 → 它接着说完，最多 MAX_TOOL_ROUNDS 轮
     const exchanges: ToolExchangeItem[] = []
     let toolRounds = 0
+    /** 到上限之后的收尾轮：不再声明工具，只让模型把已有结果说完 */
+    let finishWithoutTools = false
     for (;;) {
       const calls: ToolCall[] = []
       /** 本轮之前的块数：用来只回传这一轮模型自己说的话 */
@@ -1304,7 +1305,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
             safety_check: SAFETY_CHECK,
-            tools: serverTools(initial.search ?? false, memoryEnabled),
+            tools: finishWithoutTools ? [] : serverTools(initial.search ?? false, memoryEnabled),
             toolExchange: exchanges.length > 0 ? [...exchanges] : undefined,
           },
           controller.signal
@@ -1381,8 +1382,9 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         }
         break
       }
-      if (toolRounds >= MAX_TOOL_ROUNDS) {
-        // 到上限还在调：给一句明确说明，别让界面空着
+      const decision = decideToolRound(toolRounds, finishWithoutTools)
+      if (decision === 'notice') {
+        // 连「无工具收尾」都没能说完：这时才显示上限提示，别让界面空着
         const notice: TextPart = {
           type: 'text',
           text: `工具调用已达上限（${MAX_TOOL_ROUNDS} 轮），先按现有结果回答。`,
@@ -1392,6 +1394,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         updateReply(sessionId, reply)
         persist(sessionId)
         break
+      }
+      if (decision === 'finish-without-tools') {
+        // 到上限还在调：不执行这批调用，也不截断——换一次不带 tools 的请求让它说完
+        finishWithoutTools = true
+        continue
       }
       toolRounds += 1
       // 过程状态：让用户知道在等什么，而不是对着空屏
