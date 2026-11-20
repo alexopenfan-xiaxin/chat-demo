@@ -177,6 +177,7 @@ export const en = {
   memoryActionFailedUnavailable: 'memory is not configured',
   memoryActionFailedEmbedding: 'embedding failed',
   memoryActionFailedTooLong: 'content too long',
+  memoryActionFailedAmbiguous: 'no single match',
   memoryActionFailedMissing: 'memory not found',
   memoryActionFailedConflict: 'too close to an existing memory',
   memoryActionFailedEmpty: 'content is empty',

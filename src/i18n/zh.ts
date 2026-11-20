@@ -173,6 +173,7 @@ export const zh = {
   memoryActionFailedUnavailable: '记忆功能还没配置',
   memoryActionFailedEmbedding: '向量计算失败',
   memoryActionFailedTooLong: '内容太长',
+  memoryActionFailedAmbiguous: '匹配不到唯一一条',
   memoryActionFailedMissing: '找不到这条记忆',
   memoryActionFailedConflict: '与已有记忆太接近',
   memoryActionFailedEmpty: '内容为空',

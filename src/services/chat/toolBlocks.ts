@@ -132,6 +132,9 @@ export const memoryFailureKey = (message: string): string => {
   if (message.includes('最多')) {
     return 'memoryActionFailedTooLong'
   }
+  if (message.includes('没有找到明确对应')) {
+    return 'memoryActionFailedAmbiguous'
+  }
   if (message.includes('没有这条记忆')) {
     return 'memoryActionFailedMissing'
   }
