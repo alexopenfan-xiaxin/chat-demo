@@ -105,6 +105,14 @@ export const ReplyArea = memo(function ReplyArea({
   )
 })
 
+/**
+ * 思考块解析 Markdown 的字数上限：比这个长就整段纯文本直出。
+ *
+ * 实测 2–4k 字解析只要 3.4ms，但 66k 字一次性 parse + 渲染会卡掉 281ms 那一帧；
+ * 超长思考本来也不需要格式，留着纯文本更稳。
+ */
+const THINKING_MARKDOWN_LIMIT = 20000
+
 const stepKey = (step: Step, index: number) =>
   step.type === 'thinking' || step.type === 'text' || step.type === 'search'
     ? step.key
@@ -129,9 +137,11 @@ const StepItem = ({
       const thinking =
         streaming && lastBlock?.startedAt !== undefined && lastBlock.endedAt === undefined
       const text = step.blocks.map((block) => block.thinking).join('')
+      // 超长思考不解析：一次性 parse 两万字以上只会卡住那一帧，留着纯文本更稳
+      const plain = thinking || [...text].length > THINKING_MARKDOWN_LIMIT
       return (
         <ContentItem isLast={isLast} active={thinking} className={styles.thinkingBlock}>
-          {thinking ? (
+          {plain ? (
             <ThinkingStream text={text} />
           ) : (
             <Markdown
