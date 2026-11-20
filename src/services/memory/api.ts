@@ -40,6 +40,18 @@ export { EMBEDDINGS_SAME_ORIGIN }
 export const EMBEDDINGS_WARMUP_URL = EMBEDDINGS_URL.replace(/\/embeddings$/, '/warmup')
 
 /**
+ * 票指纹：预热按「这张票」记标记，不按账号 id。
+ *
+ * 按账号记的话，会话票到期换新票之后不会再预热，那一轮召回仍要付一次验票
+ * （经隧道约 0.9 秒）并可能降级一次。指纹只取 hash 前 8 个十六进制字符，
+ * 不落盘、不进日志、也不能反推原票。
+ */
+export const tokenFingerprint = async (token: string): Promise<string> => {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+  return Array.from(new Uint8Array(digest).slice(0, 4), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/**
  * 预热：登录、换票之后调一次，把这张票在向量接口那一侧验掉。
  *
  * 只验票：不发用户内容、不算向量。失败静默——最坏情况就是首轮检索按老样子

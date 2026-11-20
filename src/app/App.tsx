@@ -3,7 +3,7 @@ import { MEMORY_PATH, useRoute } from './route.js'
 import { setLogoutHandler } from './sessionActions.js'
 import { MemoryPage } from '../components/memory/MemoryPage.js'
 import { useTranslate } from '../i18n/index.js'
-import { warmupEmbeddings } from '../services/memory/api.js'
+import { tokenFingerprint, warmupEmbeddings } from '../services/memory/api.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
 import {
@@ -115,19 +115,34 @@ export const App = () => {
   }, [])
 
   // 票就绪、且记忆开关是开的：把向量接口那一跳先验掉，首条消息的召回不用再等验票。
-  // 用 warmedFor 记住「这个账号在这个开关状态上已经预热过」，避免每次渲染重复发；
-  // 用户在设置里中途打开开关时 key 会变，于是补一次预热。
+  // 标记用的是「票指纹」而不是账号 id：票到期换新之后指纹变了，自然补一次预热，
+  // 否则换票后的那一轮召回仍要付约 0.9 秒验票、可能降级一次。
   const memoryOn = useSettings((state) => state.memory)
   useEffect(() => {
     if (!user || !memoryOn) {
       return
     }
-    const key = user.id
-    if (warmedFor.current === key) {
-      return
+    let cancelled = false
+    const warm = async () => {
+      const token = await ensureAccessToken()
+      if (!token || cancelled) {
+        return
+      }
+      const fingerprint = await tokenFingerprint(token)
+      if (warmedFor.current === fingerprint) {
+        return
+      }
+      warmedFor.current = fingerprint
+      await warmupEmbeddings()
     }
-    warmedFor.current = key
-    void warmupEmbeddings()
+    void warm()
+    // 票是懒刷新，没有变更通知：每 5 分钟对一次指纹，换票最多 5 分钟后补上预热。
+    // 指纹没变时这一步只读内存，不发任何请求。
+    const timer = window.setInterval(() => void warm(), 5 * 60 * 1000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [user, memoryOn])
 
   // 关掉开关再打开时要重新预热一次，所以关闭时把标记清掉
