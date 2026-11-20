@@ -15,6 +15,7 @@ import {
   exportHistory,
   importHistory,
 } from '../../services/chat/backup.js'
+import { formatImportReports, readImportReports } from '../../services/chat/history/importReport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
 import {
@@ -28,6 +29,7 @@ import {
 } from '../../services/settings.js'
 import { useTranslate, type TranslationKey, type TranslationMessage } from '../../i18n/index.js'
 import { Button } from '../base/Button.js'
+import { copyText } from '../../utils/clipboard.js'
 import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
@@ -441,6 +443,8 @@ const useHistoryImport = () => {
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<Status>(null)
+  // 导入结束会落一份明细：有明细才显示复制入口
+  const [reportCount, setReportCount] = useState(() => readImportReports().length)
   const importing = useRef(false)
 
   const confirm = async () => {
@@ -461,10 +465,11 @@ const useHistoryImport = () => {
     } finally {
       importing.current = false
       setBusy(false)
+      setReportCount(readImportReports().length)
     }
   }
 
-  return { file, busy, status, select: setFile, cancel: () => setFile(null), confirm }
+  return { file, busy, status, reportCount, select: setFile, cancel: () => setFile(null), confirm }
 }
 
 /** 导入 = 覆盖：用选中文件替换本地全部会话与附件。 */
@@ -477,6 +482,7 @@ const ImportHistory = ({
 }) => {
   const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [copied, setCopied] = useState(false)
   return (
     <SettingCell
       label={t('historyImport')}
@@ -484,6 +490,21 @@ const ImportHistory = ({
       status={historyImport.status}
       action={
         <>
+          {/* 控制台不方便打开时，手机上从这里把分阶段明细复制出来 */}
+          {historyImport.reportCount > 0 ? (
+            <button
+              type="button"
+              className={styles.reportLink}
+              onClick={() => {
+                void copyText(formatImportReports(readImportReports())).then((ok) => {
+                  setCopied(ok)
+                  window.setTimeout(() => setCopied(false), 1600)
+                })
+              }}
+            >
+              {copied ? t('historyImportCopyReportDone') : t('historyImportCopyReport')}
+            </button>
+          ) : null}
           <Button
             variant="outlined"
             size="m"

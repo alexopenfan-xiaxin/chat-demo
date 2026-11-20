@@ -1,5 +1,5 @@
-/** 导入进度的三个阶段：解析目录、校验格式、逐条写入 */
-export type ImportPhase = 'checking' | 'listing' | 'writing'
+/** 导入的五个阶段：读目录 → 校验 → 逐条写入 → 提交事务 → 重建列表 */
+export type ImportPhase = 'checking' | 'listing' | 'writing' | 'committing' | 'rebuilding'
 
 export type ImportProgressValue = {
   done: number

@@ -4,6 +4,12 @@ import { replaceHistory, useChatStore } from './store.js'
 import type { Session } from './types.js'
 
 import { BackupError } from './history/errors.js'
+import {
+  createImportRun,
+  readEnvironment,
+  saveImportReport,
+  type ImportRunReport,
+} from './history/importReport.js'
 import { createProgressReporter } from './history/progress.js'
 
 export { BackupError }
@@ -50,25 +56,71 @@ export const importHistory = (file: File): Promise<number> =>
   enqueueBackup(async () => {
     const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
     const { isZipFile, openArchive, ArchiveError } = await import('./history/zipReader.js')
+    const { parseSessionPath } = await import('./history/paths.js')
+    // 从点确认那一刻起算，报告与浮层的秒数用同一个起点
+    const startedAt = performance.now()
+    const run = createImportRun(startedAt)
+    const environment = await readEnvironment()
     // 节流：目录解析与逐条写入都可能触发几十上百次，每次都 setState 会让 React 反复渲染
     const stage = createProgressReporter((value) => useChatStore.setState({ importProgress: value }))
-    // 先置 listing：目录在手机上要读好几秒，这段必须让界面有数字可看
+    const report = (outcome: string, sessions: number, entries: number, expected: number) => {
+      run.finish()
+      const value: ImportRunReport = {
+        startedAt: new Date().toISOString(),
+        outcome,
+        totalMs: Math.round(run.elapsed()),
+        zipBytes: file.size,
+        entries,
+        sessionsExpected: expected,
+        sessionsWritten: sessions,
+        phases: Object.fromEntries(
+          Object.entries(run.phases).map(([phase, ms]) => [phase, Math.round(ms as number)])
+        ) as ImportRunReport['phases'],
+        environment,
+      }
+      saveImportReport(value)
+    }
+    let archive: Awaited<ReturnType<typeof openArchive>> | null = null
+    let written = 0
+    run.enter('listing')
     stage(0, null, 'listing', true)
     try {
       if (!(await isZipFile(file))) {
         throw new BackupError('backupUnrecognized')
       }
-      let archive: Awaited<ReturnType<typeof openArchive>>
       try {
         // 目录只读这一次：后面校验与导入都复用它（见 zipReader 的 Archive）
         archive = await openArchive(file, (parsed) => stage(parsed, null, 'listing'))
       } catch (error) {
         throw error instanceof ArchiveError ? new BackupError('backupIncomplete') : error
       }
+      run.enter('checking')
+      stage(0, null, 'checking', true)
       await checkArchiveFormat(archive)
-      return await replaceHistory(async () => {
-        await importArchive(archive, (done, total) => stage(done, total, 'writing'))
-      })
+      // 只数会话文件；图片目录 chat_sessions/<id>_files/... 不算
+      const expected = archive.entries.filter(
+        (entry) => parseSessionPath(entry.path) !== null
+      ).length
+      const count = await replaceHistory(
+        async () => {
+          run.enter('writing')
+          await importArchive(archive as NonNullable<typeof archive>, (done, totalSessions) =>
+            stage(done, totalSessions, 'writing')
+          )
+        },
+        (phase) => {
+          run.enter(phase)
+          // 提交与整理阶段：写入已经到齐，计数位就停在 N / N，不留一个假的 0
+          stage(expected, expected, phase, true)
+        }
+      )
+      written = count
+      report('ok', count, archive.entries.length, expected)
+      return count
+    } catch (error) {
+      const key = error instanceof BackupError ? error.key : 'historyImportFailed'
+      report(key, written, archive?.entries.length ?? 0, 0)
+      throw error
     } finally {
       useChatStore.setState({ importProgress: null })
     }

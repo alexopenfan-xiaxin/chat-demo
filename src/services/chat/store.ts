@@ -288,7 +288,7 @@ type ChatState = {
     done: number
     total: number | null
     /** listing＝还在解析中央目录，checking＝校验格式，writing＝逐条写入 */
-    stage?: 'checking' | 'listing' | 'writing'
+    stage?: 'checking' | 'listing' | 'writing' | 'committing' | 'rebuilding'
   } | null
 }
 
@@ -625,7 +625,11 @@ const waitForIdle = (sessionId?: string) =>
  * 替换历史对话：先写入暂存，成功后原子替换旧记录；写入为空即删除全部会话与附件。
  * 期间停止生成并禁止修改会话；失败时清除暂存，保留原有记录。
  */
-export const replaceHistory = async (write: () => Promise<void>): Promise<number> => {
+export const replaceHistory = async (
+  write: () => Promise<void>,
+  /** 分阶段回调：提交与重建发生在替换内部，导入侧只能从这里拿到边界 */
+  onPhase?: (phase: 'committing' | 'rebuilding') => void
+): Promise<number> => {
   if (get().importingHistory) {
     throw new Error('History replacement is already in progress')
   }
@@ -644,6 +648,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     let summaries: SessionSummary[]
     try {
       await write()
+      onPhase?.('committing')
       summaries = await db.commitStaging()
     } catch (error) {
       await db.clearStaging().catch(db.reportStorageError('clear unfinished history replacement'))
@@ -653,6 +658,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     unsavedSessions.clear()
     pendingFiles.clear()
     clearAllDrafts()
+    onPhase?.('rebuilding')
     set({
       ready: true,
       initError: false,

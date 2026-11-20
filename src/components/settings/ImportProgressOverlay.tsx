@@ -2,6 +2,7 @@ import clsx from 'clsx'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
+import type { ImportPhase } from '../../services/chat/history/progress.js'
 import { useChatStore } from '../../services/chat/store.js'
 import styles from './ImportProgressOverlay.module.css'
 
@@ -10,10 +11,7 @@ const PREPARE_GRACE_MS = 600
 /** 结束后浮层淡出的时长，和 CSS 的 leaving 过渡一致 */
 const LEAVE_MS = 160
 
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-type View = { done: number; total: number | null; stage: 'checking' | 'listing' | 'writing' }
+type View = { done: number; total: number | null; stage: ImportPhase }
 
 /**
  * 导入历史对话的进度浮层。
@@ -35,9 +33,10 @@ export const ImportProgressOverlay = () => {
   const active = importing || progress !== null
   const [mounted, setMounted] = useState(active)
   const [slow, setSlow] = useState(false)
-  const [reduced] = useState(prefersReducedMotion)
   const [view, setView] = useState<View | null>(null)
   const startedAt = useRef<number>(Date.now())
+  /** 秒数单独走 200ms 的心跳，不跟着导入进度刷新，免得把节流又冲掉 */
+  const [nowAt, setNowAt] = useState(() => Date.now())
 
   // 浮层显示期间记下最后一次形态：淡出那 160ms 不能又跳回「已处理 0 个对话」
   useEffect(() => {
@@ -47,8 +46,17 @@ export const ImportProgressOverlay = () => {
   }, [progress])
 
   useEffect(() => {
+    if (!mounted) {
+      return
+    }
+    const timer = window.setInterval(() => setNowAt(Date.now()), 200)
+    return () => window.clearInterval(timer)
+  }, [mounted])
+
+  useEffect(() => {
     if (active) {
       startedAt.current = Date.now()
+      setNowAt(Date.now())
       setMounted(true)
       setSlow(false)
       return
@@ -63,7 +71,12 @@ export const ImportProgressOverlay = () => {
     return () => window.clearTimeout(timer)
   }, [active, mounted])
 
-  const determinate = view !== null && view.stage === 'writing' && view.total !== null && view.total > 0
+  // 写入阶段按 done/total 走；提交与整理阶段写入已到齐，条也该是满的，不能退回不确定态
+  const determinate =
+    view !== null &&
+    view.total !== null &&
+    view.total > 0 &&
+    (view.stage === 'writing' || view.done >= view.total)
   const waiting = !determinate
 
   // 只有真的慢（>600ms）才从准备态退到不确定态
@@ -88,25 +101,33 @@ export const ImportProgressOverlay = () => {
   const total = view?.total ?? null
   const percent = determinate && total ? Math.min(100, Math.round((done / total) * 100)) : null
   const preparing = waiting && !slow
-  const counting = view === null || view.stage === 'checking'
-  // 数中心目录这段也有数字：同一个计数位，文案说清现在在数什么
-  const listing = view?.stage === 'listing' && view.done > 0
+  const stage = view?.stage ?? 'listing'
+  const phaseTitle = t(
+    stage === 'checking'
+      ? 'historyPhaseChecking'
+      : stage === 'writing'
+        ? 'historyPhaseWriting'
+        : stage === 'committing'
+          ? 'historyPhaseCommitting'
+          : stage === 'rebuilding'
+            ? 'historyPhaseRebuilding'
+            : 'historyPhaseListing'
+  )
+  const elapsed = Math.max(0, (nowAt - startedAt.current) / 1000).toFixed(1)
 
   return createPortal(
     <div className={clsx(styles.overlay, !active && styles.leaving)}>
       <div className={styles.card} role="dialog" aria-modal="true" aria-live="polite">
         <div className={styles.head}>
-          <span className={styles.title}>{t('historyImporting')}</span>
+          <span className={styles.title}>{phaseTitle}</span>
           <span className={styles.count}>
-            {preparing
-              ? t('historyImportPreparing')
-              : determinate
-                ? `${done} / ${total}`
-                : listing
-                  ? t('historyImportReadingList', { count: done })
-                  : counting || reduced
-                    ? t('historyImportWorking')
-                    : t('historyImportCount', { count: done })}
+            {determinate
+              ? `${done} / ${total}`
+              : stage === 'listing'
+                ? t('historyImportReadingList', { count: done })
+                : total !== null && done >= total
+                  ? `${done} / ${total}`
+                  : ''}
           </span>
         </div>
         <div
@@ -122,8 +143,12 @@ export const ImportProgressOverlay = () => {
             <div className={clsx(styles.fill, styles.indeterminate)} />
           )}
         </div>
-        {/* 准备态隐藏而不是不渲染：卡片高度固定，标题不会在切换时跳一下 */}
-        <div className={clsx(styles.hint, preparing && styles.hidden)}>{t('historyImportKeepOpen')}</div>
+        {/* 准备态也显示秒数：用户从点确认起就能看到在走，而不是只看到一句「正在准备」 */}
+        <div className={styles.hint}>
+          {t('historyImportElapsed', { seconds: elapsed })}
+          {' · '}
+          {t('historyImportKeepOpen')}
+        </div>
       </div>
     </div>,
     document.body

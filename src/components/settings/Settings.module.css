@@ -104,6 +104,25 @@
   line-height: 22px;
 }
 
+/* 「复制导入明细」这种入口要不起眼：正文灰、无背景、只有 hover 时给个下划线 */
+.reportLink {
+  flex-shrink: 0;
+  margin-left: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reportLink:hover {
+  color: var(--dsw-alias-label-secondary);
+}
+
 .uploadButton {
   padding: 0 13px;
 }
