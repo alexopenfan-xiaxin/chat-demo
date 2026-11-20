@@ -190,8 +190,11 @@ export const pickPanelKey = (keys: PanelKey[], name: string | null): PanelKey | 
   return keys.find((key) => key.name === name) ?? null
 }
 
-/** 首赠额度（积分）。用户拍板 10，改这一个常量即可。 */
-export const SIGNUP_CREDIT_QUOTA = 10
+/**
+ * 首赠额度（积分）。用户 11-20 拍板从 10 提到 15，改这一个常量即可。
+ * 只影响新注册建的 key：已有用户与 key 不动（额度改动不做回填）。
+ */
+export const SIGNUP_CREDIT_QUOTA = 15
 
 const KEY_MODELS = ['deepseek-v4.1-flash']
 
