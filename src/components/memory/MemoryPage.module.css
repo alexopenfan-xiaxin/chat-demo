@@ -257,6 +257,10 @@
 .item {
   position: relative;
   padding-bottom: 20px;
+  /* §17：200 条一次性布局在降速设备上要 108ms（阈值 80）。按屏付费后 ×4 降到 ~11ms。
+     122px 是实测加权中位（有标签 126 / 无标签 100），auto 让浏览器记住真实高度。 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 122px;
 }
 
 .item:last-child {
@@ -265,7 +269,9 @@
 
 .node {
   position: absolute;
-  left: -20px;
+  /* 轨道是 left:5 / width:1，中心落在 5.5；节点 12px 若从 0 起中心是 6，差 0.5px。
+     这里左移半像素让两者同心（轨道是 1px 细线，不该为了对齐去挪线）。 */
+  left: calc(-20px - 0.5px);
   top: 6px;
   width: 12px;
   height: 12px;
@@ -767,6 +773,13 @@
 
   .hitBar {
     flex: 0 0 48px;
+  }
+}
+
+/* 打印时离屏条目必须恢复布局，否则打印出来是空白页 */
+@media print {
+  .item {
+    content-visibility: visible;
   }
 }
 
