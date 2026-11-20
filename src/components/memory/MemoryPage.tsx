@@ -128,7 +128,15 @@ export const MemoryPage = () => {
     if (!element || entries.length < 3) {
       return
     }
-    const sample = [...element.querySelectorAll<HTMLElement>('[data-memory-entry]')].slice(0, 8)
+    // 只取真正被布局过的（在视口内的）条目：离屏条目 getBoundingClientRect 返回的是估算值，
+    // 拿它们校准等于自己证明自己。
+    const view = scrollRef.current?.getBoundingClientRect()
+    const sample = [...element.querySelectorAll<HTMLElement>('[data-memory-entry]')]
+      .filter((item) => {
+        const rect = item.getBoundingClientRect()
+        return view ? rect.top < view.bottom && rect.bottom > view.top : false
+      })
+      .slice(0, 8)
     const heights = sample.map((item) => item.getBoundingClientRect().height).filter((height) => height > 40)
     if (heights.length < 3) {
       return
