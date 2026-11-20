@@ -133,6 +133,8 @@
 }
 
 .statValue {
+  /* 「15.1 KB」不许折行：三列等分时中间那列最容易被挤断 */
+  white-space: nowrap;
   font-size: 28px;
   line-height: 32px;
   font-weight: 600;
@@ -184,6 +186,7 @@
   width: 100%;
   max-width: 100%;
   min-height: 112px;
+  max-height: 50vh;
   margin-top: 10px;
   padding: 0 0 0 14px;
   border: 0;
@@ -372,15 +375,16 @@
 }
 
 /* 条目内编辑：无边框、左侧竖线，和画像同一个形状语言 */
+/* §15.1：竖线 = 一直就在的一段话，框 = 此刻正在改它。编辑态用框 */
 .itemEditor {
   width: 100%;
   max-width: 100%;
   min-height: 88px;
   margin-top: 4px;
-  padding: 0 0 0 12px;
-  border: 0;
-  border-left: 2px solid var(--dsw-alias-brand-primary);
-  background: transparent;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-brand-primary);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-skeleton);
   font: inherit;
   font-size: 14px;
   line-height: 22px;
@@ -461,6 +465,19 @@
 
 .addTrigger:hover {
   color: var(--dsw-alias-label-primary);
+}
+
+/* 空状态里的新增入口：不挂在时间轴上，居中对齐 */
+.emptyAdd {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.addFormCentered {
+  width: 100%;
+  max-width: 320px;
+  text-align: left;
 }
 
 .addForm {
@@ -667,6 +684,27 @@
   .left {
     position: sticky;
     top: 24px;
+  }
+
+  /* grid 对齐盒顶边：左栏 Hero 自带 28 的内边距，右栏不补就会高出一截 */
+  .right {
+    padding-top: 28px;
+  }
+
+  /* §15.3：桌面不是大标题模式，顶部栏直接显示标题 */
+  .topTitle {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* §15.5：危险区按钮在 960 宽里各占 260 太抢眼，右对齐限宽 */
+  .dangerActions > button {
+    flex: 0 0 132px;
+    max-width: 132px;
+  }
+
+  .searchInput {
+    max-width: 420px;
   }
 
   .heroTitle {

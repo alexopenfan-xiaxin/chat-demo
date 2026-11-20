@@ -29,7 +29,9 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--dsw-alias-label-primary-foreground);
+  /* 滑块是「图形」不是文字：固定用静态白，别跟着实心按钮前景 token 走，
+     否则深色主题把按钮文字改近黑时，滑块会一起变黑 */
+  background: var(--dsw-static-neutral-bluish-00);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   transition: transform 160ms ease;
 }

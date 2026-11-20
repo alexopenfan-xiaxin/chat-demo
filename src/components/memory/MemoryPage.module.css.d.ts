@@ -45,6 +45,8 @@ declare const styles: {
   readonly "emptyHint": string;
   readonly "addNode": string;
   readonly "addTrigger": string;
+  readonly "emptyAdd": string;
+  readonly "addFormCentered": string;
   readonly "addForm": string;
   readonly "caption": string;
   readonly "searchWrap": string;

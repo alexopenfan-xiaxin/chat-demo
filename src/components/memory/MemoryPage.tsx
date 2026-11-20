@@ -84,6 +84,7 @@ export const MemoryPage = () => {
   const [deleting, setDeleting] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const profileRef = useRef<HTMLTextAreaElement>(null)
   /** 「3 天前」这类相对时间在进页面时定一次基准，不用定时器重算 */
   const [now] = useState(() => Date.now())
 
@@ -105,6 +106,16 @@ export const MemoryPage = () => {
     }
     void reload()
   }, [memoryOn])
+
+  // 画像框按内容增高：730 字只显示 4 行的话，用户根本看不见自己写了什么
+  useEffect(() => {
+    const element = profileRef.current
+    if (!element) {
+      return
+    }
+    element.style.height = 'auto'
+    element.style.height = `${element.scrollHeight}px`
+  }, [profile, memoryOn])
 
   useEffect(() => {
     const element = scrollRef.current
@@ -225,6 +236,45 @@ export const MemoryPage = () => {
     showToast({ key: 'memoryCleared' })
   }
 
+  /** 手动新增：时间轴末尾与空状态共用同一份 UI */
+  const renderAdd = (centered = false) =>
+    adding ? (
+      <div className={clsx(styles.addForm, centered && styles.addFormCentered)}>
+        <textarea
+          className={styles.itemEditor}
+          value={draft}
+          disabled={!memoryOn}
+          maxLength={MEMORY_ITEM_LIMIT}
+          placeholder={t('memoryAddPlaceholder')}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <input
+          className={styles.searchInput}
+          value={draftTags}
+          disabled={!memoryOn}
+          placeholder={t('memoryTagsPlaceholder')}
+          onChange={(event) => setDraftTags(event.target.value)}
+        />
+        <div className={styles.itemEditorActions}>
+          <Button variant="outlined" size="s" onClick={() => setAdding(false)}>
+            {t('memoryCancel')}
+          </Button>
+          <Button
+            variant="primary"
+            size="s"
+            disabled={!memoryOn || !draft.trim() || draftBusy}
+            onClick={() => void add()}
+          >
+            {t('memorySave')}
+          </Button>
+        </div>
+      </div>
+    ) : (
+      <button type="button" className={styles.addTrigger} onClick={() => setAdding(true)}>
+        + {t('memoryAddInline')}
+      </button>
+    )
+
   return (
     <div className={styles.page} ref={scrollRef}>
       <header className={clsx(styles.topbar, scrolled && styles.topbarScrolled)}>
@@ -276,6 +326,7 @@ export const MemoryPage = () => {
                 </span>
               </div>
               <textarea
+                ref={profileRef}
                 className={clsx(
                   styles.profileEditor,
                   countState === 'warn' && styles.countWarn,
@@ -309,6 +360,7 @@ export const MemoryPage = () => {
                   </span>
                   <p className={styles.emptyTitle}>{t('memoryEmptyTitle')}</p>
                   <p className={styles.emptyHint}>{t('memoryEmptyHint')}</p>
+                  <div className={styles.emptyAdd}>{renderAdd(true)}</div>
                 </div>
               ) : (
                 <div className={styles.timeline}>
@@ -407,44 +459,7 @@ export const MemoryPage = () => {
                   ))}
 
                   {/* 手动新增挂在时间轴末尾：添加也是这条线上的一件事，不是另一张表单 */}
-                  <div className={styles.addNode}>
-                    {adding ? (
-                      <div className={styles.addForm}>
-                        <textarea
-                          className={styles.itemEditor}
-                          value={draft}
-                          disabled={!memoryOn}
-                          maxLength={MEMORY_ITEM_LIMIT}
-                          placeholder={t('memoryAddPlaceholder')}
-                          onChange={(event) => setDraft(event.target.value)}
-                        />
-                        <input
-                          className={styles.searchInput}
-                          value={draftTags}
-                          disabled={!memoryOn}
-                          placeholder={t('memoryTagsPlaceholder')}
-                          onChange={(event) => setDraftTags(event.target.value)}
-                        />
-                        <div className={styles.itemEditorActions}>
-                          <Button variant="outlined" size="s" onClick={() => setAdding(false)}>
-                            {t('memoryCancel')}
-                          </Button>
-                          <Button
-                            variant="primary"
-                            size="s"
-                            disabled={!memoryOn || !draft.trim() || draftBusy}
-                            onClick={() => void add()}
-                          >
-                            {t('memorySave')}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button type="button" className={styles.addTrigger} onClick={() => setAdding(true)}>
-                        + {t('memoryAddInline')}
-                      </button>
-                    )}
-                  </div>
+                  <div className={styles.addNode}>{renderAdd()}</div>
                 </div>
               )}
             </section>
