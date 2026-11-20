@@ -402,3 +402,19 @@
     max-width: 100%;
   }
 }
+
+/**
+ * 从 /memory 引导态跳进来时的定位高亮：滚到记忆开关并短暂加一圈淡色描边，
+ * 1.6 秒后自动淡掉（由组件里的 clearSettingsFocus 触发）。
+ */
+.settingFocus {
+  border-radius: 12px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary) 35%, transparent);
+  transition: box-shadow 240ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settingFocus {
+    transition: none;
+  }
+}

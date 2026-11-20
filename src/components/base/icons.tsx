@@ -415,6 +415,16 @@ export const IconRightUpOutline14 = () => (
   </svg>
 )
 
+/** 返回：/memory 顶部栏左侧，与侧边栏导航项同一套线性图标 */
+export const IconArrowLeftOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M8.46967 1.46967L7.53033 0.53033L0 8L7.53033 15.4697L8.46967 14.5303L2.93934 9H16V7H2.93934L8.46967 1.46967Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 export const IconSearchOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

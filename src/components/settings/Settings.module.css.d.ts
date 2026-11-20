@@ -9,8 +9,8 @@ declare const styles: {
   readonly "row": string;
   readonly "text": string;
   readonly "label": string;
-  readonly "uploadButton": string;
   readonly "reportLink": string;
+  readonly "uploadButton": string;
   readonly "locationCell": string;
   readonly "locationSelectors": string;
   readonly "provinceSelect": string;
@@ -30,6 +30,6 @@ declare const styles: {
   readonly "importConfirmText": string;
   readonly "deleteConfirm": string;
   readonly "deleteActions": string;
+  readonly "settingFocus": string;
 };
 export = styles;
-

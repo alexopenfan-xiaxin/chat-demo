@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   IconDarkOutline16,
   IconDataOutline16,
@@ -37,7 +37,12 @@ import { copyText } from '../../utils/clipboard.js'
 import { Modal } from '../base/Modal.js'
 import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
-import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import {
+  clearSettingsFocus,
+  closeSettings,
+  useSettingsDialog,
+  type SettingsSection,
+} from './settingsDialogState.js'
 import { ImportProgressOverlay } from './ImportProgressOverlay.js'
 import styles from './Settings.module.css'
 
@@ -216,8 +221,23 @@ const MemorySetting = () => {
   const t = useTranslate()
   const enabled = useSettings((state) => state.memory)
   const available = useMemoryStatus((state) => state.available)
+  const focus = useSettingsDialog((state) => state.focus)
   const unavailable = available === false
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  // 从 /memory 的引导态点「去设置打开」进来时，滚到这一行并短暂高亮，
+  // 否则用户看到一个通用设置列表还得自己找开关。
+  useEffect(() => {
+    if (focus !== 'memory') {
+      return
+    }
+    rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    const timer = window.setTimeout(clearSettingsFocus, 1600)
+    return () => window.clearTimeout(timer)
+  }, [focus])
+
   return (
+    <div ref={rowRef} className={focus === 'memory' ? styles.settingFocus : undefined}>
     <SettingCell
       label={t('settingsMemory')}
       status={{ key: unavailable ? 'settingsMemoryUnavailable' : 'settingsMemoryHint' }}
@@ -235,6 +255,7 @@ const MemorySetting = () => {
         />
       }
     />
+    </div>
   )
 }
 
