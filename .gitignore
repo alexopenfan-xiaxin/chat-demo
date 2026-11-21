@@ -9,3 +9,6 @@ build/
 .env.*
 !.env.example
 tmp/
+
+# 构建期准备的静态资源（模型 24MB + onnxruntime wasm 32MB），不进仓库
+/static/
