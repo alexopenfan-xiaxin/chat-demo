@@ -77,6 +77,9 @@ export const modelCacheName = () =>
 
 const CACHE_PREFIX = 'ds-chat-embed-'
 
+/** 每个源最多试几次：镜像对连续请求会 429，退避重试比直接失败好 */
+const DOWNLOAD_ATTEMPTS = 3
+
 const origin = () => (typeof self === 'undefined' ? '' : self.location.origin)
 
 /** 模型根地址：`<host>/<repo>/resolve/<commit>/`，transformers.js 与下载器用同一个 */
@@ -143,31 +146,46 @@ export const downloadLocalModel = async (onProgress?: DownloadProgress): Promise
     const errors: string[] = []
     let stored = false
     for (const host of [MODEL_MIRROR, MODEL_UPSTREAM]) {
-      const url = modelRootUrl(host) + file.path
-      try {
-        const response = await fetch(url)
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-        const buffer = await response.arrayBuffer()
-        const digest = await sha256(buffer)
-        if (digest !== file.sha256) {
-          errors.push(`${new URL(host).hostname} 哈希不符：期望 ${file.sha256}，实际 ${digest}`)
-          continue
-        }
-        // 缓存键固定用镜像地址：transformers.js 查的就是它
-        await cache.put(
-          key,
-          new Response(buffer, {
-            headers: { 'content-type': file.path.endsWith('.json') ? 'application/json' : 'application/octet-stream' },
+      for (let attempt = 0; attempt < DOWNLOAD_ATTEMPTS && !stored; attempt++) {
+        const url = modelRootUrl(host) + file.path
+        try {
+          const response = await fetch(url, {
+            // 小文件 30 秒、权重 4 分钟；没有超时的话，一次卡住就是一条不动的进度条
+            signal: AbortSignal.timeout(file.path.endsWith('.onnx') ? 240_000 : 30_000),
           })
-        )
-        done += buffer.byteLength
-        onProgress?.(Math.min(done, total), total, file.path)
-        stored = true
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`)
+          }
+          const buffer = await response.arrayBuffer()
+          const digest = await sha256(buffer)
+          if (digest !== file.sha256) {
+            errors.push(`${new URL(host).hostname} 哈希不符：期望 ${file.sha256}，实际 ${digest}`)
+            break
+          }
+          // 缓存键固定用镜像地址：transformers.js 查的就是它
+          await cache.put(
+            key,
+            new Response(buffer, {
+              headers: {
+                'content-type': file.path.endsWith('.json') ? 'application/json' : 'application/octet-stream',
+              },
+            })
+          )
+          done += buffer.byteLength
+          onProgress?.(Math.min(done, total), total, file.path)
+          stored = true
+        } catch (error) {
+          errors.push(
+            `${new URL(host).hostname} 第 ${attempt + 1} 次失败：${error instanceof Error ? error.message : String(error)}`
+          )
+          // 连续几个文件会撞上镜像的限流（429 在浏览器里表现为 CORS 错误），退避一下再来
+          if (attempt < DOWNLOAD_ATTEMPTS - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)))
+          }
+        }
+      }
+      if (stored) {
         break
-      } catch (error) {
-        errors.push(`${new URL(host).hostname} 失败：${error instanceof Error ? error.message : String(error)}`)
       }
     }
     if (!stored) {
