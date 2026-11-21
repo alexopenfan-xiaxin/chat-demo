@@ -12,8 +12,9 @@ import { useChatStore } from '../../services/chat/store.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './ContextRing.module.css'
 
-/** 环的几何：直径 28、线宽 2.5、r=12.75，周长 2πr = 80.11 */
-const RADIUS = 12.75
+/** 环的几何：直径 20、线宽 2、r=9，周长 2πr = 56.55（与麦克风、回形针并排最接近的一组） */
+const DIAMETER = 20
+const RADIUS = 9
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
 const tierClass: Record<ContextTier, string> = {
@@ -115,12 +116,12 @@ export const ContextRing = ({ sessionId }: { sessionId: string | null }) => {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <svg viewBox="0 0 28 28" width="28" height="28" aria-hidden>
-          <circle className={styles.track} cx="14" cy="14" r={RADIUS} />
+        <svg viewBox={`0 0 ${DIAMETER} ${DIAMETER}`} width={DIAMETER} height={DIAMETER} aria-hidden>
+          <circle className={styles.track} cx={DIAMETER / 2} cy={DIAMETER / 2} r={RADIUS} />
           <circle
             className={styles.progress}
-            cx="14"
-            cy="14"
+            cx={DIAMETER / 2}
+            cy={DIAMETER / 2}
             r={RADIUS}
             strokeDasharray={CIRCUMFERENCE.toFixed(2)}
             strokeDashoffset={offset.toFixed(2)}
