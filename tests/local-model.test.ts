@@ -22,11 +22,26 @@ describe('本地向量模型', () => {
     expect(model.MODEL_TOTAL_BYTES).toBeLessThan(30e6)
   })
 
-  it('缓存名与路径都带版本号：换版本才会重新下载', () => {
-    expect(model.modelCacheName()).toContain(model.LOCAL_MODEL_VERSION)
-    expect(model.modelBaseUrl()).toContain(`/${model.LOCAL_MODEL_VERSION}/`)
-    expect(model.modelBaseUrl()).toContain(model.LOCAL_MODEL_ID)
+  it('下载地址锁在固定 commit 上，缓存名带 commit 与权重哈希', () => {
+    // commit 写死在代码里：用 main 的话上游一更新，向量空间就漂了
+    expect(model.MODEL_COMMIT).toMatch(/^[0-9a-f]{40}$/)
+    expect(model.modelFileUrl('config.json')).toBe(
+      `${model.MODEL_MIRROR}/${model.LOCAL_MODEL_ID}/resolve/${model.MODEL_COMMIT}/config.json`
+    )
+    // transformers.js 的 remoteURL 必须与下载器的键同一形状，否则缓存永远命不中
+    expect(model.MODEL_REMOTE_PATH_TEMPLATE).toContain(model.MODEL_COMMIT)
+    expect(model.modelCacheName()).toContain(model.MODEL_COMMIT.slice(0, 8))
     expect(model.ortBaseUrl()).toContain(`/${model.ORT_VERSION}/`)
+  })
+
+  it('每个文件的 sha256 都是 64 位十六进制，且与字节数量级相称', () => {
+    for (const file of model.MODEL_FILES) {
+      expect(file.sha256).toMatch(/^[0-9a-f]{64}$/)
+      expect(file.bytes).toBeGreaterThan(0)
+    }
+    const onnx = model.MODEL_FILES.find((file) => file.path.endsWith('.onnx'))
+    expect(onnx?.sha256).toBe('15b717c382bcb518ba457b93ea6850ede7f4f1cd8937454aa06972366cd19bcc')
+    expect(onnx?.bytes).toBe(24010842)
   })
 
   it('阈值按三套向量空间分开：本地 0.46，不当成 bge-m3 的 0.55', () => {

@@ -13,8 +13,9 @@ import { env, pipeline, type FeatureExtractionPipeline } from '@huggingface/tran
 import {
   LOCAL_MODEL_ID,
   LOCAL_MODEL_POOLING,
+  MODEL_MIRROR,
+  MODEL_REMOTE_PATH_TEMPLATE,
   modelCacheName,
-  modelsRootUrl,
   ortBaseUrl,
 } from '../services/memory/localModel.js'
 
@@ -25,10 +26,12 @@ export type EmbedResponse =
   | { type: 'vectors'; id: number; dim: number; vectors: number[][] }
   | { type: 'error'; id: number; reason: string }
 
-env.allowLocalModels = true
-env.allowRemoteModels = false
-// 只给到版本目录：transformers.js 会自己拼 `<repoId>/<file>`
-env.localModelPath = modelsRootUrl()
+// 模型不随产物分发：远端就是镜像，命中缓存时不发任何请求。
+// 缓存键 = remoteURL = `<镜像>/<仓库>/resolve/<固定 commit>/<文件>`，与下载器写进去的键一致。
+env.allowLocalModels = false
+env.allowRemoteModels = true
+env.remoteHost = MODEL_MIRROR
+env.remotePathTemplate = MODEL_REMOTE_PATH_TEMPLATE
 env.useBrowserCache = false
 env.useCustomCache = true
 env.customCache = {
