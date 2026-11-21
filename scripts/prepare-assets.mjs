@@ -28,8 +28,22 @@ const REPO = 'Xenova/bge-small-zh-v1.5'
 const MODEL_DIR = path.join(staticDir, 'models', MODEL_VERSION, REPO)
 const ORT_DIR = path.join(staticDir, 'ort', ORT_VERSION)
 
-/** 只允许从这两个地方取，顺序有意义：HF 优先，镜像兜底 */
-const MODEL_HOSTS = ['https://huggingface.co', 'https://hf-mirror.com']
+/**
+ * 模型文件的来源，按顺序试。
+ *
+ * 第一顺位是仓库自己的 GitHub Release：Cloudflare 的构建机打 HuggingFace 会撞 429
+ * （2026-11-21 实测两个源都 429，构建直接失败），从 GitHub 拉这种大小最稳。
+ * HF 与镜像留着兜底，本地网络下它们往往更快。
+ */
+const RELEASE_URL = 'https://github.com/alexopenfan-xiaxin/chat-demo/releases/download/model-bge-small-zh-v1'
+
+const MODEL_SOURCES = [
+  { label: 'github release', url: (file) => `${RELEASE_URL}/${path.basename(file)}` },
+  // 国内网络直连 github 会掉到几十 KB/s，走代理；Cloudflare 构建机上这一条基本用不到
+  { label: 'gh-proxy release', url: (file) => `https://gh-proxy.org/${RELEASE_URL}/${path.basename(file)}` },
+  { label: 'huggingface.co', url: (file) => `https://huggingface.co/${REPO}/resolve/main/${file}` },
+  { label: 'hf-mirror.com', url: (file) => `https://hf-mirror.com/${REPO}/resolve/main/${file}` },
+]
 
 /**
  * 期望的哈希：删掉仓库里那份之前用 `sha256sum` 记下来的值。
@@ -102,8 +116,8 @@ const fetchModel = async (file) => {
 
   await mkdir(path.dirname(target), { recursive: true })
   const errors = []
-  for (const host of MODEL_HOSTS) {
-    const url = `${host}/${REPO}/resolve/main/${file.path}`
+  for (const source of MODEL_SOURCES) {
+    const url = source.url(file.path)
     const timeout = file.path.endsWith('.onnx') ? 240_000 : 30_000
     try {
       const started = Date.now()
@@ -115,16 +129,16 @@ const fetchModel = async (file) => {
       const digest = sha256(buffer)
       if (digest !== file.sha256) {
         // 拿到的东西不对就丢掉，换下一个源重试；两个都错就直接失败
-        errors.push(`${host} 哈希不符：期望 ${file.sha256}，实际 ${digest}`)
+        errors.push(`${source.label} 哈希不符：期望 ${file.sha256}，实际 ${digest}`)
         continue
       }
       await writeFile(target, buffer)
       console.log(
-        `[assets] 下载 ${file.path} 来自 ${new URL(host).hostname}（${(buffer.length / 1048576).toFixed(1)}MB，${Date.now() - started}ms）`
+        `[assets] 下载 ${file.path} 来自 ${source.label}（${(buffer.length / 1048576).toFixed(1)}MB，${Date.now() - started}ms）`
       )
       return
     } catch (error) {
-      errors.push(`${host} 失败：${error instanceof Error ? error.message : String(error)}`)
+      errors.push(`${source.label} 失败：${error instanceof Error ? error.message : String(error)}`)
     }
   }
   throw new Error(`[assets] 模型文件 ${file.path} 下载失败，构建终止：\n  ${errors.join('\n  ')}`)
