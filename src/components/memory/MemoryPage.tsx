@@ -81,10 +81,7 @@ const ModelDownloadCard = ({
 }) => {
   const t = useTranslate()
   return (
-    <div className={styles.guide}>
-      <span className={styles.guideMark}>
-        <IconBrainOutline size={24} />
-      </span>
+    <>
       <p className={styles.guideText}>{t('memoryModelNeeded')}</p>
       {busy ? (
         <div className={styles.modelProgress}>
@@ -99,7 +96,7 @@ const ModelDownloadCard = ({
         </Button>
       )}
       {failed ? <p className={styles.caption}>{t('memoryModelFailed')}</p> : null}
-    </div>
+    </>
   )
 }
 
@@ -406,12 +403,17 @@ export const MemoryPage = () => {
           />
           <h1 className={styles.topTitle}>{t('memoryTitle')}</h1>
         </header>
-        <ModelDownloadCard
-          percent={downloadPercent}
-          busy={downloading}
-          failed={downloadFailed}
-          onDownload={() => void downloadModel()}
-        />
+        <div className={styles.guide}>
+          <span className={styles.guideMark}>
+            <IconBrainOutline size={24} />
+          </span>
+          <ModelDownloadCard
+            percent={downloadPercent}
+            busy={downloading}
+            failed={downloadFailed}
+            onDownload={() => void downloadModel()}
+          />
+        </div>
       </div>
     )
   }
