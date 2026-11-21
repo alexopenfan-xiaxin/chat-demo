@@ -13,8 +13,8 @@ import { env, pipeline, type FeatureExtractionPipeline } from '@huggingface/tran
 import {
   LOCAL_MODEL_ID,
   LOCAL_MODEL_POOLING,
-  modelBaseUrl,
   modelCacheName,
+  modelsRootUrl,
   ortBaseUrl,
 } from '../services/memory/localModel.js'
 
@@ -27,8 +27,8 @@ export type EmbedResponse =
 
 env.allowLocalModels = true
 env.allowRemoteModels = false
-// 绝对地址：transformers.js 拿它当缓存键，相对路径在 worker 里构造 Request 会失败
-env.localModelPath = modelBaseUrl()
+// 只给到版本目录：transformers.js 会自己拼 `<repoId>/<file>`
+env.localModelPath = modelsRootUrl()
 env.useBrowserCache = false
 env.useCustomCache = true
 env.customCache = {
@@ -44,6 +44,8 @@ env.customCache = {
 // wasm 也自托管：ORT 默认会去 CDN 拉，手机在弱网下同样不可靠
 if (env.backends.onnx.wasm) {
   env.backends.onnx.wasm.wasmPaths = ortBaseUrl()
+  // 单线程：Pages 不发 COOP/COEP，多线程 WASM 本来就起不来
+  env.backends.onnx.wasm.numThreads = 1
 }
 
 let pipe: FeatureExtractionPipeline | null = null

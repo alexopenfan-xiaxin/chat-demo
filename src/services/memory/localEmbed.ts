@@ -31,7 +31,9 @@ const ensureWorker = () => {
   if (worker) {
     return worker
   }
-  worker = new Worker(new URL('../../workers/embed.worker.ts', import.meta.url), { type: 'module' })
+  // 经典 worker，不是 module worker：onnxruntime 用 importScripts 加载 wasm glue，
+  // module worker 里这个 API 一调就抛「Module scripts don't support importScripts()」。
+  worker = new Worker(new URL('../../workers/embed.worker.ts', import.meta.url))
   worker.onmessage = (event: MessageEvent<EmbedResponse>) => {
     const message = event.data
     if (message.type === 'ready') {

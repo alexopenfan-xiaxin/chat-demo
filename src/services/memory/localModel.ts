@@ -55,8 +55,14 @@ export const modelCacheName = () => `ds-chat-embed-${LOCAL_MODEL_VERSION}`
 
 const origin = () => (typeof self === 'undefined' ? '' : self.location.origin)
 
-/** 模型根目录的绝对地址：transformers.js 要拿它拼本地路径，缓存键也用同一个串 */
-export const modelBaseUrl = () => `${origin()}/models/${LOCAL_MODEL_VERSION}/${LOCAL_MODEL_ID}/`
+/**
+ * 模型仓库的**上级**目录：transformers.js 自己会把 `<repoId>/<file>` 拼在 localModelPath 后面，
+ * 所以这里只能给到 `/models/<版本>/`。给到含 repoId 的那层会让路径里出现两遍仓库名。
+ */
+export const modelsRootUrl = () => `${origin()}/models/${LOCAL_MODEL_VERSION}/`
+
+/** 单个模型的目录：下载与缓存键用它 */
+export const modelBaseUrl = () => `${modelsRootUrl()}${LOCAL_MODEL_ID}/`
 
 export const ortBaseUrl = () => `${origin()}/ort/${ORT_VERSION}/`
 
