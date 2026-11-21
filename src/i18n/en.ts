@@ -46,7 +46,8 @@ export const en = {
   sessionSaveFailed:
     'Chats or attachments have not been saved locally. Retry before closing this page.',
   sessionDeleteFailed: 'Unable to delete this chat. Please try again.',
-  sessionDeleteBlocked: 'This conversation is still generating, so it was not deleted; try again once it stops',
+  sessionDeleteBlocked:
+    'This conversation is still generating, so it was not deleted; try again once it stops',
   sessionDeleteBusy: 'History is being imported; delete this conversation once the import finishes',
   settings: 'Settings',
   appName: 'ds-chat',
@@ -124,7 +125,8 @@ export const en = {
   settingsLocalePreference: 'Language',
   creditsUsageTitle: 'Usage by conversation (computed locally)',
   creditsUsageRounds: '{count} rounds',
-  creditsUsageHint: 'Per conversation, from this browser only. Hit rate is the cached share of that conversation input.',
+  creditsUsageHint:
+    'Per conversation, from this browser only. Hit rate is the cached share of that conversation input.',
   creditsHit: '{percent}% cached',
   creditsHitNA: 'cache —',
   creditsRoundIndex: 'Round {index}',
@@ -137,7 +139,8 @@ export const en = {
   creditsProgress: 'Used {used} of {limit}',
   creditsUnlimited: 'This account has no credit limit',
   openCredits: 'View credits',
-  replyNoCredits: 'This account has no credits yet; ask an administrator. Credits and usage live under Credits in the sidebar',
+  replyNoCredits:
+    'This account has no credits yet; ask an administrator. Credits and usage live under Credits in the sidebar',
   creditsNoKey: 'This account has no credits yet; ask an administrator',
   creditsUnavailable: 'Credit details are unavailable right now; usage stats still work',
   creditsExhausted: 'Out of credits. Ask the admin to top up to keep using the app.',
@@ -155,8 +158,10 @@ export const en = {
   settingsTtsVoiceXiaoyi: 'Xiaoyi (female, lively)',
   settingsTtsVoiceYunyang: 'Yunyang (male, narrator)',
   settingsMemory: 'Memory',
-  settingsMemoryHint: 'Stays on this device. Turning it off stops collecting and recall; existing memories are kept',
-  settingsMemoryUnavailable: 'Download the local embedding model first (about 25MB). After that, memories are computed on your device.',
+  settingsMemoryHint:
+    'Stays on this device. Turning it off stops collecting and recall; existing memories are kept',
+  settingsMemoryUnavailable:
+    'Download the local embedding model first (about 25MB). After that, memories are computed on your device.',
   settingsLogout: 'Sign out',
   settingsLogoutHint: 'You will need to verify your email again',
   logoutConfirmTitle: 'Sign out?',
@@ -170,7 +175,8 @@ export const en = {
   memoryReindexProgress: 'Upgrading the index of {done}/{total} memories',
   memoryStatHitsLabel: 'Recalls',
   memoryGuideTitle: 'Memory is off',
-  memoryGuideText: 'Turn it on and the assistant will keep long-term facts on this device. Nothing is uploaded.',
+  memoryGuideText:
+    'Turn it on and the assistant will keep long-term facts on this device. Nothing is uploaded.',
   memoryActionSaved: 'Saved {count} memory',
   memoryActionUpdated: 'Updated {count} memory',
   memoryActionProfile: 'Rewrote the user profile',
@@ -184,7 +190,8 @@ export const en = {
   memoryActionFailedEmpty: 'content is empty',
   memoryActionFailedUnknown: 'local write failed',
   memoryGuideAction: 'Turn on in Settings',
-  memoryModelNeeded: 'The local model is not downloaded yet. Download it (about 25MB, once) before memory can be used.',
+  memoryModelNeeded:
+    'The local model is not downloaded yet. Download it (about 25MB, once) before memory can be used.',
   memoryModelDownload: 'Download the local model (about 25MB)',
   memoryModelDownloading: 'Downloading {percent}% · about 25MB',
   memoryModelFailed: 'Download failed. Check the network and try again.',
@@ -206,10 +213,12 @@ export const en = {
   memoryRecallDeleted: 'Deleted chat',
   memoryProfileTitle: 'Profile',
   memoryProfileHint: 'Sent every turn, up to 800 characters',
-  memoryProfilePlaceholder: 'e.g. prefers short answers; Android phone with Chrome; maintains ds-chat and ops-panel',
+  memoryProfilePlaceholder:
+    'e.g. prefers short answers; Android phone with Chrome; maintains ds-chat and ops-panel',
   memoryProfileSave: 'Save profile',
   memoryListTitle: 'Memories',
-  memoryListEmpty: 'No memories yet. Once memory is on, the assistant stores long-lived facts here.',
+  memoryListEmpty:
+    'No memories yet. Once memory is on, the assistant stores long-lived facts here.',
   memoryAddTitle: 'Add manually',
   memoryAddPlaceholder: 'One line, up to 200 characters',
   memoryTagsPlaceholder: 'Tags, comma separated (optional)',
@@ -223,7 +232,8 @@ export const en = {
   memoryHits: 'Recalled {count} times',
   memoryNeverUsed: 'Not recalled yet',
   memoryRetrievalTitle: 'Recall preview',
-  memoryRetrievalHint: 'Type a sentence to see which memories would be recalled (threshold 0.70, top 4)',
+  memoryRetrievalHint:
+    'Type a sentence to see which memories would be recalled (threshold 0.70, top 4)',
   memoryRetrievalEmpty: 'Nothing would be recalled for this sentence',
   memoryRetrievalFailed: 'Embeddings are unavailable, cannot preview right now',
   memoryStatCount: 'Entries',
@@ -238,7 +248,8 @@ export const en = {
   memoryDeleteConfirmTitle: 'Delete memory',
   memoryDeleteConfirm: 'This cannot be undone. Delete this memory?',
   memoryDeleteFailed: 'Delete failed, please try again',
-  memoryDisabledHint: 'Memory is off: turn it on in Settings to add memories or run a recall preview.',
+  memoryDisabledHint:
+    'Memory is off: turn it on in Settings to add memories or run a recall preview.',
   memoryDeleted: 'Deleted',
   memoryRetrieving: 'Searching memories…',
   settingsLocation: 'Location',
@@ -397,4 +408,22 @@ export const en = {
   authSessionExpiredReload: 'Your session expired. Refresh the page',
   authSessionExpiredReloadAction: 'Refresh',
   authSessionExpiredSend: 'Session expired, cannot send right now',
+  contextRingLabel: 'Context usage',
+  contextRingUsed: '{used} / {total} used · {percent}%',
+  contextRingCacheHit: 'Cache hit rate',
+  contextRingRounds: 'Rounds',
+  contextRingLastCompact: 'Last compaction',
+  contextRingNeverCompacted: 'Never',
+  compactCommandHint: 'Compact context',
+  compactionRowRounds: 'Compacted {rounds} rounds',
+  compactionRowRoundsTokens: 'Compacted {rounds} rounds, {tokens} tokens saved',
+  compactionUndo: 'Undo compaction',
+  compactionRunning: 'Compacting context…',
+  compactionFailed: 'Compaction failed, history unchanged',
+  compactionSkipped: 'Conversation is short, nothing to compact yet',
+  compactConfirmTitle: 'Compact the context?',
+  compactConfirmBody:
+    'Older turns will only reach the model as a summary, so details are lost. The originals stay on this device and you can undo any time.',
+  compactConfirmOk: 'Compact',
+  compactConfirmCancel: 'Cancel',
 } satisfies Record<keyof typeof zh, string>

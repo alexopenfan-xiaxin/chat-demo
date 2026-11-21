@@ -1,8 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import { toSessionSummary, type Session, type SessionSummary } from './types.js'
+import { toSessionSummary, type Message, type Session, type SessionSummary } from './types.js'
 
 /** IndexedDB 存储结构版本；新增或调整存储、索引时递增。 */
-const DB_VERSION = 12
+const DB_VERSION = 13
 
 /** 文件原件按附件的本地 id 存储，所有引用同一 id 的消息共用一份；用于缩略图、打开查看，以及没有 serverId 时补传。 */
 export type StoredFile = {
@@ -35,6 +35,19 @@ export type MemoryEntry = {
 /** 用户画像：纯文本，无条件注入上下文；整块重写 */
 export type MemoryProfile = { id: 'profile'; text: string; updatedAt: number }
 
+/**
+ * 压缩归档：被折叠掉的那些轮次的原文快照（含每轮的 latestReminder）。
+ *
+ * `session.messages` 仍是唯一真相、压缩从不删消息，这份归档是撤销的兜底：
+ * 万一消息列表被别处改动过，撤销时按 id 逐条核对，缺什么补什么。
+ */
+export type CompactionArchive = {
+  id: string
+  sessionId: string
+  createdAt: number
+  messages: Message[]
+}
+
 /** 文件引用留在摘要中，删除会话时通过索引判断原件是否仍被引用。 */
 type StoredSessionSummary = SessionSummary & { fileIds: string[] }
 
@@ -62,6 +75,12 @@ interface ChatDB extends DBSchema {
   }
   /** 画像单条记录，key 固定为 profile */
   memoryProfile: { key: string; value: MemoryProfile }
+  /** 压缩归档：key 是压缩记录的 id */
+  compactionArchives: {
+    key: string
+    value: CompactionArchive
+    indexes: { bySessionId: string }
+  }
 }
 
 let dbPromise: Promise<IDBPDatabase<ChatDB>> | null = null
@@ -103,6 +122,10 @@ const getDB = () =>
       }
       if (!db.objectStoreNames.contains('memoryProfile')) {
         db.createObjectStore('memoryProfile', { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains('compactionArchives')) {
+        const archives = db.createObjectStore('compactionArchives', { keyPath: 'id' })
+        archives.createIndex('bySessionId', 'sessionId')
       }
       const summaries = db.objectStoreNames.contains('sessionSummaries')
         ? tx.objectStore('sessionSummaries')
@@ -183,6 +206,33 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
       } catch (error) {
         abortTransaction(tx)
         throw error
+      }
+    })(),
+    tx.done,
+  ])
+}
+
+/* ---- 压缩归档：撤销的兜底，不参与请求组装 ---- */
+
+export const saveCompactionArchive = async (archive: CompactionArchive): Promise<void> => {
+  await (await getDB()).put('compactionArchives', archive)
+}
+
+export const loadCompactionArchive = async (id: string): Promise<CompactionArchive | undefined> =>
+  (await getDB()).get('compactionArchives', id)
+
+export const deleteCompactionArchive = async (id: string): Promise<void> => {
+  await (await getDB()).delete('compactionArchives', id)
+}
+
+/** 删除会话时一并清掉它的压缩归档 */
+export const deleteCompactionArchivesBySession = async (sessionId: string): Promise<void> => {
+  const db = await getDB()
+  const tx = db.transaction('compactionArchives', 'readwrite')
+  await Promise.all([
+    (async () => {
+      for (const key of await tx.store.index('bySessionId').getAllKeys(sessionId)) {
+        await tx.store.delete(key)
       }
     })(),
     tx.done,
@@ -309,8 +359,7 @@ export const reportStorageError = (action: string) => (error: unknown) => {
 
 /* ---- 记忆：全部只在本机 IndexedDB，没有任何网络写入 ---- */
 
-export const loadMemories = async (): Promise<MemoryEntry[]> =>
-  (await getDB()).getAll('memories')
+export const loadMemories = async (): Promise<MemoryEntry[]> => (await getDB()).getAll('memories')
 
 export const loadMemory = async (id: string): Promise<MemoryEntry | undefined> =>
   (await getDB()).get('memories', id)
@@ -340,7 +389,11 @@ export const deleteMemoriesBySession = async (sessionId: string): Promise<void> 
 export const clearMemories = async (): Promise<void> => {
   const db = await getDB()
   const tx = db.transaction(['memories', 'memoryProfile'], 'readwrite')
-  await Promise.all([tx.objectStore('memories').clear(), tx.objectStore('memoryProfile').clear(), tx.done])
+  await Promise.all([
+    tx.objectStore('memories').clear(),
+    tx.objectStore('memoryProfile').clear(),
+    tx.done,
+  ])
 }
 
 export const loadMemoryProfile = async (): Promise<MemoryProfile | undefined> =>

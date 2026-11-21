@@ -5,6 +5,8 @@ import type { ChatModel, ToolExchangeItem } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
+import { translate } from '../../i18n/index.js'
+import { showToast } from '../../components/base/toastState.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
 import { MAX_TOOL_ROUNDS, decideToolRound } from './toolRounds.js'
@@ -35,6 +37,22 @@ import {
   settleReply,
   toRequestMessages,
 } from './reply.js'
+import {
+  AUTO_COMPACT_AT,
+  CONTEXT_WINDOW,
+  MAX_SUMMARY_LAYERS,
+  MIN_COMPACT_ROUNDS,
+  SUMMARY_MAX_TOKENS,
+  applyCompaction,
+  estimateTokens,
+  planCompaction,
+  readContextUsage,
+  roundsToTranscript,
+  shouldAutoCompact,
+  summaryCondenseText,
+  summaryRequestText,
+  truncateSummary,
+} from './compaction.js'
 import { fetchBlocks, memoryActionBlocks, searchBlocks } from './toolBlocks.js'
 import {
   toSessionSummary,
@@ -60,8 +78,6 @@ const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
 
-
-
 type ToolCall = { callId: string; name: string; arguments: string }
 
 /**
@@ -83,7 +99,8 @@ const toolStatusText = (call: ToolCall): string => {
   let query = ''
   try {
     const args = JSON.parse(call.arguments) as { query?: unknown; url?: unknown }
-    query = typeof args.query === 'string' ? args.query : typeof args.url === 'string' ? args.url : ''
+    query =
+      typeof args.query === 'string' ? args.query : typeof args.url === 'string' ? args.url : ''
   } catch {
     query = ''
   }
@@ -235,13 +252,17 @@ const summariseTitle = (sessionId: string, question: string) => {
     .then((response) => (response.ok ? response.json() : null))
     .then((payload: unknown) => {
       const title =
-        typeof payload === 'object' && payload !== null && typeof (payload as { title?: unknown }).title === 'string'
+        typeof payload === 'object' &&
+        payload !== null &&
+        typeof (payload as { title?: unknown }).title === 'string'
           ? (payload as { title: string }).title.trim()
           : ''
       if (!title) {
         return
       }
-      updateSession(sessionId, (current) => (current.title === local ? { ...current, title } : current))
+      updateSession(sessionId, (current) =>
+        current.title === local ? { ...current, title } : current
+      )
       persist(sessionId)
     })
     .catch(() => {
@@ -271,7 +292,9 @@ export const deriveTitle = (text: string): string => {
     title = flat
   }
   // 末尾标点（含截断前留下的逗号句号）统一清掉，再补省略号
-  return title.replace(/[\s,.;:!?，。；：！？、·\-—]+(…)?$/u, (_, dots?: string) => (dots ? '…' : ''))
+  return title.replace(/[\s,.;:!?，。；：！？、·\-—]+(…)?$/u, (_, dots?: string) =>
+    dots ? '…' : ''
+  )
 }
 
 type ChatState = {
@@ -288,6 +311,8 @@ type ChatState = {
   activeId: string | null
   /** 正在生成回复的会话 */
   streaming: Record<string, AbortController>
+  /** 正在压缩上下文的会话：期间禁止发送，避免用旧历史拼请求 */
+  compacting: Record<string, true>
   /**
    * 导入进度：会话数已处理 / 总数（总数取不到时为 null）。
    * checking 是「还在数文件、没开始写」的阶段：这时候连总数都没有，
@@ -311,6 +336,7 @@ export const useChatStore = create<ChatState>(() => ({
   sessionSaveErrors: {},
   activeId: null,
   streaming: {},
+  compacting: {},
   importProgress: null,
 }))
 
@@ -790,6 +816,9 @@ const removeSessionData = async (id: string): Promise<DeleteOutcome> => {
       ),
       activeId: state.activeId === id ? null : state.activeId,
     }))
+    void db
+      .deleteCompactionArchivesBySession(id)
+      .catch(db.reportStorageError('delete compaction archives'))
     return 'deleted'
   } catch (error) {
     db.reportStorageError('delete session')(error)
@@ -810,6 +839,238 @@ const removeSessionData = async (id: string): Promise<DeleteOutcome> => {
 export const stopReply = (sessionId: string) => getStreamController(sessionId)?.abort()
 
 /**
+ * 摘要请求的超时：一次独立的大请求（输入可能到 70 万 token），
+ * 60 秒不够，按队长定的 180 秒。
+ */
+const SUMMARY_TIMEOUT = 180_000
+
+/**
+ * 撤销压缩后暂停自动触发的会话。
+ *
+ * 撤销时上下文其实还在 85% 以上，不加这一道，下一轮回来就会立刻再压一次，
+ * 用户撤销了个寂寞。只有用量真的掉到阈值以下（换了分支、删了消息）才重新武装。
+ */
+const autoCompactSuppressed = new Set<string>()
+
+/** 摘要请求：不带工具、不带记忆、关闭思考；失败返回 null，历史一个字节都不动 */
+const requestSummary = async (text: string): Promise<string | null> => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), SUMMARY_TIMEOUT)
+  let out = ''
+  try {
+    const events = streamMessage(
+      '',
+      {
+        model: MODEL,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: text }],
+        thinking: { type: 'disabled' },
+        safety_check: SAFETY_CHECK,
+        tools: [],
+      },
+      controller.signal
+    )
+    for await (const event of events) {
+      if (event.type === 'content_block_start' && event.content_block.type === 'text') {
+        out += event.content_block.text ?? ''
+        continue
+      }
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        out += event.delta.text
+      }
+    }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+  const trimmed = out.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+/** 摘要超过 4K 就递归再压一层，最多 3 层；仍然超长按字数硬截，保证不超上限 */
+const summarize = async (transcript: string): Promise<string | null> => {
+  let summary = await requestSummary(summaryRequestText(transcript))
+  for (
+    let layer = 0;
+    summary && estimateTokens(summary) > SUMMARY_MAX_TOKENS && layer < MAX_SUMMARY_LAYERS;
+    layer += 1
+  ) {
+    const shorter = await requestSummary(summaryCondenseText(summary))
+    if (!shorter) {
+      break
+    }
+    summary = shorter
+  }
+  return summary ? truncateSummary(summary) : null
+}
+
+export type CompactOutcome = 'done' | 'skipped' | 'failed'
+
+/**
+ * 压缩当前会话的上下文：保留尾部 150K 原文，之前的部分总结成一段。
+ *
+ * 原文一律不删，只写一条 `session.compaction`，所以撤销只是删掉它；
+ * 摘要请求失败时什么都不写，历史保持原样。
+ */
+export const compactSession = async (
+  sessionId: string,
+  options: { auto?: boolean } = {}
+): Promise<CompactOutcome> => {
+  if (get().importingHistory || Object.hasOwn(get().compacting, sessionId)) {
+    return 'skipped'
+  }
+  if (getStreamController(sessionId)) {
+    return 'skipped'
+  }
+  const session = getSession(sessionId)
+  if (!session) {
+    return 'skipped'
+  }
+  const messages = getVisibleMessages(session)
+  // 已经压过一轮时，只把「上次保留的那段」再总结，旧摘要原文一起进新摘要
+  const base = applyCompaction(messages, session.compaction).messages
+  const rounds = getContextRounds(base)
+  if (rounds.length <= MIN_COMPACT_ROUNDS) {
+    if (options.auto !== true) {
+      showToast(translate('compactionSkipped'))
+    }
+    return 'skipped'
+  }
+  const plan = planCompaction(rounds)
+  if (!plan || plan.dropped === 0) {
+    if (options.auto !== true) {
+      showToast(translate('compactionSkipped'))
+    }
+    return 'skipped'
+  }
+  const transcript = [
+    session.compaction ? `此前已经总结过的内容：\n${session.compaction.summary}` : '',
+    roundsToTranscript(rounds.slice(0, plan.keepFrom)),
+  ]
+    .filter((part) => part !== '')
+    .join('\n\n')
+  const beforeInputTokens = readContextUsage(messages, session.compaction).inputTokens
+
+  set((state) => ({ compacting: { ...state.compacting, [sessionId]: true } }))
+  try {
+    const summary = await summarize(transcript)
+    if (!summary) {
+      showToast(translate('compactionFailed'))
+      return 'failed'
+    }
+    const firstKept = rounds[plan.keepFrom]?.[0]
+    const recordId = createId()
+    // 先把被压的轮次原文连同 latestReminder 快照归档，再改会话记录
+    try {
+      await db.saveCompactionArchive({
+        id: recordId,
+        sessionId,
+        createdAt: Date.now(),
+        messages: rounds.slice(0, plan.keepFrom).flat() as Message[],
+      })
+    } catch (error) {
+      db.reportStorageError('save compaction archive')(error)
+    }
+    updateSession(sessionId, (current) => ({
+      ...current,
+      // 压缩不改动 messages：原文、每轮的 latestReminder 快照都还在
+      compaction: {
+        id: recordId,
+        createdAt: Date.now(),
+        summary,
+        firstKeptMessageId: firstKept?.id ?? null,
+        rounds: plan.dropped,
+        beforeInputTokens,
+        afterInputTokens: null,
+        auto: options.auto === true,
+      },
+      updatedAt: current.updatedAt,
+    }))
+    persist(sessionId)
+    autoCompactSuppressed.delete(sessionId)
+    return 'done'
+  } finally {
+    set((state) => ({
+      compacting: Object.fromEntries(
+        Object.entries(state.compacting).filter(([id]) => id !== sessionId)
+      ) as Record<string, true>,
+    }))
+  }
+}
+
+/**
+ * 撤销压缩：删掉记录就是恢复原文，消息从来没有被删过。
+ * 归档里那份快照再按 id 核对一遍，缺的消息（含 latestReminder 快照）补回原位置。
+ */
+export const undoCompaction = (sessionId: string) => {
+  const session = getSession(sessionId)
+  const compaction = session?.compaction
+  if (!session || !compaction) {
+    return
+  }
+  void (async () => {
+    try {
+      const archive = await db.loadCompactionArchive(compaction.id)
+      if (archive) {
+        const existing = new Set(session.messages.map((message) => message.id))
+        const missing = archive.messages.filter((message) => !existing.has(message.id))
+        if (missing.length > 0) {
+          updateSession(sessionId, (current) => ({
+            ...current,
+            messages: [...missing, ...current.messages],
+          }))
+        }
+        await db.deleteCompactionArchive(compaction.id)
+      }
+    } catch (error) {
+      db.reportStorageError('restore compaction archive')(error)
+    }
+    updateSession(sessionId, (current) => {
+      const next = { ...current }
+      delete next.compaction
+      return next
+    })
+    autoCompactSuppressed.add(sessionId)
+    persist(sessionId)
+  })()
+}
+
+/** 到 85% 自动压一次；压缩中、被撤销暂停、刚压完还没测到新数字时都不触发 */
+const maybeAutoCompact = (sessionId: string) => {
+  if (Object.hasOwn(get().compacting, sessionId) || autoCompactSuppressed.has(sessionId)) {
+    return
+  }
+  const session = getSession(sessionId)
+  if (session && shouldAutoCompact(session, getVisibleMessages(session))) {
+    void compactSession(sessionId, { auto: true })
+  }
+}
+
+/** 压缩后第一次拿到实测的 input_tokens 时回填，界面上的「减少 X tokens」才有数 */
+const settleCompactionUsage = (sessionId: string) => {
+  const session = getSession(sessionId)
+  if (!session) {
+    return
+  }
+  const usage = readContextUsage(getVisibleMessages(session), session.compaction)
+  if (session.compaction && session.compaction.afterInputTokens === null && usage.inputTokens > 0) {
+    updateSession(sessionId, (current) => ({
+      ...current,
+      compaction: current.compaction
+        ? { ...current.compaction, afterInputTokens: usage.inputTokens }
+        : undefined,
+    }))
+    persist(sessionId)
+    return
+  }
+  // 用量掉回阈值以下才重新武装自动压缩，撤销过的会话不会马上又压一次
+  if (usage.inputTokens < CONTEXT_WINDOW * AUTO_COMPACT_AT) {
+    autoCompactSuppressed.delete(sessionId)
+  }
+}
+
+/**
  * 提交指定会话的最新草稿；null 表示新建会话。
  * 同步接收成功才清空草稿，附件原件由会话接管；保存失败仍通过保存入口重试。
  */
@@ -817,11 +1078,24 @@ export const sendMessage = (targetSessionId: string | null) => {
   if (get().importingHistory || !get().ready) {
     return false
   }
+  // 压缩进行中不能发送：否则请求会用压缩前的旧历史出去，回来的摘要再覆盖一次
+  if (targetSessionId !== null && Object.hasOwn(get().compacting, targetSessionId)) {
+    return false
+  }
   const prepared = prepareDraftMessage(getDraft(targetSessionId), useUploads.getState().tasks)
   if (!prepared) {
     return false
   }
   const { text, files } = prepared
+  // 斜杠命令在组装请求之前拦下：命令本身不能进 history，也不能当提问发给上游
+  if (text.trim() === '/compact') {
+    if (targetSessionId === null) {
+      return false
+    }
+    clearSentDraft(targetSessionId)
+    void compactSession(targetSessionId)
+    return true
+  }
   const now = Date.now()
   let sessionId = targetSessionId
   if (
@@ -1275,103 +1549,106 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       /** 本轮之前的块数：用来只回传这一轮模型自己说的话 */
       const blocksBefore = reply.blocks.length
       let roundDone = false
-    for (let attempt = 0; ; attempt += 1) {
-      /** 附件补齐前出错属于上传失败，请求还没有发出 */
-      let preparing = true
-      let receivedContent = false
-      try {
-        const prepared = await prepareFiles(sessionId, request, controller.signal)
-        preparing = false
-        // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
-        const latestReminder = prepared.prefix
-          ? prepared.prefix.latestReminder
-          : createLatestReminder(useSettings.getState())
-        reply = { ...reply, latestReminder }
-        updateReply(sessionId, reply)
-        persist(sessionId)
-        const messages = toRequestMessages(
-          prepared.history,
-          prepared.question,
-          prepared.prefix,
-          initial.thinking ?? false,
-          latestReminder,
-          memoryBlock ?? undefined
-        )
-        const events = streamMessage(
-          '',
-          {
-            model: initial.model ?? MODEL,
-            system: SYSTEM_PROMPT,
-            messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            safety_check: SAFETY_CHECK,
-            tools: finishWithoutTools ? [] : serverTools(initial.search ?? false, memoryEnabled),
-            toolExchange: exchanges.length > 0 ? [...exchanges] : undefined,
-          },
-          controller.signal
-        )
-        const blockIndexes = new Map<number, number>()
-        for await (const event of events) {
-          if (event.type === 'tool_call') {
-            calls.push(event.call)
-            continue
+      for (let attempt = 0; ; attempt += 1) {
+        /** 附件补齐前出错属于上传失败，请求还没有发出 */
+        let preparing = true
+        let receivedContent = false
+        try {
+          const prepared = await prepareFiles(sessionId, request, controller.signal)
+          preparing = false
+          // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
+          const latestReminder = prepared.prefix
+            ? prepared.prefix.latestReminder
+            : createLatestReminder(useSettings.getState())
+          reply = { ...reply, latestReminder }
+          updateReply(sessionId, reply)
+          persist(sessionId)
+          // 压缩过的会话只发送切分点之后的轮次，更早的内容换成开头那条摘要
+          const scoped = applyCompaction(prepared.history, getSession(sessionId)?.compaction)
+          const messages = toRequestMessages(
+            scoped.messages,
+            prepared.question,
+            prepared.prefix,
+            initial.thinking ?? false,
+            latestReminder,
+            memoryBlock ?? undefined,
+            scoped.summary ?? undefined
+          )
+          const events = streamMessage(
+            '',
+            {
+              model: initial.model ?? MODEL,
+              system: SYSTEM_PROMPT,
+              messages,
+              thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
+              safety_check: SAFETY_CHECK,
+              tools: finishWithoutTools ? [] : serverTools(initial.search ?? false, memoryEnabled),
+              toolExchange: exchanges.length > 0 ? [...exchanges] : undefined,
+            },
+            controller.signal
+          )
+          const blockIndexes = new Map<number, number>()
+          for await (const event of events) {
+            if (event.type === 'tool_call') {
+              calls.push(event.call)
+              continue
+            }
+            receivedContent ||= event.type === 'content_block_start'
+            reply = applyEvent(reply, event, Date.now(), blockIndexes)
+            if (document.visibilityState === 'hidden') {
+              flush()
+            } else {
+              frame ||= requestAnimationFrame(flush)
+            }
           }
-          receivedContent ||= event.type === 'content_block_start'
-          reply = applyEvent(reply, event, Date.now(), blockIndexes)
-          if (document.visibilityState === 'hidden') {
-            flush()
-          } else {
-            frame ||= requestAnimationFrame(flush)
-          }
-        }
-        roundDone = true
-        break
-      } catch (error) {
-        if (controller.signal.aborted) {
-          reply = settleReply(reply, 'stopped', Date.now())
+          roundDone = true
           break
-        }
-        if (preparing) {
-          reply = settleReply(reply, 'error', Date.now(), {
-            kind: 'upload',
-            message: '',
-            localMessage: describeUploadError(error),
-            retryable: isRetryableApiError(error),
-          })
-          break
-        }
-        // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
-        if (
-          attempt < FILE_RETRY_LIMIT &&
-          !receivedContent &&
-          reuploadInvalidatedFiles(sessionId, request, error)
-        ) {
-          await waitForRetry(attempt, controller.signal)
+        } catch (error) {
           if (controller.signal.aborted) {
             reply = settleReply(reply, 'stopped', Date.now())
             break
           }
-          continue
+          if (preparing) {
+            reply = settleReply(reply, 'error', Date.now(), {
+              kind: 'upload',
+              message: '',
+              localMessage: describeUploadError(error),
+              retryable: isRetryableApiError(error),
+            })
+            break
+          }
+          // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
+          if (
+            attempt < FILE_RETRY_LIMIT &&
+            !receivedContent &&
+            reuploadInvalidatedFiles(sessionId, request, error)
+          ) {
+            await waitForRetry(attempt, controller.signal)
+            if (controller.signal.aborted) {
+              reply = settleReply(reply, 'stopped', Date.now())
+              break
+            }
+            continue
+          }
+          if (error instanceof ApiError && error.kind === 'interrupted' && reply.stopReason) {
+            // 已收到 message_delta 的结束原因，只是缺了结尾的 message_stop
+            reply = settleReply(reply, 'done', Date.now())
+          } else if (error instanceof ApiError) {
+            reply = settleReply(reply, 'error', Date.now(), {
+              kind: error.kind,
+              message: error.message,
+              status: error.status,
+              localMessage: error.localMessage,
+            })
+          } else {
+            reply = settleReply(reply, 'error', Date.now(), {
+              kind: 'protocol',
+              message: error instanceof Error ? error.message : String(error),
+            })
+          }
+          break
         }
-        if (error instanceof ApiError && error.kind === 'interrupted' && reply.stopReason) {
-          // 已收到 message_delta 的结束原因，只是缺了结尾的 message_stop
-          reply = settleReply(reply, 'done', Date.now())
-        } else if (error instanceof ApiError) {
-          reply = settleReply(reply, 'error', Date.now(), {
-            kind: error.kind,
-            message: error.message,
-            status: error.status,
-            localMessage: error.localMessage,
-          })
-        } else {
-          reply = settleReply(reply, 'error', Date.now(), {
-            kind: 'protocol',
-            message: error instanceof Error ? error.message : String(error),
-          })
-        }
-        break
       }
-    }
       if (!roundDone || calls.length === 0) {
         // 只有真的说完（没有待执行的工具调用）才收尾；工具轮中途收 done，
         // 会让历史里留下一条「已完成」但正文只有过程状态的回复。
@@ -1402,7 +1679,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       }
       toolRounds += 1
       // 过程状态：让用户知道在等什么，而不是对着空屏
-      const status: TextPart = { type: 'text', text: calls.map(toolStatusText).join(' '), isTemplate: true }
+      const status: TextPart = {
+        type: 'text',
+        text: calls.map(toolStatusText).join(' '),
+        isTemplate: true,
+      }
       reply = { ...reply, blocks: [...reply.blocks, status], status: 'streaming' }
       updateReply(sessionId, reply)
       const outputs: string[] = []
@@ -1461,7 +1742,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           name: call.name,
           arguments: call.arguments,
         })
-        exchanges.push({ type: 'function_call_output', call_id: call.callId, output: outputs[index] ?? '' })
+        exchanges.push({
+          type: 'function_call_output',
+          call_id: call.callId,
+          output: outputs[index] ?? '',
+        })
       })
       updateReply(sessionId, reply)
     }
@@ -1479,5 +1764,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       ),
     }))
     persist(sessionId)
+  }
+  // 控制器在上面的 finally 里才释放，压缩检查必须放在它之后：
+  // 提前调用会被「本会话正在生成」这条互斥判据挡掉，自动压缩就永远不触发。
+  if (reply.status === 'done') {
+    settleCompactionUsage(sessionId)
+    maybeAutoCompact(sessionId)
   }
 }

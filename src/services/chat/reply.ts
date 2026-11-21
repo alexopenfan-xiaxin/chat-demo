@@ -6,6 +6,7 @@ import type {
   OutputBlockStart,
   TextBlockParam,
 } from '../api/types.js'
+import { SUMMARY_ACK, SUMMARY_PREFIX, SUMMARY_SUFFIX } from './compaction.js'
 import type {
   AssistantMessage,
   FileAttachment,
@@ -185,8 +186,7 @@ export const canContinueReply = (reply: AssistantMessage): boolean => {
     return false
   }
   return (
-    reply.status === 'stopped' ||
-    (reply.status === 'done' && reply.stopReason === 'max_tokens')
+    reply.status === 'stopped' || (reply.status === 'done' && reply.stopReason === 'max_tokens')
   )
 }
 
@@ -306,7 +306,9 @@ export const toRequestMessages = (
   prefix?: AssistantMessage,
   thinking = prefix?.thinking ?? false,
   latestReminder?: string,
-  memoryBlock?: string
+  memoryBlock?: string,
+  /** 压缩后的摘要：作为一条 user 消息放在 history 最前，后面补一条 assistant 占位 */
+  summary?: string
 ): MessageParam[] => {
   const messages: MessageParam[] = []
   let previousReminder: string | undefined
@@ -316,6 +318,12 @@ export const toRequestMessages = (
       messages.push({ role: 'latest_reminder', content: reminder })
       previousReminder = reminder
     }
+  }
+  if (summary) {
+    // aider 的做法：摘要用一条 user 消息说给模型，再补一条 assistant「好的。」，
+    // 否则摘要和紧随的第一轮提问是连续两条 user，模型会把摘要当成待回答的问题。
+    messages.push({ role: 'user', content: `${SUMMARY_PREFIX}\n\n${summary}\n\n${SUMMARY_SUFFIX}` })
+    messages.push({ role: 'assistant', content: [{ type: 'text', text: SUMMARY_ACK }] })
   }
   for (const [user, reply] of getContextRounds(history)) {
     // 历史提问没有文字、附件也都没有 serverId 时，提问为空，连同回答一起省略。

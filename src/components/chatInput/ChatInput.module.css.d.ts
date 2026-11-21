@@ -1,4 +1,6 @@
 declare const styles: {
+  readonly "root": string;
+  readonly "statusHint": string;
   readonly "wrapper": string;
   readonly "session": string;
   readonly "home": string;

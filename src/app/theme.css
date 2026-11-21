@@ -130,6 +130,10 @@ body {
   --dsw-alias-brand-text: var(--dsw-static-blue-500);
   --dsw-alias-button-contrast-fill: var(--dsw-static-neutral-bluish-700);
   --dsw-alias-button-elevated-fill: var(--dsw-static-neutral-bluish-00);
+  /* 上下文用量环四档：45% 黄、65% 橙、80% 红；浅色黄压到 3.05:1（画眉核对） */
+  --dsw-alias-ctx-ring-warn: #c08a00;
+  --dsw-alias-ctx-ring-caution: #dc5a08;
+  --dsw-alias-ctx-ring-critical: #e11d1d;
   --dsw-alias-button-ghost-active-border: var(--dsw-static-blue-300);
   --dsw-alias-button-ghost-active-fill: var(--dsw-static-blue-50);
   --dsw-alias-button-ghost-active-hover: var(--dsw-static-blue-100);
@@ -183,6 +187,10 @@ body[data-ds-dark-theme] {
   --dsw-alias-brand-text: var(--dsw-static-blue-400);
   --dsw-alias-button-contrast-fill: var(--dsw-static-neutral-bluish-50);
   --dsw-alias-button-elevated-fill: var(--dsw-static-neutral-bluish-750);
+  /* 上下文用量环四档（深色）：与浅色同一组色相，明度抬高 */
+  --dsw-alias-ctx-ring-warn: #f7ad31;
+  --dsw-alias-ctx-ring-caution: #fb7a3c;
+  --dsw-alias-ctx-ring-critical: #f25a5a;
   --dsw-alias-button-ghost-active-border: var(--dsw-static-blue-600);
   --dsw-alias-button-ghost-active-fill: var(--dsw-static-blue-900);
   --dsw-alias-button-ghost-active-hover: var(--dsw-static-blue-800);

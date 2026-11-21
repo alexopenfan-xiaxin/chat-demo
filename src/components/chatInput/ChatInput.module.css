@@ -1,3 +1,21 @@
+.root {
+  position: relative;
+  width: 100%;
+}
+
+/* 压缩中的常驻提示：贴在输入框上方，与命令列表同一位置 */
+.statusHint {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .wrapper {
   --line-height: 24px;
   --input-padding-top: 12px;

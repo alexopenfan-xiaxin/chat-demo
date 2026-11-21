@@ -140,6 +140,29 @@ export type AssistantMessage = MessageBranch & {
 
 export type Message = UserMessage | AssistantMessage
 
+/**
+ * 一次上下文压缩的记录。
+ *
+ * 原文**从不删除**：`session.messages` 是唯一真相，压缩只是把切分点之前的内容在组装请求时
+ * 换成这段摘要，所以撤销 = 删掉这条记录，原文与每轮的 latestReminder 快照都原样还在。
+ */
+export type CompactionRecord = {
+  id: string
+  createdAt: number
+  /** 摘要正文（不含「我之前和你聊过一些事。」那句前缀，前缀只在组装请求时加） */
+  summary: string
+  /** 保留原文从这条消息开始（含）；找不到时视为不裁剪 */
+  firstKeptMessageId: string | null
+  /** 被压掉的轮数，用于界面上那行「已压缩 N 轮」 */
+  rounds: number
+  /** 压缩前最后一次实测的上下文 input_tokens */
+  beforeInputTokens: number
+  /** 压缩后第一次请求实测的 input_tokens；还没测到就是 null */
+  afterInputTokens: number | null
+  /** 自动触发还是手动 /compact */
+  auto: boolean
+}
+
 export type Session = {
   id: string
   title: string
@@ -149,6 +172,8 @@ export type Session = {
   messages: Message[]
   /** undefined 表示线性消息列表；null 表示空会话。 */
   rootMessageId?: string | null
+  /** 最近一次上下文压缩；只影响请求组装，不改动 messages */
+  compaction?: CompactionRecord
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */
