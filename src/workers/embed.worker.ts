@@ -55,6 +55,20 @@ let pipe: FeatureExtractionPipeline | null = null
 let device: 'webgpu' | 'wasm' = 'wasm'
 let loading: Promise<void> | null = null
 
+/**
+ * WebGPU 后端**停用**：q8 权重在 WebGPU 执行器上算出来的向量是坏的。
+ *
+ * 实测（同一份 q8、同一份 wasm glue、同一个 Chromium，只换 device）：同一句话
+ * WASM 与 WebGPU 的余弦只有 0.33–0.45；五句毫不相关的短句在 WebGPU 下两两
+ * 0.48–0.57（WASM 是 0.20–0.38）。库里的老条目与本地 WebGPU 单条输出吻合到 0.998，
+ * 召回分数于是变成 0.65/0.60，阈值 0.46 拦不住，无关记忆全被召回。
+ *
+ * 换成 true 之前必须重跑那组对照，确认无关两两回到 0.3 以下——否则等于把
+ * 「召回分数不可信」重新打开一次。`LOCAL_MODEL_LABEL` 的 -wasm 后缀是同一件事的
+ * 另一半：后端换了向量空间就换了，老条目必须按新标签重算。
+ */
+const WEBGPU_ENABLED = false
+
 const webgpuAvailable = async (): Promise<boolean> => {
   try {
     const gpu = (navigator as { gpu?: { requestAdapter(): Promise<unknown | null> } }).gpu
@@ -74,9 +88,10 @@ const options = (target: 'webgpu' | 'wasm') => ({
   normalize: true,
 })
 
-/** 先 WebGPU 再 WASM：WebGPU 建图失败时换 WASM 重来，不把错误甩给上层 */
+/** 默认只用 WASM；WebGPU 建图失败时同样是 WASM 兜底，不把错误甩给上层 */
 const build = async (): Promise<void> => {
-  const targets: ('webgpu' | 'wasm')[] = (await webgpuAvailable()) ? ['webgpu', 'wasm'] : ['wasm']
+  const targets: ('webgpu' | 'wasm')[] =
+    WEBGPU_ENABLED && (await webgpuAvailable()) ? ['webgpu', 'wasm'] : ['wasm']
   let lastError: unknown = null
   for (const target of targets) {
     try {

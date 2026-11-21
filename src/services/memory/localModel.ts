@@ -23,8 +23,14 @@ export const MODEL_COMMIT = '75c43b069aac4d136ba6bc1122f995fedcfd2781'
 export const MODEL_MIRROR = 'https://hf-mirror.com'
 export const MODEL_UPSTREAM = 'https://huggingface.co'
 
-/** 存进条目 `model` 字段的标识：它是「哪一套向量空间」的标记 */
-export const LOCAL_MODEL_LABEL = 'local-bge-small-zh-v1.5'
+/**
+ * 存进条目 `model` 字段的标识：它是「哪一套向量空间」的标记。
+ *
+ * `-wasm` 后缀不只是说明后端：WebGPU 那条路算出来的向量是坏的（无关句两两
+ * 0.48–0.57），换回 WASM 就等于换了向量空间，老条目必须按新标签重算——
+ * reindex 只挑 `model !== 当前标签` 的条目，标签不变它们永远不会被修。
+ */
+export const LOCAL_MODEL_LABEL = 'local-bge-small-zh-v1.5-wasm'
 
 /** bge-small-zh-v1.5 输出 512 维 */
 export const LOCAL_MODEL_DIM = 512
