@@ -14,9 +14,7 @@
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
 
-# 本地向量模型与 wasm 运行时：文件名不带 hash，靠代码里的 MODEL_VERSION 与 ?v= 查询串换版本
-/models/*
-  Cache-Control: public, max-age=31536000, immutable
-
+# onnxruntime 的 wasm 与 glue：文件名不带 hash，靠代码里的 ORT_VERSION 换目录
+# （模型本身不在这里——浏览器直接从镜像下载，见 src/services/memory/localModel.ts）
 /ort/*
   Cache-Control: public, max-age=31536000, immutable
