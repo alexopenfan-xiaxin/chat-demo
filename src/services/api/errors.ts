@@ -33,6 +33,18 @@ export const classifyStatus = (status: number | undefined): ApiErrorCondition =>
   return 'other'
 }
 
+/**
+ * 上游额度耗尽回的是 **429**（实测 2026-11-21）：
+ * `{"error":{"message":"密钥配额已用尽","type":"insufficient_quota","code":"quota_exhausted"}}`
+ * 只看状态码会被归成「请求过于频繁」，还会被当成可重试——两条都不对。
+ * 所以先认 code，再退一步认文案，最后才按状态码走。
+ */
+const QUOTA_EXHAUSTED = /quota_exhausted|insufficient_quota/i
+const QUOTA_MESSAGE = /配额已用尽|额度已用尽|配额不足/
+
+const isQuotaExhausted = (error: ApiError): boolean =>
+  QUOTA_EXHAUSTED.test(error.code ?? '') || QUOTA_MESSAGE.test(error.message)
+
 export const classifyApiError = (error: unknown): ApiErrorCondition => {
   if (!(error instanceof ApiError)) {
     return 'other'
@@ -43,6 +55,9 @@ export const classifyApiError = (error: unknown): ApiErrorCondition => {
   }
   if (error.status === undefined) {
     return error.kind === 'network' ? 'network' : 'other'
+  }
+  if (isQuotaExhausted(error)) {
+    return 'insufficientBalance'
   }
   return classifyStatus(error.status)
 }

@@ -47,7 +47,9 @@ export class ApiError extends Error {
   constructor(
     readonly kind: ApiErrorKind,
     message: string | TranslationMessage,
-    readonly status?: number
+    readonly status?: number,
+    /** 上游 error.code，例如 quota_exhausted：只用来分类，不展示给用户 */
+    readonly code?: string
   ) {
     super(typeof message === 'string' ? message : translate(message.key, message.params))
     this.name = 'ApiError'
@@ -71,15 +73,18 @@ const readErrorResponse = async (
 ): Promise<ApiError> => {
   const text = await response.text().catch(() => '')
   let message = text || fallback
+  let code: string | undefined
   try {
     const body: unknown = JSON.parse(text)
     if (isErrorBody(body)) {
       message = body.error.message
+      // 额度耗尽是 429，光看状态码会跟限流混成一件事，所以把 code 带出来供分类
+      code = typeof body.error.code === 'string' ? body.error.code : undefined
     }
   } catch {
     // 非 JSON 响应体直接展示原文
   }
-  return new ApiError(kind, message, response.status)
+  return new ApiError(kind, message, response.status, code)
 }
 
 /** proxy 的 401 判定：优先读 WWW-Authenticate，读不到再看 body 里的 code */
