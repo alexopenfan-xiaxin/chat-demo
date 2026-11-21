@@ -45,8 +45,14 @@ export const MEMORY_TOP_K = 4
 export const MEMORY_BLOCK_LIMIT = 1200
 export const MEMORY_ITEM_LIMIT = 200
 export const PROFILE_LIMIT = 800
-/** 召回这一跳最多等这么久，超过就只带画像，别让用户干等 */
-export const RETRIEVAL_TIMEOUT_MS = 800
+/**
+ * 召回这一跳最多等这么久，超过就只带画像，别让用户干等。
+ *
+ * 实测（生产包、无头 Chromium、WASM 后端、390 宽）：热态 13–20ms，但页面加载后
+ * 第一次推理 725–808ms，冷启会正好撞上 800ms 丢一次召回；提到 1500ms 后仍有
+ * 「用户还没等完预热就发消息」的余量，而正常情况只花 14ms，不会真的等 1.5 秒。
+ */
+export const RETRIEVAL_TIMEOUT_MS = 1500
 /** 写入侧冲突检查：≥0.60 拉出来给模型看，≥0.90 硬拦，必须先 edit */
 export const CONFLICT_MIN = 0.6
 export const CONFLICT_BLOCK = 0.9

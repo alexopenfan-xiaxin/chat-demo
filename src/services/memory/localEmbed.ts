@@ -100,7 +100,19 @@ export const warmLocalModel = async (): Promise<void> => {
       resolve()
     }, 20000)
     const onMessage = (event: MessageEvent<EmbedResponse>) => {
-      if (event.data.type === 'ready' || (event.data.type === 'error' && event.data.id === -1)) {
+      if (event.data.type === 'ready') {
+        // 建图之后立刻跑一次推理：第一次推理比之后每次都慢一个量级
+        // （实测冷启 725–802ms、热态 13–20ms），不预热就会把页面加载后的第一条消息
+        // 顶掉 800ms 的召回预算，用户看到「参考了 0 条」。
+        instance.postMessage({ type: 'embed', id: -2, texts: ['预热'] })
+        return
+      }
+      if (event.data.type === 'vectors' && event.data.id === -2) {
+        instance.removeEventListener('message', onMessage)
+        finish()
+        return
+      }
+      if (event.data.type === 'error' && event.data.id === -1) {
         instance.removeEventListener('message', onMessage)
         finish()
       }
