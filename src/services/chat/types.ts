@@ -174,6 +174,11 @@ export type Session = {
   rootMessageId?: string | null
   /** 最近一次上下文压缩；只影响请求组装，不改动 messages */
   compaction?: CompactionRecord
+  /**
+   * 撤销压缩后暂停自动压缩：撤销时上下文仍在阈值以上，不落盘的话刷新一次就会立刻再压，
+   * 只有用量真的掉到阈值以下（切分支、删消息）才由 settleCompactionUsage 清掉。
+   */
+  autoCompactPaused?: boolean
 }
 
 /** 会话列表元数据；消息只在打开会话时加载。 */

@@ -77,7 +77,10 @@ export const Turnstile = ({ resetSignal, onToken, onError, onUnavailable }: Turn
   // 跟随后台的深浅色切换（body 上的 data-ds-dark-theme 由 theme.ts 维护）
   useEffect(() => {
     const observer = new MutationObserver(() => setThemeDark(isDarkTheme()))
-    observer.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'class'] })
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-ds-dark-theme', 'class'],
+    })
     return () => observer.disconnect()
   }, [])
 

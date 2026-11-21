@@ -1,7 +1,13 @@
 import clsx from 'clsx'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { IconBrainOutline, IconPanelLeftOutline16, IconSettingsOutline16, IconWallet16, NewChatIcon } from '../base/icons.js'
+import {
+  IconBrainOutline,
+  IconPanelLeftOutline16,
+  IconSettingsOutline16,
+  IconWallet16,
+  NewChatIcon,
+} from '../base/icons.js'
 import { BrandIcon } from '../base/BrandIcon.js'
 import { CreditsDialog } from '../credits/CreditsDialog.js'
 import { closeCredits, openCredits, useCreditsDialog } from '../credits/creditsDialogState.js'

@@ -128,7 +128,10 @@ export const resetLocalModel = () => {
  * 算向量。超时按调用方给的预算走（召回 800ms、写入 6s），超时就 reject，
  * 由 api.ts 决定是降级还是当作写入失败——这里不做任何兜底，避免两处各有一套策略。
  */
-export const embedLocal = (texts: string[], timeoutMs: number): Promise<{ vectors: number[][]; dim: number }> => {
+export const embedLocal = (
+  texts: string[],
+  timeoutMs: number
+): Promise<{ vectors: number[][]; dim: number }> => {
   const instance = ensureWorker()
   const id = ++seq
   return new Promise((resolve, reject) => {

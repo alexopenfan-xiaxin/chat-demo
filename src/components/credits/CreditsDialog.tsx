@@ -42,8 +42,7 @@ const formatDate = (value: string | number | null) => {
   if (value === null || value === 0 || value === '') {
     return null
   }
-  const time =
-    typeof value === 'number' ? (value < 1e12 ? value * 1000 : value) : Date.parse(value)
+  const time = typeof value === 'number' ? (value < 1e12 ? value * 1000 : value) : Date.parse(value)
   if (!Number.isFinite(time)) {
     return null
   }
@@ -107,7 +106,8 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
   const shownRatio = displayRatio(used, limit)
   const hasBar = shownRatio !== null
   const barWidth = barWidthPercent(used, limit)
-  const percentText = shownRatio === null || used === null || used <= 0 ? null : formatPercent(shownRatio)
+  const percentText =
+    shownRatio === null || used === null || used <= 0 ? null : formatPercent(shownRatio)
   const barTone = tone === 'error' ? styles.fillError : tone === 'warn' ? styles.fillWarn : ''
 
   // 不限额时唯一有意义的数字是「用掉多少」；读不到时主数字位留一个破折号，不留空
@@ -119,7 +119,8 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
         : remaining
   const mainText = mainValue === null ? '——' : formatCredits(mainValue)
   // 数字都没有时不留单位，只留破折号
-  const mainUnit = mainValue === null ? '' : unlimited ? t('creditsUnitUsed') : t('creditsUnitRemaining')
+  const mainUnit =
+    mainValue === null ? '' : unlimited ? t('creditsUnitUsed') : t('creditsUnitRemaining')
 
   // 上游没给 daily_tokens（或段内没有 used）时不能拿累计值冒充「今日」，换标签
   const todayTokens = snapshot?.dailyTokens?.used ?? null
@@ -155,7 +156,6 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
       onClose={onClose}
     >
       <div className={styles.panel}>
-
         {status === 'loading' ? (
           <>
             <div className={styles.skeletonAmount} />
@@ -196,10 +196,18 @@ export const CreditsDialog = ({ onClose }: { onClose: () => void }) => {
               </>
             ) : null}
 
-            {status === 'ready' && unlimited ? <p className={styles.meta}>{t('creditsUnlimited')}</p> : null}
-            {status === 'unavailable' ? <p className={styles.meta}>{t('creditsUnavailable')}</p> : null}
+            {status === 'ready' && unlimited ? (
+              <p className={styles.meta}>{t('creditsUnlimited')}</p>
+            ) : null}
+            {status === 'unavailable' ? (
+              <p className={styles.meta}>{t('creditsUnavailable')}</p>
+            ) : null}
             {status === 'nokey' ? <p className={styles.meta}>{t('creditsNoKey')}</p> : null}
-            {exhausted ? <p className={[styles.notice, styles.noticeError].join(' ')}>{t('creditsExhausted')}</p> : null}
+            {exhausted ? (
+              <p className={[styles.notice, styles.noticeError].join(' ')}>
+                {t('creditsExhausted')}
+              </p>
+            ) : null}
           </>
         )}
 

@@ -9,7 +9,13 @@ import {
 } from '../base/icons.js'
 import { setSearch, setThinking, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
-import { compactSession, sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
+import {
+  announceCompaction,
+  compactSession,
+  sendMessage,
+  stopReply,
+  useChatStore,
+} from '../../services/chat/store.js'
 import { useSessionState } from '../../services/sessionState.js'
 import {
   addDraftFiles,
@@ -35,7 +41,8 @@ import { DraftAttachments } from './DraftAttachments.js'
 import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
-import { useTranslate } from '../../i18n/index.js'
+import { translate, useTranslate } from '../../i18n/index.js'
+import { isSupportedCommand, parseSlashCommand } from '../../services/chat/slash.js'
 import styles from './ChatInput.module.css'
 
 /** 输入框：自适应高度的文本框 + 文件 + 深度思考与智能搜索开关 + 语音输入 + 发送 / 停止 */
@@ -151,11 +158,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     !sessionExpired
 
   const send = () => {
-    // 斜杠命令先弹确认，不进入提问路径
-    if (text.trim() === '/compact') {
-      if (sessionId !== null) {
-        setConfirmCompact(true)
+    // 斜杠命令先弹确认，不进入提问路径；大小写、带参数的写法都按命令处理
+    const command = parseSlashCommand(text)
+    if (command) {
+      if (!isSupportedCommand(command.name)) {
+        showToast(translate('compactUnknownCommand'))
+        return
       }
+      if (sessionId === null) {
+        showToast(translate('compactionEmpty'))
+        return
+      }
+      setConfirmCompact(true)
       return
     }
     if (
@@ -332,7 +346,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             onConfirm={() => {
               setConfirmCompact(false)
               setText('')
-              void compactSession(sessionId)
+              void compactSession(sessionId).then(announceCompaction)
             }}
           />
         ) : null}

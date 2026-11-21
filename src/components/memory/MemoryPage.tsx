@@ -40,7 +40,8 @@ import styles from './MemoryPage.module.css'
  * 版式按 /root/work/ds-chat-memory-page-v2.md：Hero 数字三连、画像场域、条目时间轴、
  * 检索相似度条、危险区；桌面 ≥768 变两栏且左栏 sticky（画像常驻，对应「每轮都带上」）。
  */
-const formatBytes = (bytes: number) => (bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`)
+const formatBytes = (bytes: number) =>
+  bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
 
 /** 相对时间：一周内说「几天前」，更久给日期；1 分钟内「刚刚」 */
 const relativeTimeKey = (at: number, now: number) => {
@@ -62,7 +63,6 @@ const relativeTimeKey = (at: number, now: number) => {
   }
   return null
 }
-
 
 /**
  * 本地模型下载卡片：引导态与「开关开着但模型没下」共用一块。
@@ -141,7 +141,11 @@ export const MemoryPage = () => {
   /** 画像字数三态：≥720（90%）预警、到 800 变色并给竖线换色 */
   const profileCount = [...profile].length
   const countState =
-    profileCount >= PROFILE_LIMIT ? 'over' : profileCount >= Math.round(PROFILE_LIMIT * 0.9) ? 'warn' : 'normal'
+    profileCount >= PROFILE_LIMIT
+      ? 'over'
+      : profileCount >= Math.round(PROFILE_LIMIT * 0.9)
+        ? 'warn'
+        : 'normal'
 
   const reload = async () => {
     const [text, list] = await Promise.all([loadProfile(), listMemories()])
@@ -221,7 +225,9 @@ export const MemoryPage = () => {
           return view ? rect.top < view.bottom && rect.bottom > view.top : false
         })
         .slice(0, 8)
-      const heights = sample.map((item) => item.getBoundingClientRect().height).filter((height) => height > 40)
+      const heights = sample
+        .map((item) => item.getBoundingClientRect().height)
+        .filter((height) => height > 40)
       if (heights.length < 3) {
         return
       }
@@ -255,7 +261,10 @@ export const MemoryPage = () => {
     () => entries.reduce((total, entry) => total + entry.content.length + entry.vec.byteLength, 0),
     [entries]
   )
-  const hitTotal = useMemo(() => entries.reduce((total, entry) => total + entry.hitCount, 0), [entries])
+  const hitTotal = useMemo(
+    () => entries.reduce((total, entry) => total + entry.hitCount, 0),
+    [entries]
+  )
 
   const saveProfile = async () => {
     setProfileBusy(true)
@@ -486,7 +495,12 @@ export const MemoryPage = () => {
                 onChange={(event) => setProfile(event.target.value)}
               />
               <div className={styles.fieldActions}>
-                <Button variant="primary" size="s" disabled={profileBusy} onClick={() => void saveProfile()}>
+                <Button
+                  variant="primary"
+                  size="s"
+                  disabled={profileBusy}
+                  onClick={() => void saveProfile()}
+                >
                   {t('memoryProfileSave')}
                 </Button>
               </div>
@@ -581,7 +595,11 @@ export const MemoryPage = () => {
                             <Button variant="outlined" size="s" onClick={() => setEditing(null)}>
                               {t('memoryCancel')}
                             </Button>
-                            <Button variant="primary" size="s" onClick={() => void commitEdit(entry)}>
+                            <Button
+                              variant="primary"
+                              size="s"
+                              onClick={() => void commitEdit(entry)}
+                            >
                               {t('memorySave')}
                             </Button>
                           </div>
@@ -605,7 +623,6 @@ export const MemoryPage = () => {
                           ))}
                         </div>
                       ) : null}
-
                     </article>
                   ))}
 
@@ -619,7 +636,10 @@ export const MemoryPage = () => {
               <div className={styles.sectionHead}>
                 <h3 className={styles.sectionTitle}>{t('memoryRetrievalTitle')}</h3>
                 <span className={styles.sectionMeta}>
-                  {t('memoryThresholdNote', { threshold: memoryThreshold(LOCAL_MODEL_LABEL).toFixed(2), count: MEMORY_TOP_K })}
+                  {t('memoryThresholdNote', {
+                    threshold: memoryThreshold(LOCAL_MODEL_LABEL).toFixed(2),
+                    count: MEMORY_TOP_K,
+                  })}
                 </span>
               </div>
               <div className={styles.searchWrap}>
@@ -641,14 +661,19 @@ export const MemoryPage = () => {
               </div>
               {hits === null ? null : hits.length === 0 ? (
                 <p className={styles.emptyHits}>
-                  {t('memoryNoHitAbove', { threshold: memoryThreshold(LOCAL_MODEL_LABEL).toFixed(2) })}
+                  {t('memoryNoHitAbove', {
+                    threshold: memoryThreshold(LOCAL_MODEL_LABEL).toFixed(2),
+                  })}
                 </p>
               ) : (
                 <div className={styles.hits}>
                   {hits.map((hit) => (
                     <div
                       key={hit.entry.id}
-                      className={clsx(styles.hit, hit.score < memoryThreshold(LOCAL_MODEL_LABEL) && styles.hitMiss)}
+                      className={clsx(
+                        styles.hit,
+                        hit.score < memoryThreshold(LOCAL_MODEL_LABEL) && styles.hitMiss
+                      )}
                     >
                       <span className={styles.hitScore}>{hit.score.toFixed(2)}</span>
                       <span className={styles.hitBar} aria-hidden="true">
@@ -689,35 +714,35 @@ export const MemoryPage = () => {
                   </Button>
                 </div>
               ) : null}
-              {available === false ? <p className={styles.caption}>{t('settingsMemoryUnavailable')}</p> : null}
+              {available === false ? (
+                <p className={styles.caption}>{t('settingsMemoryUnavailable')}</p>
+              ) : null}
             </section>
           </div>
         </div>
+      ) : modelReady === false ? (
+        <ModelDownloadCard
+          percent={downloadPercent}
+          busy={downloading}
+          failed={downloadFailed}
+          onDownload={() => void downloadModel()}
+        />
       ) : (
-        modelReady === false ? (
-          <ModelDownloadCard
-            percent={downloadPercent}
-            busy={downloading}
-            failed={downloadFailed}
-            onDownload={() => void downloadModel()}
-          />
-        ) : (
-          <div className={styles.guide}>
-            <span className={styles.guideMark}>
-              <IconBrainOutline size={24} />
-            </span>
-            <h2 className={styles.guideTitle}>{t('memoryGuideTitle')}</h2>
-            <p className={styles.guideText}>{t('memoryGuideText')}</p>
-            <Button
-              variant="primary"
-              size="l"
-              className={styles.guideButton}
-              onClick={() => openSettings('general', 'memory')}
-            >
-              {t('memoryGuideAction')}
-            </Button>
-          </div>
-        )
+        <div className={styles.guide}>
+          <span className={styles.guideMark}>
+            <IconBrainOutline size={24} />
+          </span>
+          <h2 className={styles.guideTitle}>{t('memoryGuideTitle')}</h2>
+          <p className={styles.guideText}>{t('memoryGuideText')}</p>
+          <Button
+            variant="primary"
+            size="l"
+            className={styles.guideButton}
+            onClick={() => openSettings('general', 'memory')}
+          >
+            {t('memoryGuideAction')}
+          </Button>
+        </div>
       )}
 
       {pendingDelete ? (
@@ -729,7 +754,12 @@ export const MemoryPage = () => {
               <Button variant="outlined" size="m" autoFocus onClick={() => setPendingDelete(null)}>
                 {t('cancel')}
               </Button>
-              <Button variant="danger" size="m" disabled={deleting} onClick={() => void confirmRemove()}>
+              <Button
+                variant="danger"
+                size="m"
+                disabled={deleting}
+                onClick={() => void confirmRemove()}
+              >
                 {t('memoryDelete')}
               </Button>
             </>

@@ -90,7 +90,11 @@ const collect = (node: Nodes, lines: string[], state: { code: boolean }): void =
       return
     case 'table':
       for (const row of (node as Parent).children) {
-        push((row as Parent).children.map((cell) => (cell as Parent).children.map(inline).join('')).join('，'))
+        push(
+          (row as Parent).children
+            .map((cell) => (cell as Parent).children.map(inline).join(''))
+            .join('，')
+        )
       }
       return
     case 'html':

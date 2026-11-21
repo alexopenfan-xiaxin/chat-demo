@@ -93,7 +93,10 @@ export const Hcaptcha = ({ resetSignal, onToken, onUnavailable }: HcaptchaProps)
 
   useEffect(() => {
     const observer = new MutationObserver(() => setThemeDark(isDarkTheme()))
-    observer.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'class'] })
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-ds-dark-theme', 'class'],
+    })
     return () => observer.disconnect()
   }, [])
 

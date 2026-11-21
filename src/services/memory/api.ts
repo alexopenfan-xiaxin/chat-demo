@@ -72,7 +72,9 @@ export const EMBEDDINGS_WARMUP_URL = EMBEDDINGS_VIA_TUNNEL.replace(/\/embeddings
  */
 export const tokenFingerprint = async (token: string): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
-  return Array.from(new Uint8Array(digest).slice(0, 4), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return Array.from(new Uint8Array(digest).slice(0, 4), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('')
 }
 
 /**
@@ -135,7 +137,11 @@ export class EmbeddingsRequestError extends ApiError {
     readonly channel: EmbeddingChannel,
     status?: number
   ) {
-    super(reason === 'unauthorized' ? 'session' : reason === 'network' ? 'network' : 'http', '', status)
+    super(
+      reason === 'unauthorized' ? 'session' : reason === 'network' ? 'network' : 'http',
+      '',
+      status
+    )
     this.name = 'EmbeddingsRequestError'
   }
 }
@@ -295,7 +301,8 @@ export const embedTextsAs = async (
     return result
   } catch (error) {
     const budget = options.tunnelFallbackTimeoutMs ?? 0
-    const retry = budget > 0 && error instanceof EmbeddingsRequestError && RETRIABLE.has(error.reason)
+    const retry =
+      budget > 0 && error instanceof EmbeddingsRequestError && RETRIABLE.has(error.reason)
     logEmbeddingFailure(error, route.channel, texts.length, timeoutMs, retry)
     if (!retry) {
       throw error

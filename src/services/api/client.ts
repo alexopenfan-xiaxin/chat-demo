@@ -117,15 +117,20 @@ export const request = async (url: string, init: RequestInit): Promise<Response>
     // 503 必须排在 401 之前判：introspect 一抖，proxy 就回 503，
     // 当成会话失效会把用户踢回登录页，等于把后端的故障放大一次。
     if (response.status === 503 && API_ORIGIN !== '') {
-      const body = (await response.clone().json().catch(() => null)) as
-        | { error?: { code?: unknown } }
-        | null
+      const body = (await response
+        .clone()
+        .json()
+        .catch(() => null)) as { error?: { code?: unknown } } | null
       if (body?.error?.code === 'service_unavailable') {
         setServiceUnavailable(true)
         throw new ApiError('unavailable', translate('authServiceUnavailable'), 503)
       }
     }
-    if (response.status === 401 && API_ORIGIN !== '' && (await isSessionExpired(response.clone()))) {
+    if (
+      response.status === 401 &&
+      API_ORIGIN !== '' &&
+      (await isSessionExpired(response.clone()))
+    ) {
       notifySessionExpired()
       throw new ApiError('session', translate('authSessionExpired'), 401)
     }

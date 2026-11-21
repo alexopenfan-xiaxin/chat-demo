@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest'
+
+const { parseSlashCommand, isSupportedCommand } = await import('../src/services/chat/slash')
+
+describe('斜杠命令解析', () => {
+  it('标准写法', () => {
+    expect(parseSlashCommand('/compact')).toEqual({ name: 'compact', args: '' })
+  })
+
+  it('大小写与前后空格都认', () => {
+    expect(parseSlashCommand('  /Compact  ')?.name).toBe('compact')
+    expect(parseSlashCommand('/COMPACT')?.name).toBe('compact')
+  })
+
+  it('带参数也认，参数单独取出', () => {
+    expect(parseSlashCommand('/compact 现在')).toEqual({ name: 'compact', args: '现在' })
+  })
+
+  it('「/ compact」中间有空格不算命令，按普通提问处理', () => {
+    expect(parseSlashCommand('/ compact')).toBeNull()
+  })
+
+  it('多行文本不算命令', () => {
+    expect(parseSlashCommand('/compact\n再问一句')).toBeNull()
+  })
+
+  it('不认识的命令名返回名字但标记为不支持', () => {
+    const parsed = parseSlashCommand('/help')
+    expect(parsed?.name).toBe('help')
+    expect(isSupportedCommand('help')).toBe(false)
+  })
+
+  it('普通提问与空串不误判', () => {
+    expect(parseSlashCommand('帮我压缩一下上下文')).toBeNull()
+    expect(parseSlashCommand('')).toBeNull()
+    expect(parseSlashCommand('  ')).toBeNull()
+  })
+})

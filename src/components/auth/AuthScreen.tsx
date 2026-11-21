@@ -80,7 +80,9 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
 
   return (
     <main className={styles.page}>
-      <div className={mode === 'login' ? styles.content : `${styles.content} ${styles.contentCompact}`}>
+      <div
+        className={mode === 'login' ? styles.content : `${styles.content} ${styles.contentCompact}`}
+      >
         <header className={styles.head}>
           <span className={styles.brandMark} aria-hidden="true">
             <svg viewBox="0 0 20 20" width="22" height="22" fill="none">
@@ -92,7 +94,12 @@ export const AuthScreen = ({ onAuthenticated }: AuthScreenProps) => {
                 strokeWidth="1.4"
                 strokeLinejoin="round"
               />
-              <path d="M7.2 8.4h5.6M7.2 11h3.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path
+                d="M7.2 8.4h5.6M7.2 11h3.4"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+              />
             </svg>
           </span>
           <h1 className={styles.wordmark}>{t('authWordmark')}</h1>

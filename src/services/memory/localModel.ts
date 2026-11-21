@@ -167,7 +167,9 @@ export const downloadLocalModel = async (onProgress?: DownloadProgress): Promise
             key,
             new Response(buffer, {
               headers: {
-                'content-type': file.path.endsWith('.json') ? 'application/json' : 'application/octet-stream',
+                'content-type': file.path.endsWith('.json')
+                  ? 'application/json'
+                  : 'application/octet-stream',
               },
             })
           )

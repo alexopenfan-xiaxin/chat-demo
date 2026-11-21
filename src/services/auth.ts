@@ -105,12 +105,10 @@ const acceptSession = (data: { user: AuthUser; token?: string }): AuthUser => {
 export const login = async (email: string, password: string): Promise<AuthUser> =>
   acceptSession(await post<{ user: AuthUser; token: string }>('login', { email, password }))
 
-export const register = async (
-  email: string,
-  code: string,
-  password: string
-): Promise<AuthUser> =>
-  acceptSession(await post<{ user: AuthUser; token: string }>('register', { email, code, password }))
+export const register = async (email: string, code: string, password: string): Promise<AuthUser> =>
+  acceptSession(
+    await post<{ user: AuthUser; token: string }>('register', { email, code, password })
+  )
 
 export const logout = async (): Promise<void> => {
   try {

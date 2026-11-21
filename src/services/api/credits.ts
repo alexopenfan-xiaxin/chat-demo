@@ -48,14 +48,21 @@ const section = (value: unknown): CreditSection | null => {
  * 服务端有 30 秒缓存（这条链路走隧道 + 本机 introspect + 上游，一次 7 秒），
  * 所以默认允许命中；用户点刷新时传 `fresh: true`，直接打真实请求。
  */
-export const fetchCredits = async (signal?: AbortSignal, fresh = false): Promise<CreditsSnapshot> => {
+export const fetchCredits = async (
+  signal?: AbortSignal,
+  fresh = false
+): Promise<CreditsSnapshot> => {
   // key 只在服务端，浏览器不带任何额度凭据
   const response = await fetch(fresh ? '/api/credits?fresh=1' : '/api/credits', {
     credentials: 'same-origin',
     signal,
   })
   if (!response.ok) {
-    throw new ApiError(response.status === 401 ? 'session' : 'http', `credits ${response.status}`, response.status)
+    throw new ApiError(
+      response.status === 401 ? 'session' : 'http',
+      `credits ${response.status}`,
+      response.status
+    )
   }
   const body = (await response.json()) as Record<string, unknown>
   const expiresAt = body.expires_at
@@ -65,7 +72,9 @@ export const fetchCredits = async (signal?: AbortSignal, fresh = false): Promise
     credits: section(body.credits),
     tokens: section(body.tokens),
     dailyTokens: section(body.daily_tokens),
-    models: Array.isArray(body.models) ? body.models.filter((m): m is string => typeof m === 'string') : [],
+    models: Array.isArray(body.models)
+      ? body.models.filter((m): m is string => typeof m === 'string')
+      : [],
     expiresAt: typeof expiresAt === 'number' || typeof expiresAt === 'string' ? expiresAt : null,
     snapshotAt: typeof body.snapshot_at === 'string' ? body.snapshot_at : new Date().toISOString(),
   }

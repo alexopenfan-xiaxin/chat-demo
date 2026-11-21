@@ -97,9 +97,22 @@ export const PasswordForm = ({
   if (updatedAt) {
     return (
       <div className={styles.passwordSuccess}>
-        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true" className={styles.passwordSuccessIcon}>
+        <svg
+          viewBox="0 0 16 16"
+          width="16"
+          height="16"
+          fill="none"
+          aria-hidden="true"
+          className={styles.passwordSuccessIcon}
+        >
           <circle cx="8" cy="8" r="6.6" stroke="currentColor" strokeWidth="1.2" />
-          <path d="m5.2 8.2 1.9 1.9 3.7-3.9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="m5.2 8.2 1.9 1.9 3.7-3.9"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
         <div className={styles.passwordSuccessTitle}>{t('authPasswordUpdated')}</div>
         <div className={styles.passwordSuccessTime}>
@@ -136,7 +149,11 @@ export const PasswordForm = ({
         message={errors.password}
         autoComplete="new-password"
         hint={fields.includes('confirm') ? undefined : t('authPasswordRule')}
-        trailing={fields.includes('current') ? undefined : <PasswordToggle shown={shown} onToggle={() => setShown(!shown)} />}
+        trailing={
+          fields.includes('current') ? undefined : (
+            <PasswordToggle shown={shown} onToggle={() => setShown(!shown)} />
+          )
+        }
         onChange={(event) => set('password', event.target.value)}
       />
       {fields.includes('confirm') ? (

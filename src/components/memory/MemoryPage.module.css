@@ -355,7 +355,12 @@
 }
 
 .idTag {
-  font: 500 11px/16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font:
+    500 11px/16px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -405,7 +410,6 @@
   font-size: 12px;
   color: var(--dsw-alias-label-secondary);
 }
-
 
 /* §14.4：可点击的必须可读——tertiary 3.71:1 不达 AA，用 secondary（5.80:1） */
 .textButton {
@@ -606,7 +610,12 @@
 .hitScore {
   flex: 0 0 42px;
   text-align: right;
-  font: 500 13px/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font:
+    500 13px/18px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-brand-text);
 }

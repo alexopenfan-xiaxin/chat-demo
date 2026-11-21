@@ -112,7 +112,9 @@ export const rankMemories = (
     }
   }
   // 分数相同时按 id 排，保证同一轮拼出来的块逐字节稳定
-  hits.sort((left, right) => right.score - left.score || left.entry.id.localeCompare(right.entry.id))
+  hits.sort(
+    (left, right) => right.score - left.score || left.entry.id.localeCompare(right.entry.id)
+  )
   return hits.slice(0, options.topK)
 }
 
@@ -272,14 +274,20 @@ export const saveMemory = async (input: {
     return { ok: false, message: '内容为空，没有保存', reason: 'empty' }
   }
   if ([...content].length > MEMORY_ITEM_LIMIT) {
-    return { ok: false, message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试`, reason: 'too_long' }
+    return {
+      ok: false,
+      message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试`,
+      reason: 'too_long',
+    }
   }
   const entries = await db.loadMemories()
   let vec: Float32Array
   let dim: number
   let model: string
   try {
-    const result = await embedTexts([content], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
+    const result = await embedTexts([content], WRITE_TIMEOUT_MS, {
+      tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS,
+    })
     vec = toVector(result.vectors[0])
     dim = result.dim
     model = result.model
@@ -339,7 +347,9 @@ export const editMemoryFromPage = async (
     return false
   }
   try {
-    const result = await embedTexts([text], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
+    const result = await embedTexts([text], WRITE_TIMEOUT_MS, {
+      tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS,
+    })
     await db.putMemory({
       ...entry,
       content: clip(text),
@@ -374,7 +384,9 @@ const locateByDescription = async (
   let dim: number
   let model: string
   try {
-    const result = await embedTexts([text], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
+    const result = await embedTexts([text], WRITE_TIMEOUT_MS, {
+      tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS,
+    })
     vec = toVector(result.vectors[0])
     dim = result.dim
     model = result.model
@@ -415,7 +427,11 @@ export const editMemory = async (input: {
     return { ok: false, message: '内容为空，没有改动', reason: 'empty' }
   }
   if ([...content].length > MEMORY_ITEM_LIMIT) {
-    return { ok: false, message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试`, reason: 'too_long' }
+    return {
+      ok: false,
+      message: `一条记忆最多 ${MEMORY_ITEM_LIMIT} 字，请压缩后重试`,
+      reason: 'too_long',
+    }
   }
   let entry = await db.loadMemory(id)
   if (!entry) {
@@ -445,7 +461,9 @@ export const editMemory = async (input: {
   let dim: number
   let model: string
   try {
-    const result = await embedTexts([content], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
+    const result = await embedTexts([content], WRITE_TIMEOUT_MS, {
+      tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS,
+    })
     vec = toVector(result.vectors[0])
     dim = result.dim
     model = result.model
@@ -485,7 +503,8 @@ export const updateProfile = async (fullText: string): Promise<ToolResult> => {
 
 export const listMemories = async (): Promise<db.MemoryEntry[]> =>
   (await db.loadMemories()).sort(
-    (left, right) => (right.lastUsedAt ?? 0) - (left.lastUsedAt ?? 0) || right.updatedAt - left.updatedAt
+    (left, right) =>
+      (right.lastUsedAt ?? 0) - (left.lastUsedAt ?? 0) || right.updatedAt - left.updatedAt
   )
 
 export const addMemoryManually = async (content: string, tags: string[]): Promise<ToolResult> => {
@@ -498,7 +517,9 @@ export const addMemoryManually = async (content: string, tags: string[]): Promis
   let dim: number
   let model: string
   try {
-    const result = await embedTexts([text], WRITE_TIMEOUT_MS, { tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS })
+    const result = await embedTexts([text], WRITE_TIMEOUT_MS, {
+      tunnelFallbackTimeoutMs: WRITE_TIMEOUT_MS,
+    })
     vec = toVector(result.vectors[0])
     dim = result.dim
     model = result.model

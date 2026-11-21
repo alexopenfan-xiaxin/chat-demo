@@ -73,10 +73,7 @@ export const memoryTools = (): NonNullable<CreateMessageRequest['tools']> => [
  * 阅读链接常开；智能搜索关着时不声明搜索工具。
  */
 
-export const serverTools = (
-  search: boolean,
-  memory = false
-): CreateMessageRequest['tools'] => {
+export const serverTools = (search: boolean, memory = false): CreateMessageRequest['tools'] => {
   const tools: CreateMessageRequest['tools'] = [
     {
       type: 'function',
@@ -115,4 +112,3 @@ export const serverTools = (
   }
   return tools
 }
-

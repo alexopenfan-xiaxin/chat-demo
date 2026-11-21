@@ -57,9 +57,8 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
 export const importHistory = (file: File): Promise<number> =>
   enqueueBackup(async () => {
     const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
-    const { openArchive, setStreamTiming, ArchiveError, ArchiveFormatError } = await import(
-      './history/zipReader.js'
-    )
+    const { openArchive, setStreamTiming, ArchiveError, ArchiveFormatError } =
+      await import('./history/zipReader.js')
     const { parseSessionPath } = await import('./history/paths.js')
     // 从点确认那一刻起算，报告与浮层的秒数用同一个起点
     const startedAt = performance.now()
@@ -69,7 +68,9 @@ export const importHistory = (file: File): Promise<number> =>
     // CRC 与解压的细分计时：安卓上 CRC 到底占多少，只能靠这两个数
     setStreamTiming((kind, ms) => run.addDetail(kind, ms))
     // 节流：目录解析与逐条写入都可能触发几十上百次，每次都 setState 会让 React 反复渲染
-    const stage = createProgressReporter((value) => useChatStore.setState({ importProgress: value }))
+    const stage = createProgressReporter((value) =>
+      useChatStore.setState({ importProgress: value })
+    )
     const report = (outcome: string, sessions: number, entries: number, expected: number) => {
       run.finish()
       setStreamTiming(null)
@@ -77,10 +78,9 @@ export const importHistory = (file: File): Promise<number> =>
         Object.entries(run.detail).map(([stage, ms]) => [stage, Math.round(ms as number)])
       ) as NonNullable<ImportRunReport['detail']>
       // writing 总时长减去所有已经单独记账的段，剩下的就是还没解释的缺口
-      const accounted = (['read', 'parse', 'schema', 'toLocal', 'write', 'scan', 'image', 'progress'] as const).reduce(
-        (sum, key) => sum + (detail?.[key] ?? 0),
-        0
-      )
+      const accounted = (
+        ['read', 'parse', 'schema', 'toLocal', 'write', 'scan', 'image', 'progress'] as const
+      ).reduce((sum, key) => sum + (detail?.[key] ?? 0), 0)
       detail.other = Math.max(0, Math.round((run.phases.writing ?? 0) - accounted))
       // inflate 的计时区间把 append 里的 CRC 一并包住了，这里减掉才是纯解压
       if (detail.inflate !== undefined && detail.crc !== undefined) {

@@ -160,8 +160,17 @@ export const ResetForm = ({
         <span className={sendError ? styles.error : styles.hint}>
           {sendError ?? (sent ? t('authCodeSent', { minutes: CODE_TTL_MINUTES }) : '')}
         </span>
-        <button type="button" className={styles.sendButton} disabled={sending || remaining > 0} onClick={() => void send()}>
-          {remaining > 0 ? t('authResendIn', { seconds: remaining }) : sent ? t('authResend') : t('authSendCode')}
+        <button
+          type="button"
+          className={styles.sendButton}
+          disabled={sending || remaining > 0}
+          onClick={() => void send()}
+        >
+          {remaining > 0
+            ? t('authResendIn', { seconds: remaining })
+            : sent
+              ? t('authResend')
+              : t('authSendCode')}
         </button>
       </div>
 

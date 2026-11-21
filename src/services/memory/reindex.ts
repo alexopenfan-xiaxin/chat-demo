@@ -31,7 +31,12 @@ export type ReindexState = {
   model: string
 }
 
-export const useReindex = create<ReindexState>(() => ({ running: false, done: 0, total: 0, model: '' }))
+export const useReindex = create<ReindexState>(() => ({
+  running: false,
+  done: 0,
+  total: 0,
+  model: '',
+}))
 
 const toVector = (values: readonly number[]): Float32Array => Float32Array.from(values)
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))

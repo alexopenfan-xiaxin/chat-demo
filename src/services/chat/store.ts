@@ -18,6 +18,7 @@ import {
   prepareDraftMessage,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
+import { isSupportedCommand, parseSlashCommand } from './slash.js'
 import { serverTools } from '../memory/tools.js'
 import {
   buildBlock,
@@ -844,14 +845,6 @@ export const stopReply = (sessionId: string) => getStreamController(sessionId)?.
  */
 const SUMMARY_TIMEOUT = 180_000
 
-/**
- * 撤销压缩后暂停自动触发的会话。
- *
- * 撤销时上下文其实还在 85% 以上，不加这一道，下一轮回来就会立刻再压一次，
- * 用户撤销了个寂寞。只有用量真的掉到阈值以下（换了分支、删了消息）才重新武装。
- */
-const autoCompactSuppressed = new Set<string>()
-
 /** 摘要请求：不带工具、不带记忆、关闭思考；失败返回 null，历史一个字节都不动 */
 const requestSummary = async (text: string): Promise<string | null> => {
   const controller = new AbortController()
@@ -905,7 +898,28 @@ const summarize = async (transcript: string): Promise<string | null> => {
   return summary ? truncateSummary(summary) : null
 }
 
-export type CompactOutcome = 'done' | 'skipped' | 'failed'
+/** streaming：正在生成回复；compacting：已有压缩在跑或正在导入；short：轮次太少；failed：摘要失败 */
+/** 命令被拒时按原因各说一句，别让「对话还不够长」去解释「正在生成」 */
+export const announceCompaction = (outcome: CompactOutcome) => {
+  switch (outcome) {
+    case 'short':
+      showToast(translate('compactionSkipped'))
+      break
+    case 'streaming':
+      showToast(translate('compactionBusyStreaming'))
+      break
+    case 'compacting':
+      showToast(translate('compactionBusyCompacting'))
+      break
+    case 'failed':
+      showToast(translate('compactionFailed'))
+      break
+    default:
+      break
+  }
+}
+
+export type CompactOutcome = 'done' | 'streaming' | 'compacting' | 'short' | 'failed'
 
 /**
  * 压缩当前会话的上下文：保留尾部 150K 原文，之前的部分总结成一段。
@@ -918,31 +932,25 @@ export const compactSession = async (
   options: { auto?: boolean } = {}
 ): Promise<CompactOutcome> => {
   if (get().importingHistory || Object.hasOwn(get().compacting, sessionId)) {
-    return 'skipped'
+    return 'compacting'
   }
   if (getStreamController(sessionId)) {
-    return 'skipped'
+    return 'streaming'
   }
   const session = getSession(sessionId)
   if (!session) {
-    return 'skipped'
+    return 'compacting'
   }
   const messages = getVisibleMessages(session)
   // 已经压过一轮时，只把「上次保留的那段」再总结，旧摘要原文一起进新摘要
   const base = applyCompaction(messages, session.compaction).messages
   const rounds = getContextRounds(base)
   if (rounds.length <= MIN_COMPACT_ROUNDS) {
-    if (options.auto !== true) {
-      showToast(translate('compactionSkipped'))
-    }
-    return 'skipped'
+    return 'short'
   }
   const plan = planCompaction(rounds)
   if (!plan || plan.dropped === 0) {
-    if (options.auto !== true) {
-      showToast(translate('compactionSkipped'))
-    }
-    return 'skipped'
+    return 'short'
   }
   const transcript = [
     session.compaction ? `此前已经总结过的内容：\n${session.compaction.summary}` : '',
@@ -956,7 +964,6 @@ export const compactSession = async (
   try {
     const summary = await summarize(transcript)
     if (!summary) {
-      showToast(translate('compactionFailed'))
       return 'failed'
     }
     const firstKept = rounds[plan.keepFrom]?.[0]
@@ -988,7 +995,6 @@ export const compactSession = async (
       updatedAt: current.updatedAt,
     }))
     persist(sessionId)
-    autoCompactSuppressed.delete(sessionId)
     return 'done'
   } finally {
     set((state) => ({
@@ -1016,10 +1022,22 @@ export const undoCompaction = (sessionId: string) => {
         const existing = new Set(session.messages.map((message) => message.id))
         const missing = archive.messages.filter((message) => !existing.has(message.id))
         if (missing.length > 0) {
-          updateSession(sessionId, (current) => ({
-            ...current,
-            messages: [...missing, ...current.messages],
-          }))
+          updateSession(sessionId, (current) => {
+            const anchor = current.compaction?.firstKeptMessageId
+            const index = anchor
+              ? current.messages.findIndex((message) => message.id === anchor)
+              : -1
+            // 归档的快照就是被压掉的前缀，插回切分点之前才是原位
+            const messages =
+              index > 0
+                ? [
+                    ...current.messages.slice(0, index),
+                    ...missing,
+                    ...current.messages.slice(index),
+                  ]
+                : [...missing, ...current.messages]
+            return { ...current, messages }
+          })
         }
         await db.deleteCompactionArchive(compaction.id)
       }
@@ -1029,19 +1047,23 @@ export const undoCompaction = (sessionId: string) => {
     updateSession(sessionId, (current) => {
       const next = { ...current }
       delete next.compaction
+      // 抑制标记落在会话上并持久化：刷新页面后也不能立刻再压一次
+      next.autoCompactPaused = true
       return next
     })
-    autoCompactSuppressed.add(sessionId)
     persist(sessionId)
   })()
 }
 
 /** 到 85% 自动压一次；压缩中、被撤销暂停、刚压完还没测到新数字时都不触发 */
 const maybeAutoCompact = (sessionId: string) => {
-  if (Object.hasOwn(get().compacting, sessionId) || autoCompactSuppressed.has(sessionId)) {
+  if (Object.hasOwn(get().compacting, sessionId)) {
     return
   }
   const session = getSession(sessionId)
+  if (session?.autoCompactPaused) {
+    return
+  }
   if (session && shouldAutoCompact(session, getVisibleMessages(session))) {
     void compactSession(sessionId, { auto: true })
   }
@@ -1065,8 +1087,13 @@ const settleCompactionUsage = (sessionId: string) => {
     return
   }
   // 用量掉回阈值以下才重新武装自动压缩，撤销过的会话不会马上又压一次
-  if (usage.inputTokens < CONTEXT_WINDOW * AUTO_COMPACT_AT) {
-    autoCompactSuppressed.delete(sessionId)
+  if (session.autoCompactPaused && usage.inputTokens < CONTEXT_WINDOW * AUTO_COMPACT_AT) {
+    updateSession(sessionId, (current) => {
+      const next = { ...current }
+      delete next.autoCompactPaused
+      return next
+    })
+    persist(sessionId)
   }
 }
 
@@ -1088,12 +1115,18 @@ export const sendMessage = (targetSessionId: string | null) => {
   }
   const { text, files } = prepared
   // 斜杠命令在组装请求之前拦下：命令本身不能进 history，也不能当提问发给上游
-  if (text.trim() === '/compact') {
+  const command = parseSlashCommand(text)
+  if (command) {
+    if (!isSupportedCommand(command.name)) {
+      showToast(translate('compactUnknownCommand'))
+      return false
+    }
     if (targetSessionId === null) {
+      showToast(translate('compactionEmpty'))
       return false
     }
     clearSentDraft(targetSessionId)
-    void compactSession(targetSessionId)
+    void compactSession(targetSessionId).then(announceCompaction)
     return true
   }
   const now = Date.now()
@@ -1225,7 +1258,21 @@ export const selectMessageVersion = (sessionId: string, messageId: string) => {
   if (getStreamController(sessionId)) {
     return
   }
-  updateSession(sessionId, (session) => selectVersion(session, messageId))
+  updateSession(sessionId, (session) => {
+    const next = selectVersion(session, messageId)
+    // 摘要讲的是旧分支的事，换分支后立刻失效；原文本来就没删，删记录即可
+    if (!next.compaction) {
+      return next
+    }
+    const kept = next.compaction.firstKeptMessageId
+    const path = getVisibleMessages(next)
+    if (kept && path.some((message) => message.id === kept)) {
+      return next
+    }
+    const cleared = { ...next }
+    delete cleared.compaction
+    return cleared
+  })
   persist(sessionId)
 }
 

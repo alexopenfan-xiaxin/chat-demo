@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslate } from '../../i18n/index.js'
 import { copyText } from '../../utils/clipboard.js'
-import { readImportReports, type ImportRunReport } from '../../services/chat/history/importReport.js'
+import {
+  readImportReports,
+  type ImportRunReport,
+} from '../../services/chat/history/importReport.js'
 import type { ImportPhase } from '../../services/chat/history/progress.js'
 import { useChatStore } from '../../services/chat/store.js'
 import styles from './ImportProgressOverlay.module.css'
@@ -17,7 +20,17 @@ type View = { done: number; total: number | null; stage: ImportPhase }
 type Result = { report: ImportRunReport; ok: boolean }
 
 const PHASES: ImportPhase[] = ['listing', 'checking', 'writing', 'committing', 'rebuilding']
-const WRITING_STAGES = ['read', 'parse', 'schema', 'toLocal', 'write', 'scan', 'image', 'progress', 'other'] as const
+const WRITING_STAGES = [
+  'read',
+  'parse',
+  'schema',
+  'toLocal',
+  'write',
+  'scan',
+  'image',
+  'progress',
+  'other',
+] as const
 /** 解压与 CRC 是 read 内部的拆分，缩进更深一层，只作说明，不参与加总 */
 const READ_PARTS = ['crc', 'inflate'] as const
 
@@ -35,7 +48,8 @@ const formatBytes = (bytes: number): string => {
   return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`
 }
 
-const pad = (text: string, width: number) => (text.length >= width ? text : text + ' '.repeat(width - text.length))
+const pad = (text: string, width: number) =>
+  text.length >= width ? text : text + ' '.repeat(width - text.length)
 
 /**
  * 导入历史对话的进度浮层。
@@ -112,7 +126,10 @@ export const ImportProgressOverlay = () => {
       return
     }
     const determinate =
-      view !== null && view.total !== null && view.total > 0 && (view.stage === 'writing' || view.done >= view.total)
+      view !== null &&
+      view.total !== null &&
+      view.total > 0 &&
+      (view.stage === 'writing' || view.done >= view.total)
     if (determinate) {
       return
     }
@@ -149,7 +166,6 @@ export const ImportProgressOverlay = () => {
     setView(null)
   }
 
-
   if (result !== null) {
     const { report, ok } = result
     const lines: string[] = []
@@ -181,14 +197,18 @@ export const ImportProgressOverlay = () => {
           if (stageMs === undefined) {
             continue
           }
-          lines.push(`      ${pad(stage, 11)}${pad(`${stageMs} ms`, 9)}${Math.round((stageMs / Math.max(1, ms)) * 100)}%`)
+          lines.push(
+            `      ${pad(stage, 11)}${pad(`${stageMs} ms`, 9)}${Math.round((stageMs / Math.max(1, ms)) * 100)}%`
+          )
           if (stage === 'read' && report.detail) {
             for (const part of READ_PARTS) {
               const partMs = report.detail[part]
               if (partMs === undefined) {
                 continue
               }
-              lines.push(`          ${pad(part, 8)}${pad(`${partMs} ms`, 9)}${Math.round((partMs / Math.max(1, stageMs)) * 100)}%`)
+              lines.push(
+                `          ${pad(part, 8)}${pad(`${partMs} ms`, 9)}${Math.round((partMs / Math.max(1, stageMs)) * 100)}%`
+              )
             }
           }
         }
@@ -216,7 +236,12 @@ export const ImportProgressOverlay = () => {
 
     return createPortal(
       <div className={styles.overlay}>
-        <div className={clsx(styles.card, styles.cardResult)} role="dialog" aria-modal="true" aria-live="polite">
+        <div
+          className={clsx(styles.card, styles.cardResult)}
+          role="dialog"
+          aria-modal="true"
+          aria-live="polite"
+        >
           <div className={styles.resultHead}>
             <span className={clsx(styles.resultTitle, !ok && styles.resultTitleFailed)}>
               {ok
@@ -239,7 +264,9 @@ export const ImportProgressOverlay = () => {
                 void copyText(details).then((copied) => setCopyState(copied ? 'done' : 'failed'))
               }}
             >
-              {copyState === 'done' ? t('historyImportCopyReportDone') : t('historyImportCopyReport')}
+              {copyState === 'done'
+                ? t('historyImportCopyReportDone')
+                : t('historyImportCopyReport')}
             </button>
           </div>
           {copyState === 'failed' ? (
@@ -262,7 +289,10 @@ export const ImportProgressOverlay = () => {
   const done = view?.done ?? 0
   const total = view?.total ?? null
   const determinate =
-    view !== null && view.total !== null && view.total > 0 && (view.stage === 'writing' || view.done >= view.total)
+    view !== null &&
+    view.total !== null &&
+    view.total > 0 &&
+    (view.stage === 'writing' || view.done >= view.total)
   const percent = determinate && total ? Math.min(100, Math.round((done / total) * 100)) : null
   const preparing = !determinate && !slow
   const stage = view?.stage ?? 'listing'

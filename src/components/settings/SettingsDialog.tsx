@@ -251,23 +251,23 @@ const MemorySetting = () => {
         focus === 'memory' ? clsx(styles.settingFocus, fading && styles.settingFocusOff) : undefined
       }
     >
-    <SettingCell
-      label={t('settingsMemory')}
-      status={{ key: unavailable ? 'settingsMemoryUnavailable' : 'settingsMemoryHint' }}
-      action={
-        <Switch
-          checked={enabled && !unavailable}
-          disabled={unavailable}
-          label={t('settingsMemory')}
-          onChange={(next) => {
-            setMemory(next)
-            if (next) {
-              showToast({ key: 'settingsMemory' })
-            }
-          }}
-        />
-      }
-    />
+      <SettingCell
+        label={t('settingsMemory')}
+        status={{ key: unavailable ? 'settingsMemoryUnavailable' : 'settingsMemoryHint' }}
+        action={
+          <Switch
+            checked={enabled && !unavailable}
+            disabled={unavailable}
+            label={t('settingsMemory')}
+            onChange={(next) => {
+              setMemory(next)
+              if (next) {
+                showToast({ key: 'settingsMemory' })
+              }
+            }}
+          />
+        }
+      />
     </div>
   )
 }
@@ -573,7 +573,11 @@ const useHistoryImport = () => {
     } catch (error) {
       // 每种失败原因都有自己的文案：版本过新、格式不是我们的、文件不完整、JSON 坏了
       // 都让用户看到具体是哪一种，而不是一句「可能是格式错误」让他反复试
-      setStatus(error instanceof BackupError ? { key: error.key, error: true } : { key: 'historyImportFailed', error: true })
+      setStatus(
+        error instanceof BackupError
+          ? { key: error.key, error: true }
+          : { key: 'historyImportFailed', error: true }
+      )
     } finally {
       importing.current = false
       setBusy(false)
@@ -584,10 +588,22 @@ const useHistoryImport = () => {
   /** 剪贴板被浏览器拒绝时不能静默：把「请手动选择」顶到状态行，4 秒后自己散掉 */
   const copyFailed = () => {
     setStatus({ key: 'historyCopyFailed', error: true })
-    window.setTimeout(() => setStatus((current) => (current?.key === 'historyCopyFailed' ? null : current)), 4000)
+    window.setTimeout(
+      () => setStatus((current) => (current?.key === 'historyCopyFailed' ? null : current)),
+      4000
+    )
   }
 
-  return { file, busy, status, reportCount, copyFailed, select: setFile, cancel: () => setFile(null), confirm }
+  return {
+    file,
+    busy,
+    status,
+    reportCount,
+    copyFailed,
+    select: setFile,
+    cancel: () => setFile(null),
+    confirm,
+  }
 }
 
 /** 导入 = 覆盖：用选中文件替换本地全部会话与附件。 */

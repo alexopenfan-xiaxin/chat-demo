@@ -851,7 +851,6 @@
   .head {
     margin-bottom: 28px;
   }
-
 }
 
 @media (max-width: 359px) {
@@ -894,26 +893,26 @@
   }
 
   /* 重置页字段多，顶部收一点，别让主按钮掉到首屏外 */
-.contentCompact .head {
-  padding-top: 56px;
-}
+  .contentCompact .head {
+    padding-top: 56px;
+  }
 
-.contentCompact .subline {
-  margin: 10px 0 16px;
-}
+  .contentCompact .subline {
+    margin: 10px 0 16px;
+  }
 
-.spacer {
+  .spacer {
     min-height: 24px;
   }
 
   /* 身份行里的输入框要撑满：.field 是 flex 子项，不给 flex:1 就退化成内容宽（type=email 的默认宽度） */
-.identity > .field {
-  flex: 1;
-  min-width: 0;
-  margin-bottom: 0;
-}
+  .identity > .field {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+  }
 
-.subline {
+  .subline {
     margin-bottom: 24px;
   }
 

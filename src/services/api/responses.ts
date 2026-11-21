@@ -42,7 +42,9 @@ const textOf = (content: string | readonly TextCarrier[]): string =>
   typeof content === 'string'
     ? content
     : content
-        .flatMap((block) => (block.type === 'text' && typeof block.text === 'string' ? [block.text] : []))
+        .flatMap((block) =>
+          block.type === 'text' && typeof block.text === 'string' ? [block.text] : []
+        )
         .join('\n\n')
 
 /** 相邻的同角色消息合并成一段，避免出现连续的相同 role */

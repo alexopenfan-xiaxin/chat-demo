@@ -54,7 +54,8 @@ const zipSignature = (bytes: Uint8Array) =>
   bytes.length === 4 && [0x50, 0x4b, 3, 4].every((byte, index) => bytes[index] === byte)
 
 /** 本地文件头签名 PK\x03\x04，用于在解析前区分 ZIP 与其他文件。 */
-export const isZipFile = async (file: File) => zipSignature(new Uint8Array(await file.slice(0, 4).arrayBuffer()))
+export const isZipFile = async (file: File) =>
+  zipSignature(new Uint8Array(await file.slice(0, 4).arrayBuffer()))
 
 /**
  * 归档的数据源：整包内存或原始文件。
@@ -76,7 +77,8 @@ const memorySource = (bytes: Uint8Array): ArchiveSource => ({
 
 const fileSource = (file: File): ArchiveSource => ({
   size: file.size,
-  read: async (start, length) => new Uint8Array(await file.slice(start, start + length).arrayBuffer()),
+  read: async (start, length) =>
+    new Uint8Array(await file.slice(start, start + length).arrayBuffer()),
 })
 
 const viewOf = (bytes: Uint8Array) => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)

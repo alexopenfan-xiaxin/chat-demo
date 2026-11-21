@@ -39,7 +39,11 @@ import {
   onSessionExpired,
   type AuthUser,
 } from '../services/auth.js'
-import { setServiceUnavailable, setSessionExpired, useSessionState } from '../services/sessionState.js'
+import {
+  setServiceUnavailable,
+  setSessionExpired,
+  useSessionState,
+} from '../services/sessionState.js'
 import authStyles from '../components/auth/AuthScreen.module.css'
 import styles from './App.module.css'
 
@@ -218,11 +222,7 @@ export const App = () => {
   return (
     <>
       <div ref={frameRef} className={styles.frame}>
-        {isMobile ? (
-          <MobileSider user={user} />
-        ) : siderCollapsed ? null : (
-          <Sider user={user} />
-        )}
+        {isMobile ? <MobileSider user={user} /> : siderCollapsed ? null : <Sider user={user} />}
         <main className={styles.main}>
           {sessionExpired ? (
             <div className={styles.sessionExpired} role="status">
@@ -297,11 +297,7 @@ export const App = () => {
                       {t('newChat')}
                     </Button>
                   ) : sessionLoadError && activeId !== null ? (
-                    <Button
-                      variant="outlined"
-                      size="m"
-                      onClick={() => selectSession(activeId)}
-                    >
+                    <Button variant="outlined" size="m" onClick={() => selectSession(activeId)}>
                       {t('retry')}
                     </Button>
                   ) : null}

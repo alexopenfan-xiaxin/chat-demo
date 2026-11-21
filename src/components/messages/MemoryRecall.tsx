@@ -1,6 +1,10 @@
 import { memo, useState } from 'react'
 import clsx from 'clsx'
-import { IconBrainOutline, IconChevronDownOutline14, IconChevronRightOutline14 } from '../base/icons.js'
+import {
+  IconBrainOutline,
+  IconChevronDownOutline14,
+  IconChevronRightOutline14,
+} from '../base/icons.js'
 import { useTranslate } from '../../i18n/index.js'
 import { useChatStore } from '../../services/chat/store.js'
 import type { AssistantMessage } from '../../services/chat/types.js'

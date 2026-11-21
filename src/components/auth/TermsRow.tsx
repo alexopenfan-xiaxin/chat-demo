@@ -47,7 +47,11 @@ export const TermsRow = ({ accepted, onChange, flashToken, compact }: TermsRowPr
       </button>
       <span className={styles.termsText}>
         {t('authTermsPrefix')}
-        <button type="button" className={styles.termsLink} onClick={() => window.open('/terms', '_blank', 'noopener')}>
+        <button
+          type="button"
+          className={styles.termsLink}
+          onClick={() => window.open('/terms', '_blank', 'noopener')}
+        >
           {t('authTermsUser')}
         </button>
         {t('authTermsAnd')}

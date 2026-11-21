@@ -73,35 +73,35 @@ export const TextField = ({
 export const PasswordToggle = ({ shown, onToggle }: { shown: boolean; onToggle: () => void }) => {
   const t = useTranslate()
   return (
-  <button
-    type="button"
-    className={styles.eye}
-    aria-pressed={shown}
-    aria-label={shown ? t('authHidePassword') : t('authShowPassword')}
-    onClick={onToggle}
-  >
-    {shown ? (
-      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-        <path
-          d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4Z"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinejoin="round"
-        />
-        <circle cx="8" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-        <path d="M3 13 13 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-      </svg>
-    ) : (
-      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-        <path
-          d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4Z"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinejoin="round"
-        />
-        <circle cx="8" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.3" />
-      </svg>
-    )}
-  </button>
+    <button
+      type="button"
+      className={styles.eye}
+      aria-pressed={shown}
+      aria-label={shown ? t('authHidePassword') : t('authShowPassword')}
+      onClick={onToggle}
+    >
+      {shown ? (
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+          <path
+            d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4Z"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
+          <circle cx="8" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M3 13 13 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+          <path
+            d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4Z"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
+          <circle cx="8" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.3" />
+        </svg>
+      )}
+    </button>
   )
 }

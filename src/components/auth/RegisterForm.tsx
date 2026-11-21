@@ -2,7 +2,13 @@ import clsx from 'clsx'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { AuthError, register, requestCode, type AuthUser, type CaptchaProvider } from '../../services/auth.js'
+import {
+  AuthError,
+  register,
+  requestCode,
+  type AuthUser,
+  type CaptchaProvider,
+} from '../../services/auth.js'
 import styles from './AuthScreen.module.css'
 import { OtpInput } from './OtpInput.js'
 import { TermsRow } from './TermsRow.js'
@@ -198,7 +204,11 @@ export const RegisterForm = ({
       <div className={styles.sendRow}>
         <span
           className={
-            sendError ? styles.error : ttlSeconds > 0 && ttlSeconds <= 60 ? styles.hintWarn : styles.hint
+            sendError
+              ? styles.error
+              : ttlSeconds > 0 && ttlSeconds <= 60
+                ? styles.hintWarn
+                : styles.hint
           }
         >
           {sendError ?? codeHint ?? ''}
