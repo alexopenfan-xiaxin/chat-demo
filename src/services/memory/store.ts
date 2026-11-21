@@ -552,7 +552,13 @@ export const exportMemories = async (): Promise<string> => {
     {
       exportedAt: new Date().toISOString(),
       profile: profile?.text ?? '',
-      memories: entries.map(({ vec, ...rest }) => ({ ...rest, dim: vec.length })),
+      // vec 一并导出：判断「库里的向量是不是当前模型算的」只有拿出来算余弦才定得下来。
+      // 只读导出，不参与检索逻辑；用户自己下载，不经服务端。
+      memories: entries.map((entry) => ({
+        ...entry,
+        vec: Array.from(entry.vec),
+        dim: entry.dim,
+      })),
     },
     null,
     2
