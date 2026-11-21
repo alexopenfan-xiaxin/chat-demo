@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { MEMORY_PATH, useRoute } from './route.js'
 import { setLogoutHandler } from './sessionActions.js'
 import { MemoryPage } from '../components/memory/MemoryPage.js'
 import { useTranslate } from '../i18n/index.js'
-import { tokenFingerprint, warmupEmbeddings } from '../services/memory/api.js'
+import { refreshMemoryAvailability } from '../services/memory/api.js'
+import { warmLocalModel } from '../services/memory/localEmbed.js'
 import { startReindex } from '../services/memory/reindex.js'
 import { useSettings } from '../services/settings.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
@@ -115,43 +116,26 @@ export const App = () => {
     })()
   }, [])
 
-  // 票就绪、且记忆开关是开的：把向量接口那一跳先验掉，首条消息的召回不用再等验票。
-  // 标记用的是「票指纹」而不是账号 id：票到期换新之后指纹变了，自然补一次预热，
-  // 否则换票后的那一轮召回仍要付约 0.9 秒验票、可能降级一次。
+  /**
+   * 向量模型是本地的：进页面先看模型下没下，下了就把 Worker 里的图建好，
+   * 免得用户第一条消息才付那几百毫秒；没下过就什么都不做——24MB 不替用户决定。
+   */
   const memoryOn = useSettings((state) => state.memory)
   useEffect(() => {
-    if (!user || !memoryOn) {
+    if (!user) {
       return
     }
     let cancelled = false
-    const warm = async () => {
-      const token = await ensureAccessToken()
-      if (!token || cancelled) {
-        return
+    void (async () => {
+      const ready = await refreshMemoryAvailability()
+      if (!cancelled && ready && memoryOn) {
+        await warmLocalModel()
       }
-      const fingerprint = await tokenFingerprint(token)
-      if (warmedFor.current === fingerprint) {
-        return
-      }
-      warmedFor.current = fingerprint
-      await warmupEmbeddings()
-    }
-    void warm()
-    // 票是懒刷新，没有变更通知：每 5 分钟对一次指纹，换票最多 5 分钟后补上预热。
-    // 指纹没变时这一步只读内存，不发任何请求。
-    const timer = window.setInterval(() => void warm(), 5 * 60 * 1000)
+    })()
     return () => {
       cancelled = true
-      window.clearInterval(timer)
     }
   }, [user, memoryOn])
-
-  // 关掉开关再打开时要重新预热一次，所以关闭时把标记清掉
-  useEffect(() => {
-    if (!memoryOn) {
-      warmedFor.current = null
-    }
-  }, [memoryOn])
 
   /**
    * 索引升级：开记忆、且浏览器空闲时才跑，一次页面只起一轮。
@@ -191,9 +175,6 @@ export const App = () => {
     // 首次打开先在设置里输入 API Key
     ensureApiKey()
   }, [user])
-
-  /** 已经预热过的账号：避免重复请求，关闭开关时清掉以便再打开时补一次 */
-  const warmedFor = useRef<string | null>(null)
 
   const route = useRoute()
 

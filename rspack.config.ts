@@ -115,6 +115,8 @@ export const createConfig = ({
         { from: path.resolve(root, 'LICENSE'), to: 'LICENSE', toType: 'file' },
         // Cloudflare Pages 从构建产物的根读 _headers：缓存策略跟代码放一起，别散在控制台里
         { from: path.resolve(root, 'src/_headers'), to: '_headers', toType: 'file' },
+        // 本地向量模型与 onnxruntime 运行时：必须自托管（手机访问 HF 基本拿不下来）
+        { from: path.resolve(root, 'static'), to: '.', toType: 'dir' },
       ],
     }),
   ],

@@ -33,6 +33,16 @@ const { EMBEDDINGS_VIA_TUNNEL, EMBEDDINGS_PUBLIC } = api
 const CF = '/api/embed'
 /** 讯飞那条：bge-m3 失败时的降级，也是 switch 回 qwen 时的主路 */
 const SAME_ORIGIN = '/api/embeddings'
+vi.mock('../src/services/memory/localEmbed', () => ({
+  embedLocal: async (texts: string[], timeoutMs: number) => {
+    const api = await import('../src/services/memory/api')
+    const result = await api.embedTextsRemote(texts, timeoutMs, {
+      tunnelFallbackTimeoutMs: api.RECALL_FALLBACK_TIMEOUT_MS,
+    })
+    return { vectors: result.vectors, dim: result.dim }
+  },
+}))
+
 const { saveMemory } = await import('../src/services/memory/store')
 const { memoryActionBlocks } = await import('../src/services/chat/toolBlocks')
 
@@ -131,7 +141,7 @@ describe('召回路径的换路', () => {
   it('召回主路不通时也降级讯飞同源，用的是这一跳自己的预算', async () => {
     installFetch((url) => (url === CF ? 'throw' : okResponse()))
 
-    const result = await api.embedTexts(['要不要带伞'], 800, {
+    const result = await api.embedTextsRemote(['要不要带伞'], 800, {
       tunnelFallbackTimeoutMs: api.RECALL_FALLBACK_TIMEOUT_MS,
     })
 
@@ -151,7 +161,7 @@ describe('召回路径的换路', () => {
   it('不传换路预算时只打一次主路，失败就直接抛', async () => {
     installFetch((url) => (url === CF ? 'throw' : okResponse()))
 
-    await expect(api.embedTexts(['一句话'], 800)).rejects.toThrow()
+    await expect(api.embedTextsRemote(['一句话'], 800)).rejects.toThrow()
 
     expect(calls.map((call) => call.url)).toEqual([CF])
   })

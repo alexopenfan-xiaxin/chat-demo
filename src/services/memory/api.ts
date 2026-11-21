@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { ApiError } from '../api/client.js'
 import { ensureAccessToken } from '../auth.js'
+import { embedLocal } from './localEmbed.js'
+import { LOCAL_MODEL_LABEL, hasLocalModel } from './localModel.js'
 
 /**
  * 向量接口有三条路，顺序是「同源 → 隧道」，直连留而不用：
@@ -27,6 +29,14 @@ const EMBEDDINGS_CF = '/api/embed'
  * 要先确认重算任务跟着跑起来。
  */
 export const EMBEDDINGS_MODEL: EmbeddingModel = 'cf-bge-m3'
+
+/**
+ * 远端向量链路的总开关：**默认关闭**，记忆正文只在设备上算。
+ *
+ * 关掉之后 `request` / `embedTextsAs` / 隧道回退 / 预热这些都还留在代码里，
+ * 但没有调用方——要临时对照或出问题时，把这一行改成 true 就能切回去。
+ */
+export const REMOTE_EMBEDDINGS_ENABLED = false
 
 /** 本机 emb-relay（隧道路由 emb-ds-chat → 127.0.0.1:18789），保留当备份 */
 export const EMBEDDINGS_VIA_TUNNEL = 'https://emb-ds-chat.openfan.dpdns.org/embeddings'
@@ -307,9 +317,41 @@ export const embedTextsAs = async (
   }
 }
 
-/** 按开关当前选的模型算向量；调用方不用关心是哪一家 */
-export const embedTexts = (
+/**
+ * 算向量：默认走本机 Worker，正文一个字节都不出设备。
+ *
+ * 远端那条（`embedTextsAs`）只在 REMOTE_EMBEDDINGS_ENABLED 打开时才会被用到；
+ * 关闭时它仍是可用的纯函数，重算任务、对照测试都能直接调。
+ */
+export const embedTexts = async (
+  texts: string[],
+  timeoutMs: number,
+  options: EmbedOptions = {}
+): Promise<EmbeddingResult> => {
+  if (REMOTE_EMBEDDINGS_ENABLED) {
+    return embedTextsAs(EMBEDDINGS_MODEL, texts, timeoutMs, options)
+  }
+  const result = await embedLocal(texts, timeoutMs)
+  useMemoryStatus.setState({ available: true })
+  return { vectors: result.vectors, dim: result.dim, model: LOCAL_MODEL_LABEL }
+}
+
+/**
+ * 远端入口：默认链路不走它，但回落对照、以及那批换路用例要直接打它。
+ * 语义与改造前完全一致，只是不再挂在 `embedTexts` 下面。
+ */
+export const embedTextsRemote = (
   texts: string[],
   timeoutMs: number,
   options: EmbedOptions = {}
 ): Promise<EmbeddingResult> => embedTextsAs(EMBEDDINGS_MODEL, texts, timeoutMs, options)
+
+/**
+ * 记忆能不能用：现在是「本地模型下没下」，不再是「服务端配没配 key」。
+ * 设置页与记忆页据此置灰/显示下载指引。
+ */
+export const refreshMemoryAvailability = async (): Promise<boolean> => {
+  const ready = await hasLocalModel()
+  useMemoryStatus.setState({ available: ready })
+  return ready
+}

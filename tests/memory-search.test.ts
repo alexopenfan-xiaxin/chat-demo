@@ -5,6 +5,9 @@ vi.hoisted(() => {
 })
 
 const state = vi.hoisted(() => ({
+  /** 让用例能模拟「这一轮算不出向量」 */
+  embedFails: false,
+  embedCalls: 0,
   entries: [
     {
       id: 'm1',
@@ -12,7 +15,8 @@ const state = vi.hoisted(() => ({
       tags: [] as string[],
       vec: new Float32Array([1, 0]),
       dim: 2,
-      model: 'test',
+      // 空 model 的更早条目按维度放行，正好用来测召回本身
+      model: '',
       createdAt: 1,
       updatedAt: 1,
       prevContent: null,
@@ -29,6 +33,16 @@ vi.mock('../src/services/chat/db', () => ({
 vi.mock('../src/services/auth', () => ({
   ensureAccessToken: async () => 'test-token',
 }))
+// 向量现在由本地 Worker 算：这里直接给同一个方向的假向量
+vi.mock('../src/services/memory/localEmbed', () => ({
+  embedLocal: async (texts: string[]) => {
+    state.embedCalls += 1
+    if (state.embedFails) {
+      throw new Error('embed_timeout')
+    }
+    return { vectors: texts.map(() => [1, 0]), dim: 2 }
+  },
+}))
 
 const { useMemoryStatus } = await import('../src/services/memory/api')
 const memory = await import('../src/services/memory/store')
@@ -43,6 +57,8 @@ const answer = () =>
 const fetchMock = vi.fn(async () => answer())
 
 beforeEach(() => {
+  state.embedCalls = 0
+  state.embedFails = false
   fetchMock.mockClear()
   fetchMock.mockImplementation(async () => answer())
   vi.stubGlobal('fetch', fetchMock)
@@ -52,7 +68,7 @@ beforeEach(() => {
 describe('发送前检索', () => {
   it('点发送时算一次向量并命中', async () => {
     const hits = await memory.searchMemory('用户偏好短句回复')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(state.embedCalls).toBe(1)
     expect(hits?.map((hit) => hit.entry.id)).toEqual(['m1'])
   })
 
@@ -61,7 +77,7 @@ describe('发送前检索', () => {
     state.entries = []
     try {
       expect(await memory.searchMemory('用户偏好短句回复')).toEqual([])
-      expect(fetchMock).not.toHaveBeenCalled()
+      expect(state.embedCalls).toBe(0)
     } finally {
       state.entries = saved
     }
@@ -69,33 +85,30 @@ describe('发送前检索', () => {
 
   it('空字符串不发请求', async () => {
     expect(await memory.searchMemory('   ')).toEqual([])
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(state.embedCalls).toBe(0)
   })
 
   it('从未算成功过向量时，本次失败就返回 null（只带画像）', async () => {
     // 换一份模块实例，保证 lastVector 是空的
     vi.resetModules()
     const fresh = await import('../src/services/memory/store')
-    fetchMock.mockImplementation(async () => {
-      throw new Error('network')
-    })
+    state.embedFails = true
     expect(await fresh.searchMemory('第一次就失败')).toBeNull()
+    state.embedFails = false
   })
 
   it('本轮失败时用上一次成功算出的向量兜底', async () => {
     await memory.searchMemory('用户偏好短句回复')
-    fetchMock.mockImplementation(async () => {
-      throw new Error('timeout')
-    })
+    state.embedFails = true
     const hits = await memory.searchMemory('这一句算不出向量')
+    state.embedFails = false
     expect(hits?.map((hit) => hit.entry.id)).toEqual(['m1'])
   })
 
   it('记忆页预览不许用旧向量：失败就返回 null', async () => {
     await memory.searchMemory('用户偏好短句回复')
-    fetchMock.mockImplementation(async () => {
-      throw new Error('timeout')
-    })
+    state.embedFails = true
     expect(await memory.searchMemory('预览这句话', null, { staleFallback: false })).toBeNull()
+    state.embedFails = false
   })
 })
