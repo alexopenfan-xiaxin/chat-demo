@@ -161,23 +161,18 @@ export const buildBlock = (profile: string, hits: readonly MemoryHit[]): string 
   return `${BLOCK_HEADER}\n\n${sections.join('\n\n')}`
 }
 
-/** 上一次算成功的向量：只在本轮请求失败时兜底，不当常态用 */
-let lastVector: { vec: Float32Array; dim: number; model: string } | null = null
 
 /**
  * 发送前检索：点发送时算一次向量、全库点积、取 top-4。
  *
- * 正常路径只有一次网络往返，预算 800ms。只有**这一次**失败或超时才用上一次成功的
- * 向量顶上（那种情况下至少还能命中跨会话的长期偏好），两者都没有就返回 null，
- * 调用方只带画像，绝不让检索拖住发送。
- *
- * `staleFallback: false` 给记忆页的检索预览用：预览必须对应输入的那句话，
- * 拿上一次的向量会把别的问题的结果显示出来。
+ * 正常路径只有一次网络往返，预算 800ms。算不出来就返回 null，调用方只带画像——
+ * 不再拿上一次成功的向量顶上：那个向量属于另一个问题，会把「上一句问的股票」召回到
+ * 「这一句问的爱好」上（用户在真机上看到两条无关记忆被召回，就是这么来的）。
+ * 宁可不注入细节层，也不注入错的东西。
  */
 export const searchMemory = async (
   question: string,
-  sessionId: string | null = null,
-  options: { staleFallback?: boolean } = {}
+  sessionId: string | null = null
 ): Promise<MemoryHit[] | null> => {
   const text = question.trim()
   if (!text) {
@@ -202,13 +197,9 @@ export const searchMemory = async (
       tunnelFallbackTimeoutMs: RECALL_FALLBACK_TIMEOUT_MS,
     })
     const vec = toVector(vectors[0])
-    lastVector = { vec, dim, model }
     return rank(vec, dim, model)
   } catch {
-    if (options.staleFallback === false || !lastVector) {
-      return null
-    }
-    return rank(lastVector.vec, lastVector.dim, lastVector.model)
+    return null
   }
 }
 

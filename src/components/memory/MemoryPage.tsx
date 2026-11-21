@@ -340,7 +340,7 @@ export const MemoryPage = () => {
     setPreviewBusy(true)
     try {
       // 预览必须对应输入的那句话，不许拿上一次的向量冒充
-      setHits(await searchMemory(query, null, { staleFallback: false }))
+      setHits(await searchMemory(query, null))
     } finally {
       setPreviewBusy(false)
     }

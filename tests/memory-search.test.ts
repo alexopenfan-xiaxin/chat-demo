@@ -97,18 +97,17 @@ describe('发送前检索', () => {
     state.embedFails = false
   })
 
-  it('本轮失败时用上一次成功算出的向量兜底', async () => {
+  it('本轮失败就返回 null：绝不拿上一个问题的向量顶替', async () => {
     await memory.searchMemory('用户偏好短句回复')
     state.embedFails = true
-    const hits = await memory.searchMemory('这一句算不出向量')
+    expect(await memory.searchMemory('这一句算不出向量')).toBeNull()
     state.embedFails = false
-    expect(hits?.map((hit) => hit.entry.id)).toEqual(['m1'])
   })
 
-  it('记忆页预览不许用旧向量：失败就返回 null', async () => {
+  it('记忆页预览同样不会用旧向量：失败就返回 null', async () => {
     await memory.searchMemory('用户偏好短句回复')
     state.embedFails = true
-    expect(await memory.searchMemory('预览这句话', null, { staleFallback: false })).toBeNull()
+    expect(await memory.searchMemory('预览这句话', null)).toBeNull()
     state.embedFails = false
   })
 })
