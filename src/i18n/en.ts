@@ -191,8 +191,8 @@ export const en = {
   memoryActionFailedUnknown: 'local write failed',
   memoryGuideAction: 'Turn on in Settings',
   memoryModelNeeded:
-    'The local model is not downloaded yet. Download it (about 66MB, once) before memory can be used.',
-  memoryModelDownload: 'Download the local model (about 66MB)',
+    'The local model is not downloaded yet. Download it (about 32MB, once) before memory can be used.',
+  memoryModelDownload: 'Download the local model (about 32MB)',
   memoryModelDownloading: 'Preparing the local model',
   memoryModelFailed: 'Download failed. Check the network and try again.',
   memoryEmptyTitle: 'No memories yet',

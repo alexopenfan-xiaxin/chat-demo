@@ -93,6 +93,9 @@ export const createConfig = ({
         },
         type: 'javascript/auto',
       },
+      // onnxruntime 的 wasm 由我们自己发（static/ort/v2，gzip 后交给 ORT 的 wasmBinary），
+      // 不靠打包器再复制一份：26.8MB 那份会把 Pages 的 25MiB 单文件上限撞爆
+      { test: /\.wasm$/, type: 'asset/resource', generator: { emit: false } },
       { test: /\.(woff2?|ttf)$/, type: 'asset/resource' },
       // 图标：走 asset/resource，文件名带 hash，CSS 里 url() 也能拿到
       { test: /\.(png|jpe?g|webp)$/, type: 'asset/resource' },

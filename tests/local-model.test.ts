@@ -40,11 +40,12 @@ describe('本地向量模型', () => {
     expect(sum).toBe(model.ORT_TOTAL_BYTES)
     // WebGPU 走 asyncify，WASM 兜底走 plain：两份少一份就有设备起不来
     expect(model.ORT_RUNTIME_FILES.some((file) => file.path.includes('asyncify.wasm'))).toBe(true)
-    expect(model.ORT_RUNTIME_FILES.some((file) => file.path === 'ort-wasm-simd-threaded.wasm')).toBe(
-      true
-    )
-    expect(model.ORT_TOTAL_BYTES).toBeGreaterThan(38e6)
-    expect(model.ORT_TOTAL_BYTES).toBeLessThan(45e6)
+    // wasm 发的是 gzip 过的：单文件必须留在 Pages 的 25MiB 限制以内
+    for (const file of model.ORT_RUNTIME_FILES) {
+      expect(file.bytes).toBeLessThan(25 * 1024 * 1024)
+    }
+    expect(model.ORT_TOTAL_BYTES).toBeGreaterThan(6e6)
+    expect(model.ORT_TOTAL_BYTES).toBeLessThan(8e6)
   })
 
   it('每个文件的 sha256 都是 64 位十六进制，且与字节数量级相称', () => {

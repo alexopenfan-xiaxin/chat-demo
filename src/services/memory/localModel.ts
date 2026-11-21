@@ -52,10 +52,10 @@ export type ModelFile = { path: string; bytes: number; sha256: string }
 export type RuntimeFile = { path: string; bytes: number }
 
 export const ORT_RUNTIME_FILES: RuntimeFile[] = [
-  { path: 'ort-wasm-simd-threaded.mjs', bytes: 24381 },
-  { path: 'ort-wasm-simd-threaded.wasm', bytes: 14264838 },
-  { path: 'ort-wasm-simd-threaded.asyncify.mjs', bytes: 53057 },
-  { path: 'ort-wasm-simd-threaded.asyncify.wasm', bytes: 26861777 },
+  // ort 1.31 只用 asyncify 这份 glue，且 wasm 本体 25.6MiB 超过 Pages 单文件上限，
+  // 所以发 gzip、浏览器侧解压后交给 ORT 的 wasmBinary
+  { path: 'ort-wasm-simd-threaded.asyncify.mjs', bytes: 52406 },
+  { path: 'ort-wasm-simd-threaded.asyncify.wasm.gz', bytes: 6625019 },
 ]
 
 export const ORT_TOTAL_BYTES = ORT_RUNTIME_FILES.reduce((sum, file) => sum + file.bytes, 0)

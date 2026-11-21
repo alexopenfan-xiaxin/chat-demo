@@ -88,6 +88,25 @@ const options = (target: 'webgpu' | 'wasm') => ({
   normalize: true,
 })
 
+/**
+ * 把 wasm 本体自己取回来再交给 onnxruntime。
+ *
+ * 为什么不直接让 ORT 去拉：产物里的 wasm 是 gzip 过的（原文件 26.9MB 超过 Pages
+ * 单文件 25MiB 上限），而且这样浏览器能走同一条缓存、下载进度也由我们统计。
+ * 取不到或解不开就抛错，让上层退回下一种 device。
+ */
+const runtimeBinary = async (): Promise<ArrayBuffer> => {
+  const response = await fetch(ortBaseUrl() + 'ort-wasm-simd-threaded.asyncify.wasm.gz')
+  if (!response.ok || !response.body) {
+    throw new Error(`runtime_fetch_failed ${response.status}`)
+  }
+  if (typeof DecompressionStream !== 'function') {
+    throw new Error('decompression_unsupported')
+  }
+  const stream = response.body.pipeThrough(new DecompressionStream('gzip'))
+  return await new Response(stream).arrayBuffer()
+}
+
 /** 默认只用 WASM；WebGPU 建图失败时同样是 WASM 兜底，不把错误甩给上层 */
 const build = async (): Promise<void> => {
   const targets: ('webgpu' | 'wasm')[] =
@@ -95,6 +114,12 @@ const build = async (): Promise<void> => {
   let lastError: unknown = null
   for (const target of targets) {
     try {
+      // wasm 本体是 gzip 发的（原文件超过 Pages 单文件上限），解压后交给 ORT。
+      // 两档用同一份：ort 1.31 在浏览器里只加载 asyncify 那份 glue 与 wasm
+      const wasm = await runtimeBinary()
+      if (env.backends.onnx.wasm) {
+        ;(env.backends.onnx.wasm as { wasmBinary?: ArrayBuffer }).wasmBinary = wasm
+      }
       pipe = (await pipeline(
         'feature-extraction',
         LOCAL_MODEL_ID,
