@@ -99,12 +99,25 @@ export const toResponsesBody = (body: CreateMessageRequest) => {
   }
 }
 
-/** 读 Responses 的 usage，缺失的字段按 0 处理 */
+/**
+ * 读 Responses 的 usage，缺失的字段按 0 处理。
+ *
+ * 真实的 `response.completed` / `response.incomplete` 事件把 usage 放在 `response` 里面，
+ * 不是在事件顶层；早期我们只认顶层，真机上就一直读到空、环显示「已用 0 / 1M」。
+ * 两种形状都收，免得上游哪天换回来又坏一次。
+ */
 export const readUsage = (value: unknown): MessageUsage | undefined => {
-  if (!isRecord(value) || !isRecord(value.usage)) {
+  if (!isRecord(value)) {
     return undefined
   }
-  const { usage } = value
+  const usage = isRecord(value.usage)
+    ? value.usage
+    : isRecord(value.response) && isRecord(value.response.usage)
+      ? value.response.usage
+      : null
+  if (!usage) {
+    return undefined
+  }
   const cached =
     isRecord(usage.input_tokens_details) && isNumber(usage.input_tokens_details.cached_tokens)
       ? usage.input_tokens_details.cached_tokens

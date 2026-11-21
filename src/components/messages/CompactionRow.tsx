@@ -53,11 +53,7 @@ export const CompactionRow = ({
         <div className={styles.detail}>
           <p className={styles.summary}>{record.summary}</p>
           <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.action}
-              onClick={() => setShowOriginal(true)}
-            >
+            <button type="button" className={styles.action} onClick={() => setShowOriginal(true)}>
               {t('compactionViewOriginal')}
             </button>
             <button
