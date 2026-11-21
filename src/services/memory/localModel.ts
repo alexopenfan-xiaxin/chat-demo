@@ -39,9 +39,26 @@ export const LOCAL_MODEL_DIM = 512
 export const LOCAL_MODEL_POOLING = 'cls' as const
 
 /** onnxruntime 的 wasm 仍由我们自己的产物提供，版本跟着构建走 */
-export const ORT_VERSION = 'v1'
+export const ORT_VERSION = 'v2'
 
 export type ModelFile = { path: string; bytes: number; sha256: string }
+
+/**
+ * 推理运行时（onnxruntime 的 wasm 与 glue）：跟着产物走、不随模型。
+ *
+ * transform 4.x / ort 1.31 起 WebGPU 走 `asyncify` 变体，WASM 兜底走 plain 那一份，
+ * 两份都必须有。体积是实测值，同样要算进下载进度——用户看到的一次下载是模型 + 运行时。
+ */
+export type RuntimeFile = { path: string; bytes: number }
+
+export const ORT_RUNTIME_FILES: RuntimeFile[] = [
+  { path: 'ort-wasm-simd-threaded.mjs', bytes: 24381 },
+  { path: 'ort-wasm-simd-threaded.wasm', bytes: 14264838 },
+  { path: 'ort-wasm-simd-threaded.asyncify.mjs', bytes: 53057 },
+  { path: 'ort-wasm-simd-threaded.asyncify.wasm', bytes: 26861777 },
+]
+
+export const ORT_TOTAL_BYTES = ORT_RUNTIME_FILES.reduce((sum, file) => sum + file.bytes, 0)
 
 /**
  * 需要下载的四个文件：`bytes` 只用于算进度，`sha256` 是入缓存的闸门。
@@ -102,7 +119,12 @@ export const MODEL_REMOTE_PATH_TEMPLATE = `{model}/resolve/${MODEL_COMMIT}/`
 
 export const ortBaseUrl = () => `${origin()}/ort/${ORT_VERSION}/`
 
-/** 下载进度回调：已下字节 / 总字节 / 当前文件 */
+/**
+ * 下载进度回调：已下字节 / 总字节 / 当前文件。
+ *
+ * `total` 为 0 表示这次拿不到总量（比如响应没有 content-length），界面此时只显示百分比，
+ * 不显示 `0 / 0 MB` 这种假数字。
+ */
 export type DownloadProgress = (done: number, total: number, file: string) => void
 
 const openCache = () => caches.open(modelCacheName())
@@ -112,7 +134,49 @@ const hex = (buffer: ArrayBuffer) =>
 
 const sha256 = async (data: ArrayBuffer) => hex(await crypto.subtle.digest('SHA-256', data))
 
-/** 是否四个文件都已经在缓存里；任何一次异常都按「没有」处理，宁可重下一遍 */
+/** 运行时是否已经落盘：用一个标记文件记，省得为了查一遍去请求 40MB */
+const ortMarkerKey = () => `${ortBaseUrl()}.ready`
+
+/** 分子要按字节算，不能按文件数：2 个运行时文件占了总量的六成，按个数会在中途跳一大格 */
+const runtimeTimeout = (path: string) => (path.endsWith('.wasm') ? 240_000 : 30_000)
+
+/**
+ * 按块读响应，边读边报字节。
+ *
+ * 不用 `arrayBuffer()` 的理由：25MB 的权重与 26MB 的 wasm 一次性读完，进度条会从 0
+ * 直接跳到该文件的占比，看着像卡住；按块读能把「当前文件已收字节」算进分子。
+ */
+const readStream = async (
+  response: Response,
+  onBytes: (bytes: number) => void
+): Promise<ArrayBuffer> => {
+  if (!response.body) {
+    const buffer = await response.arrayBuffer()
+    onBytes(buffer.byteLength)
+    return buffer
+  }
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let seen = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+    chunks.push(value)
+    seen += value.byteLength
+    onBytes(value.byteLength)
+  }
+  const merged = new Uint8Array(seen)
+  let offset = 0
+  for (const chunk of chunks) {
+    merged.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return merged.buffer as ArrayBuffer
+}
+
+/** 模型四个文件 + 运行时都已在缓存里；任何一次异常都按「没有」处理，宁可重下一遍 */
 export const hasLocalModel = async (): Promise<boolean> => {
   if (typeof caches === 'undefined') {
     return false
@@ -124,28 +188,33 @@ export const hasLocalModel = async (): Promise<boolean> => {
         return false
       }
     }
-    return true
+    return Boolean(await cache.match(ortMarkerKey()))
   } catch {
     return false
   }
 }
 
 /**
- * 下载缺失的文件并写进 Cache Storage。
+ * 下载缺失的模型与推理运行时，模型部分写进 Cache Storage。
  *
- * 每个文件先打镜像、再打官方源；sha256 对不上就丢掉换下一个源，两个都不对算失败。
- * 失败时抛错，界面据此显示「下载失败，请检查网络后重试」——不静默、也不让记忆半开着。
+ * 模型每个文件先打镜像、再打官方源；sha256 对不上就丢掉换下一个源，两个都不对算失败。
+ * 运行时是同源静态资源，失败直接算下载失败——不静默、也不让记忆半开着。
+ *
+ * 进度只有一个总量（模型 + 运行时），按字节加权；任何一个文件读不到 content-length
+ * 时总量仍按上表算，界面显示的是真实已下字节，不会出现 0 / 0。
  */
 export const downloadLocalModel = async (onProgress?: DownloadProgress): Promise<void> => {
   const cache = await openCache()
-  const total = MODEL_TOTAL_BYTES
+  const total = MODEL_TOTAL_BYTES + ORT_TOTAL_BYTES
   let done = 0
+  const report = (extra: number, file: string) =>
+    onProgress?.(Math.min(done + extra, total), total, file)
 
   for (const file of MODEL_FILES) {
     const key = modelFileUrl(file.path)
     if (await cache.match(key)) {
       done += file.bytes
-      onProgress?.(Math.min(done, total), total, file.path)
+      report(0, file.path)
       continue
     }
 
@@ -154,18 +223,24 @@ export const downloadLocalModel = async (onProgress?: DownloadProgress): Promise
     for (const host of [MODEL_MIRROR, MODEL_UPSTREAM]) {
       for (let attempt = 0; attempt < DOWNLOAD_ATTEMPTS && !stored; attempt++) {
         const url = modelRootUrl(host) + file.path
+        let received = 0
         try {
           const response = await fetch(url, {
             // 小文件 30 秒、权重 4 分钟；没有超时的话，一次卡住就是一条不动的进度条
-            signal: AbortSignal.timeout(file.path.endsWith('.onnx') ? 240_000 : 30_000),
+            signal: AbortSignal.timeout(runtimeTimeout(file.path)),
           })
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}`)
           }
-          const buffer = await response.arrayBuffer()
+          const buffer = await readStream(response, (bytes) => {
+            received += bytes
+            report(received, file.path)
+          })
           const digest = await sha256(buffer)
           if (digest !== file.sha256) {
             errors.push(`${new URL(host).hostname} 哈希不符：期望 ${file.sha256}，实际 ${digest}`)
+            received = 0
+            report(received, file.path)
             break
           }
           // 缓存键固定用镜像地址：transformers.js 查的就是它
@@ -180,13 +255,15 @@ export const downloadLocalModel = async (onProgress?: DownloadProgress): Promise
             })
           )
           done += buffer.byteLength
-          onProgress?.(Math.min(done, total), total, file.path)
+          report(0, file.path)
           stored = true
         } catch (error) {
           errors.push(
             `${new URL(host).hostname} 第 ${attempt + 1} 次失败：${error instanceof Error ? error.message : String(error)}`
           )
           // 连续几个文件会撞上镜像的限流（429 在浏览器里表现为 CORS 错误），退避一下再来
+          received = 0
+          report(received, file.path)
           if (attempt < DOWNLOAD_ATTEMPTS - 1) {
             await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)))
           }
@@ -200,6 +277,29 @@ export const downloadLocalModel = async (onProgress?: DownloadProgress): Promise
       throw new Error(`model_download_failed ${file.path}: ${errors.join(' | ')}`)
     }
   }
+
+  // 运行时：同源静态资源，进的是 HTTP 缓存（/ort/* 是 immutable），这里只负责把字节拉回来
+  if (await cache.match(ortMarkerKey())) {
+    done += ORT_TOTAL_BYTES
+    report(0, '')
+  } else {
+    for (const file of ORT_RUNTIME_FILES) {
+      const url = ortBaseUrl() + file.path
+      const response = await fetch(url, { signal: AbortSignal.timeout(runtimeTimeout(file.path)) })
+      if (!response.ok) {
+        throw new Error(`runtime_download_failed ${file.path}: HTTP ${response.status}`)
+      }
+      let received = 0
+      await readStream(response, (bytes) => {
+        received += bytes
+        report(received, file.path)
+      })
+      done += received
+      report(0, file.path)
+    }
+    await cache.put(ortMarkerKey(), new Response('ok'))
+  }
+
   onProgress?.(total, total, '')
   await dropStaleCaches()
 }

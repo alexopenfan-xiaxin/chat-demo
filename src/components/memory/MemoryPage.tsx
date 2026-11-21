@@ -5,6 +5,7 @@ import { useTranslate } from '../../i18n/index.js'
 import { refreshMemoryAvailability, useMemoryStatus } from '../../services/memory/api.js'
 import { warmLocalModel } from '../../services/memory/localEmbed.js'
 import { LOCAL_MODEL_LABEL, downloadLocalModel } from '../../services/memory/localModel.js'
+import { formatDownload } from './download-format.js'
 import { useReindex } from '../../services/memory/reindex.js'
 import {
   MEMORY_ITEM_LIMIT,
@@ -71,11 +72,14 @@ const relativeTimeKey = (at: number, now: number) => {
  */
 const ModelDownloadCard = ({
   percent,
+  bytes,
   busy,
   failed,
   onDownload,
 }: {
   percent: number
+  /** 「32.4 / 64.5 MB · 50%」；总量未知时为 null，只留左边那行字 */
+  bytes: string | null
   busy: boolean
   failed: boolean
   onDownload: () => void
@@ -92,7 +96,10 @@ const ModelDownloadCard = ({
           <div className={styles.modelBar}>
             <span className={styles.modelBarFill} style={{ width: `${percent}%` }} />
           </div>
-          <p className={styles.modelPercent}>{t('memoryModelDownloading', { percent })}</p>
+          <p className={styles.modelProgressLine}>
+            <span>{t('memoryModelDownloading')}</span>
+            {bytes ? <span className={styles.modelProgressBytes}>{bytes}</span> : null}
+          </p>
         </div>
       ) : (
         <Button variant="primary" size="l" className={styles.modelButton} onClick={onDownload}>
@@ -112,7 +119,8 @@ export const MemoryPage = () => {
   /** 本地模型是否已下载完：null 表示还在查 */
   const [modelReady, setModelReady] = useState<boolean | null>(null)
   const [downloading, setDownloading] = useState(false)
-  const [downloadPercent, setDownloadPercent] = useState(0)
+  const [downloadDone, setDownloadDone] = useState(0)
+  const [downloadTotal, setDownloadTotal] = useState(0)
   const [downloadFailed, setDownloadFailed] = useState(false)
 
   const [profile, setProfile] = useState('')
@@ -165,10 +173,12 @@ export const MemoryPage = () => {
   const downloadModel = async () => {
     setDownloading(true)
     setDownloadFailed(false)
-    setDownloadPercent(0)
+    setDownloadDone(0)
+    setDownloadTotal(0)
     try {
       await downloadLocalModel((done, total) => {
-        setDownloadPercent(total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0)
+        setDownloadDone(done)
+        setDownloadTotal(total)
       })
       await refreshMemoryAvailability()
       setModelReady(true)
@@ -417,7 +427,8 @@ export const MemoryPage = () => {
           <h1 className={styles.topTitle}>{t('memoryTitle')}</h1>
         </header>
         <ModelDownloadCard
-          percent={downloadPercent}
+          percent={downloadTotal > 0 ? Math.min(100, Math.round((downloadDone / downloadTotal) * 100)) : 0}
+          bytes={formatDownload(downloadDone, downloadTotal)}
           busy={downloading}
           failed={downloadFailed}
           onDownload={() => void downloadModel()}
@@ -722,7 +733,8 @@ export const MemoryPage = () => {
         </div>
       ) : modelReady === false ? (
         <ModelDownloadCard
-          percent={downloadPercent}
+          percent={downloadTotal > 0 ? Math.min(100, Math.round((downloadDone / downloadTotal) * 100)) : 0}
+          bytes={formatDownload(downloadDone, downloadTotal)}
           busy={downloading}
           failed={downloadFailed}
           onDownload={() => void downloadModel()}

@@ -67,7 +67,7 @@ let loading: Promise<void> | null = null
  * 「召回分数不可信」重新打开一次。`LOCAL_MODEL_LABEL` 的 -wasm 后缀是同一件事的
  * 另一半：后端换了向量空间就换了，老条目必须按新标签重算。
  */
-const WEBGPU_ENABLED = false
+const WEBGPU_ENABLED = true
 
 const webgpuAvailable = async (): Promise<boolean> => {
   try {

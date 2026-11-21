@@ -903,6 +903,22 @@
   transition: width 200ms ease-out;
 }
 
+.modelProgressLine {
+  width: 100%;
+  margin: 10px 0 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.modelProgressBytes {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .modelPercent {
   margin: 10px 0 0;
   font-size: 13px;

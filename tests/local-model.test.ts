@@ -34,6 +34,19 @@ describe('本地向量模型', () => {
     expect(model.ortBaseUrl()).toContain(`/${model.ORT_VERSION}/`)
   })
 
+  it('下载量里包含推理运行时：4 个 ort 文件、带 asyncify，且目录是 v2', () => {
+    expect(model.ORT_VERSION).toBe('v2')
+    const sum = model.ORT_RUNTIME_FILES.reduce((total, file) => total + file.bytes, 0)
+    expect(sum).toBe(model.ORT_TOTAL_BYTES)
+    // WebGPU 走 asyncify，WASM 兜底走 plain：两份少一份就有设备起不来
+    expect(model.ORT_RUNTIME_FILES.some((file) => file.path.includes('asyncify.wasm'))).toBe(true)
+    expect(model.ORT_RUNTIME_FILES.some((file) => file.path === 'ort-wasm-simd-threaded.wasm')).toBe(
+      true
+    )
+    expect(model.ORT_TOTAL_BYTES).toBeGreaterThan(38e6)
+    expect(model.ORT_TOTAL_BYTES).toBeLessThan(45e6)
+  })
+
   it('每个文件的 sha256 都是 64 位十六进制，且与字节数量级相称', () => {
     for (const file of model.MODEL_FILES) {
       expect(file.sha256).toMatch(/^[0-9a-f]{64}$/)

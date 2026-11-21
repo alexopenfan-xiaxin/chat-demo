@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const staticDir = path.join(root, 'static')
 
-const ORT_VERSION = 'v1'
+const ORT_VERSION = 'v2'
 const ORT_DIR = path.join(staticDir, 'ort', ORT_VERSION)
 
 /**
@@ -23,8 +23,10 @@ const ORT_DIR = path.join(staticDir, 'ort', ORT_VERSION)
 const ORT_FILES = [
   'ort-wasm-simd-threaded.wasm',
   'ort-wasm-simd-threaded.mjs',
-  'ort-wasm-simd-threaded.jsep.wasm',
-  'ort-wasm-simd-threaded.jsep.mjs',
+  // ort 1.30+ 的 WebGPU 后端走 asyncify 变体，缺了它 webgpu 一建图就是
+  // "Failed to fetch dynamically imported module … .asyncify.mjs"
+  'ort-wasm-simd-threaded.asyncify.wasm',
+  'ort-wasm-simd-threaded.asyncify.mjs',
 ]
 
 const exists = async (file) => {
