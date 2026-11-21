@@ -839,7 +839,10 @@
   align-items: center;
   width: 380px;
   max-width: calc(100vw - 32px);
-  margin: 0 auto;
+  /* 垂直居中：.page 是 flex column，margin:auto 把剩余空间上下平分；
+     flex-shrink:0 是矮视口（横屏）下别把卡片压扁 */
+  margin: auto;
+  flex-shrink: 0;
   padding: 24px;
   border-radius: 24px;
   background: var(--dsw-alias-bg-layer-2);
