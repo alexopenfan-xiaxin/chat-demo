@@ -409,4 +409,11 @@ export const zh = {
   compactionBusyStreaming: '正在生成回复，稍后再压缩',
   compactionBusyCompacting: '正在压缩，请稍等',
   compactionEmpty: '这个会话还没有可压缩的内容',
+  compactionViewOriginal: '查看原文',
+  originalModalTitle: '压缩前的原文',
+  originalModalSubtitle: '{rounds} 轮 · {count} 条消息',
+  originalModalYou: '你',
+  originalModalModel: '模型',
+  originalModalEmpty: '（空）',
+  originalModalLoading: '正在读取…',
 } as const

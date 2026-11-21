@@ -429,4 +429,11 @@ export const en = {
   compactionBusyStreaming: 'Still generating, compact later',
   compactionBusyCompacting: 'Already compacting, please wait',
   compactionEmpty: 'Nothing to compact in this conversation yet',
+  compactionViewOriginal: 'View original',
+  originalModalTitle: 'Messages before compaction',
+  originalModalSubtitle: '{rounds} rounds · {count} messages',
+  originalModalYou: 'You',
+  originalModalModel: 'Model',
+  originalModalEmpty: '(empty)',
+  originalModalLoading: 'Loading…',
 } satisfies Record<keyof typeof zh, string>

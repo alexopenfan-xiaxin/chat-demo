@@ -1,0 +1,97 @@
+/* 只读原文面板：宽 560、移动端压到视口内，滚动交给内层，底部 28px 渐隐提示还能滚 */
+.panel {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: min(72vh, 620px);
+  padding: 22px 24px;
+}
+
+.main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.subtitle {
+  font-size: 13px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  padding: 2px 4px 8px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+
+  [data-ds-dark-theme] & {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+}
+
+.segment + .segment {
+  margin-top: 20px;
+}
+
+.meta {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.body {
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 24px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bodyUser {
+  color: var(--dsw-alias-label-primary);
+}
+
+.bodyModel {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.divider {
+  margin: 20px 0;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+
+.fade {
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  left: 0;
+  height: 28px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--dsw-alias-bg-layer-2));
+}
+
+.loading {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}

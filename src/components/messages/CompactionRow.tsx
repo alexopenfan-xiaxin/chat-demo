@@ -4,6 +4,7 @@ import { IconChevronDownOutline14 } from '../base/icons.js'
 import { formatTokenCount } from '../../services/chat/compaction.js'
 import { undoCompaction } from '../../services/chat/store.js'
 import type { CompactionRecord } from '../../services/chat/types.js'
+import { OriginalModal } from './OriginalModal.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './CompactionRow.module.css'
 
@@ -22,6 +23,7 @@ export const CompactionRow = ({
 }) => {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
+  const [showOriginal, setShowOriginal] = useState(false)
   const reduced =
     record.afterInputTokens === null
       ? null
@@ -54,12 +56,26 @@ export const CompactionRow = ({
             <button
               type="button"
               className={styles.action}
+              onClick={() => setShowOriginal(true)}
+            >
+              {t('compactionViewOriginal')}
+            </button>
+            <button
+              type="button"
+              className={styles.action}
               onClick={() => undoCompaction(sessionId)}
             >
               {t('compactionUndo')}
             </button>
           </div>
         </div>
+      ) : null}
+      {showOriginal ? (
+        <OriginalModal
+          sessionId={sessionId}
+          record={record}
+          onClose={() => setShowOriginal(false)}
+        />
       ) : null}
     </div>
   )
