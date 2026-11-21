@@ -66,7 +66,8 @@ const relativeTimeKey = (at: number, now: number) => {
 
 /**
  * 本地模型下载卡片：引导态与「开关开着但模型没下」共用一块。
- * 进度按字节算，文案是「正在下载 12% · 约 25MB」；失败不静默，留在卡片里给重试。
+ *
+ * 失败态不画进度条——空轨道看起来像卡在 0%，比什么都不显示更误导。
  */
 const ModelDownloadCard = ({
   percent,
@@ -81,22 +82,25 @@ const ModelDownloadCard = ({
 }) => {
   const t = useTranslate()
   return (
-    <>
-      <p className={styles.guideText}>{t('memoryModelNeeded')}</p>
+    <div className={styles.modelCard}>
+      <span className={styles.modelMark}>
+        <IconBrainOutline size={24} />
+      </span>
+      <p className={styles.modelText}>{t('memoryModelNeeded')}</p>
       {busy ? (
         <div className={styles.modelProgress}>
           <div className={styles.modelBar}>
             <span className={styles.modelBarFill} style={{ width: `${percent}%` }} />
           </div>
-          <p className={styles.caption}>{t('memoryModelDownloading', { percent })}</p>
+          <p className={styles.modelPercent}>{t('memoryModelDownloading', { percent })}</p>
         </div>
       ) : (
-        <Button variant="primary" size="l" className={styles.guideButton} onClick={onDownload}>
+        <Button variant="primary" size="l" className={styles.modelButton} onClick={onDownload}>
           {t('memoryModelDownload')}
         </Button>
       )}
-      {failed ? <p className={styles.caption}>{t('memoryModelFailed')}</p> : null}
-    </>
+      {failed ? <p className={styles.modelPercent}>{t('memoryModelFailed')}</p> : null}
+    </div>
   )
 }
 
@@ -403,17 +407,12 @@ export const MemoryPage = () => {
           />
           <h1 className={styles.topTitle}>{t('memoryTitle')}</h1>
         </header>
-        <div className={styles.guide}>
-          <span className={styles.guideMark}>
-            <IconBrainOutline size={24} />
-          </span>
-          <ModelDownloadCard
-            percent={downloadPercent}
-            busy={downloading}
-            failed={downloadFailed}
-            onDownload={() => void downloadModel()}
-          />
-        </div>
+        <ModelDownloadCard
+          percent={downloadPercent}
+          busy={downloading}
+          failed={downloadFailed}
+          onDownload={() => void downloadModel()}
+        />
       </div>
     )
   }
@@ -695,32 +694,30 @@ export const MemoryPage = () => {
           </div>
         </div>
       ) : (
-        <div className={styles.guide}>
-          <span className={styles.guideMark}>
-            <IconBrainOutline size={24} />
-          </span>
-          {modelReady === false ? (
-            <ModelDownloadCard
-              percent={downloadPercent}
-              busy={downloading}
-              failed={downloadFailed}
-              onDownload={() => void downloadModel()}
-            />
-          ) : (
-            <>
-              <h2 className={styles.guideTitle}>{t('memoryGuideTitle')}</h2>
-              <p className={styles.guideText}>{t('memoryGuideText')}</p>
-              <Button
-                variant="primary"
-                size="l"
-                className={styles.guideButton}
-                onClick={() => openSettings('general', 'memory')}
-              >
-                {t('memoryGuideAction')}
-              </Button>
-            </>
-          )}
-        </div>
+        modelReady === false ? (
+          <ModelDownloadCard
+            percent={downloadPercent}
+            busy={downloading}
+            failed={downloadFailed}
+            onDownload={() => void downloadModel()}
+          />
+        ) : (
+          <div className={styles.guide}>
+            <span className={styles.guideMark}>
+              <IconBrainOutline size={24} />
+            </span>
+            <h2 className={styles.guideTitle}>{t('memoryGuideTitle')}</h2>
+            <p className={styles.guideText}>{t('memoryGuideText')}</p>
+            <Button
+              variant="primary"
+              size="l"
+              className={styles.guideButton}
+              onClick={() => openSettings('general', 'memory')}
+            >
+              {t('memoryGuideAction')}
+            </Button>
+          </div>
+        )
       )}
 
       {pendingDelete ? (
