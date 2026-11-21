@@ -61,8 +61,7 @@ const makeDb = (limits = new Map<string, LimitRow>()) => {
   return { db: db as unknown as D1Database, limits }
 }
 
-const env = (db: D1Database) =>
-  ({ DB: db, KEENABLE_BASE: 'https://keenable.test' }) as never
+const env = (db: D1Database) => ({ DB: db, KEENABLE_BASE: 'https://keenable.test' }) as never
 
 const authHeaders = (extra: Record<string, string> = {}) => ({
   cookie: '__Host-ds_chat_session=token',
@@ -91,9 +90,8 @@ describe('搜索代理的额度记账', () => {
 
   it('上游成功之后小时桶和分钟桶各记一次', async () => {
     const { db, limits } = makeDb()
-    vi.stubGlobal(
-      'fetch',
-      async () => Response.json({ results: [{ url: 'https://a.test/', title: 'A' }] })
+    vi.stubGlobal('fetch', async () =>
+      Response.json({ results: [{ url: 'https://a.test/', title: 'A' }] })
     )
     const response = await search({
       request: new Request(`${ORIGIN}/api/tools/search`, {
@@ -141,9 +139,12 @@ describe('抓取代理的额度记账', () => {
     const { db, limits } = makeDb()
     vi.stubGlobal('fetch', async () => new Response('slow down', { status: 429 }))
     const response = await fetchPage({
-      request: new Request(`${ORIGIN}/api/tools/fetch?url=${encodeURIComponent('https://example.com/')}`, {
-        headers: authHeaders(),
-      }),
+      request: new Request(
+        `${ORIGIN}/api/tools/fetch?url=${encodeURIComponent('https://example.com/')}`,
+        {
+          headers: authHeaders(),
+        }
+      ),
       env: env(db),
     })
     expect(response.status).toBe(503)
@@ -153,14 +154,16 @@ describe('抓取代理的额度记账', () => {
 
   it('上游成功之后才计数，正文按上限截断', async () => {
     const { db, limits } = makeDb()
-    vi.stubGlobal(
-      'fetch',
-      async () => Response.json({ title: 'Example Domain', content: 'x'.repeat(9000) })
+    vi.stubGlobal('fetch', async () =>
+      Response.json({ title: 'Example Domain', content: 'x'.repeat(9000) })
     )
     const response = await fetchPage({
-      request: new Request(`${ORIGIN}/api/tools/fetch?url=${encodeURIComponent('https://example.com/')}`, {
-        headers: authHeaders(),
-      }),
+      request: new Request(
+        `${ORIGIN}/api/tools/fetch?url=${encodeURIComponent('https://example.com/')}`,
+        {
+          headers: authHeaders(),
+        }
+      ),
       env: env(db),
     })
     expect(response.status).toBe(200)

@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { createProgressReporter, type ImportProgressValue } from '../src/services/chat/history/progress'
+import {
+  createProgressReporter,
+  type ImportProgressValue,
+} from '../src/services/chat/history/progress'
 
 /** 可控时钟 + 收集发出的进度 */
 const setup = () => {
   let time = 0
   const sent: ImportProgressValue[] = []
-  const report = createProgressReporter((value) => sent.push(value), () => time)
+  const report = createProgressReporter(
+    (value) => sent.push(value),
+    () => time
+  )
   const advance = (ms: number) => {
     time += ms
   }

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { barWidthPercent, creditTone, displayRatio, displayValue, formatCredits, formatPercent } from '../src/services/credits/format'
+import {
+  barWidthPercent,
+  creditTone,
+  displayRatio,
+  displayValue,
+  formatCredits,
+  formatPercent,
+} from '../src/services/credits/format'
 
 describe('formatCredits', () => {
   it('小于 10 保留两位，0.02 不能变成 0.0', () => {

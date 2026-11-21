@@ -3,7 +3,9 @@ import { toSpeechText } from '../src/services/speech/speechText'
 
 describe('朗读文本转换', () => {
   it('去掉加粗、斜体、删除线的定界符，文字照念', () => {
-    expect(toSpeechText('这是**很重**要的*一点*，~~不要~~跳过。')).toBe('这是很重要的一点，不要跳过。')
+    expect(toSpeechText('这是**很重**要的*一点*，~~不要~~跳过。')).toBe(
+      '这是很重要的一点，不要跳过。'
+    )
   })
 
   it('标题只留文字，不带井号', () => {
@@ -29,23 +31,31 @@ describe('朗读文本转换', () => {
   })
 
   it('代码块不念代码，只在第一次出现时提示一句', () => {
-    const text = toSpeechText('先看代码：\n\n```ts\nconst a = 1\n```\n\n再看：\n\n```ts\nconst b = 2\n```\n\n结束。')
+    const text = toSpeechText(
+      '先看代码：\n\n```ts\nconst a = 1\n```\n\n再看：\n\n```ts\nconst b = 2\n```\n\n结束。'
+    )
     expect(text).toBe('先看代码：\n代码略。\n再看：\n结束。')
     expect(text).not.toContain('const')
     expect(text.match(/代码略/g)).toHaveLength(1)
   })
 
   it('链接只留文字，丢掉地址和括号', () => {
-    expect(toSpeechText('参考[官方文档](https://example.com/a?b=1)这一节。')).toBe('参考官方文档这一节。')
+    expect(toSpeechText('参考[官方文档](https://example.com/a?b=1)这一节。')).toBe(
+      '参考官方文档这一节。'
+    )
   })
 
   it('图片和 HTML 标签整个丢掉', () => {
-    expect(toSpeechText('看这张 ![截图](https://example.com/a.png) 和 <br> 这一行。')).toBe('看这张 和 这一行。')
+    expect(toSpeechText('看这张 ![截图](https://example.com/a.png) 和 <br> 这一行。')).toBe(
+      '看这张 和 这一行。'
+    )
     expect(toSpeechText('<div align="center">居中</div>')).toBe('居中')
   })
 
   it('表格去掉竖线和对齐符号，每行念成一句', () => {
-    const text = toSpeechText('| 阶段 | 耗时 |\n| --- | ---: |\n| 读取 | 41 ms |\n| 写入 | 38410 ms |')
+    const text = toSpeechText(
+      '| 阶段 | 耗时 |\n| --- | ---: |\n| 读取 | 41 ms |\n| 写入 | 38410 ms |'
+    )
     expect(text).toBe('阶段，耗时\n读取，41 ms\n写入，38410 ms')
     expect(text).not.toContain('|')
   })
@@ -55,7 +65,9 @@ describe('朗读文本转换', () => {
   })
 
   it('公式不念', () => {
-    expect(toSpeechText('公式 $E=mc^2$ 和块级：\n\n$$\na+b\n$$\n\n都跳过。')).toBe('公式 和块级：\n都跳过。')
+    expect(toSpeechText('公式 $E=mc^2$ 和块级：\n\n$$\na+b\n$$\n\n都跳过。')).toBe(
+      '公式 和块级：\n都跳过。'
+    )
   })
 
   it('正常标点原样保留，句号逗号都是停顿', () => {

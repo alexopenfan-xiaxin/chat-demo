@@ -29,7 +29,9 @@ vi.mock('../src/services/chat/db', () => ({
 }))
 
 vi.mock('../src/services/memory/api', async () => {
-  const actual = await vi.importActual<typeof import('../src/services/memory/api')>('../src/services/memory/api')
+  const actual = await vi.importActual<typeof import('../src/services/memory/api')>(
+    '../src/services/memory/api'
+  )
   return {
     ...actual,
     EMBEDDINGS_MODEL: 'cf-bge-m3',

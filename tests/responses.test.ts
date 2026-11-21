@@ -13,7 +13,11 @@ const request = (overrides: Partial<CreateMessageRequest> = {}): CreateMessageRe
       function: {
         name: 'web_search',
         description: '搜索互联网',
-        parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        parameters: {
+          type: 'object',
+          properties: { query: { type: 'string' } },
+          required: ['query'],
+        },
       },
     },
   ],
@@ -27,7 +31,12 @@ describe('toResponsesBody 的工具往返', () => {
       request({
         toolExchange: [
           { role: 'assistant', content: '我搜一下。' },
-          { type: 'function_call', call_id: 'call_1', name: 'web_search', arguments: '{"query":"V4"}' },
+          {
+            type: 'function_call',
+            call_id: 'call_1',
+            name: 'web_search',
+            arguments: '{"query":"V4"}',
+          },
           { type: 'function_call_output', call_id: 'call_1', output: '{"results":[]}' },
         ],
       })

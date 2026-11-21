@@ -42,7 +42,7 @@ import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
 import { translate, useTranslate } from '../../i18n/index.js'
-import { isSupportedCommand, parseSlashCommand } from '../../services/chat/slash.js'
+import { isCommand, parseSlashCommand } from '../../services/chat/slash.js'
 import styles from './ChatInput.module.css'
 
 /** 输入框：自适应高度的文本框 + 文件 + 深度思考与智能搜索开关 + 语音输入 + 发送 / 停止 */
@@ -160,11 +160,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const send = () => {
     // 斜杠命令先弹确认，不进入提问路径；大小写、带参数的写法都按命令处理
     const command = parseSlashCommand(text)
-    if (command) {
-      if (!isSupportedCommand(command.name)) {
-        showToast(translate('compactUnknownCommand'))
-        return
-      }
+    if (isCommand(command)) {
       if (sessionId === null) {
         showToast(translate('compactionEmpty'))
         return

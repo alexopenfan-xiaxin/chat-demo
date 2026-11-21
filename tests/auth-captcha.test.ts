@@ -18,7 +18,8 @@ const env = (overrides: Partial<Env> = {}): Env =>
 const okFetch = (success: boolean) =>
   vi.fn(async () => new Response(JSON.stringify({ success }), { status: 200 }))
 
-const urls = (fetchMock: ReturnType<typeof vi.fn>) => fetchMock.mock.calls.map((call) => String(call[0]))
+const urls = (fetchMock: ReturnType<typeof vi.fn>) =>
+  fetchMock.mock.calls.map((call) => String(call[0]))
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -50,7 +51,9 @@ describe('verifyCaptcha', () => {
   it('hCaptcha 没配密钥时直接失败，不发请求也不放行', async () => {
     const fetchMock = okFetch(true)
     vi.stubGlobal('fetch', fetchMock)
-    await expect(verifyCaptcha(env({ HCAPTCHA_SECRET: undefined }), 'hcaptcha', 'tok', '1.2.3.4')).resolves.toBe(false)
+    await expect(
+      verifyCaptcha(env({ HCAPTCHA_SECRET: undefined }), 'hcaptcha', 'tok', '1.2.3.4')
+    ).resolves.toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

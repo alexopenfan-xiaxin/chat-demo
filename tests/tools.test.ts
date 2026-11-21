@@ -26,7 +26,11 @@ describe('mapResults', () => {
       ...Array.from({ length: 6 }, (_, i) => ({ url: `https://h${i}.test/` })),
     ]
     const hits = mapResults({ results }, 3)
-    expect(hits.map((hit) => hit.url)).toEqual(['https://h0.test/', 'https://h1.test/', 'https://h2.test/'])
+    expect(hits.map((hit) => hit.url)).toEqual([
+      'https://h0.test/',
+      'https://h1.test/',
+      'https://h2.test/',
+    ])
   })
 
   it('结构不对时返回空数组，不抛异常', () => {
@@ -56,7 +60,10 @@ describe('shapePage', () => {
   })
 
   it('上游自己截过的也算截断，标题按 300 截', () => {
-    const page = shapePage({ title: 'T'.repeat(400), content: 'short', truncated: true }, 'https://a.test/')
+    const page = shapePage(
+      { title: 'T'.repeat(400), content: 'short', truncated: true },
+      'https://a.test/'
+    )
     expect(page.title).toHaveLength(300)
     expect(page.truncated).toBe(true)
   })

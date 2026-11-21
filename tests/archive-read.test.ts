@@ -57,7 +57,9 @@ describe('openArchive（整包读一次内存源）', () => {
     // 4 字节签名也改在内存里看，不再为它单独读一次盘
     expect(counts.slice).toBe(0)
     expect(archive.entries).toHaveLength(6)
-    expect(archive.entries.filter((entry) => entry.path.startsWith('chat_sessions/'))).toHaveLength(5)
+    expect(archive.entries.filter((entry) => entry.path.startsWith('chat_sessions/'))).toHaveLength(
+      5
+    )
     expect(archive.source.size).toBe(file.size)
   })
 

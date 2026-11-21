@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-const { parseSlashCommand, isSupportedCommand } = await import('../src/services/chat/slash')
+const { isCommand, parseSlashCommand, isSupportedCommand } =
+  await import('../src/services/chat/slash')
 
 describe('斜杠命令解析', () => {
   it('标准写法', () => {
@@ -28,6 +29,19 @@ describe('斜杠命令解析', () => {
     const parsed = parseSlashCommand('/help')
     expect(parsed?.name).toBe('help')
     expect(isSupportedCommand('help')).toBe(false)
+  })
+
+  it('未知命令一律按普通提问发出去', () => {
+    expect(isCommand(parseSlashCommand('/help'))).toBe(false)
+    expect(isCommand(parseSlashCommand('/etc 里那个文件是干嘛的'))).toBe(false)
+    expect(isCommand(parseSlashCommand('/tmp 目录满了怎么办'))).toBe(false)
+  })
+
+  it('认识的命令才算命令', () => {
+    expect(isCommand(parseSlashCommand('/compact'))).toBe(true)
+    expect(isCommand(parseSlashCommand('/Compact 现在'))).toBe(true)
+    expect(isCommand(parseSlashCommand('帮我压缩一下'))).toBe(false)
+    expect(isCommand(null)).toBe(false)
   })
 
   it('普通提问与空串不误判', () => {

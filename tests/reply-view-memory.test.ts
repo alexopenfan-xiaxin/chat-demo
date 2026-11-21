@@ -45,7 +45,13 @@ describe('记忆动作在思考过程里的位置', () => {
       { type: 'thinking', thinking: '想' },
       { type: 'memory_action', id: 'memory-x', action: 'edit', count: 1 },
       { type: 'thinking', thinking: '再想' },
-      { type: 'memory_action', id: 'memory-y', action: 'save', count: 0, failureReason: 'not_found' },
+      {
+        type: 'memory_action',
+        id: 'memory-y',
+        action: 'save',
+        count: 0,
+        failureReason: 'not_found',
+      },
       { type: 'text', text: '答案' },
     ]
     const first = buildReplyView(reply(blocks), false)
@@ -62,7 +68,13 @@ describe('记忆动作在思考过程里的位置', () => {
   it('视图里只有动作与条数，带不出任何记忆正文', () => {
     const view = buildReplyView(
       reply([
-        { type: 'memory_action', id: 'memory-1', action: 'save', count: 0, failureReason: 'too_close' },
+        {
+          type: 'memory_action',
+          id: 'memory-1',
+          action: 'save',
+          count: 0,
+          failureReason: 'too_close',
+        },
         { type: 'text', text: '答案' },
       ]),
       false

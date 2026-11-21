@@ -26,3 +26,14 @@ export const parseSlashCommand = (text: string): ParsedCommand | null => {
 }
 
 export const isSupportedCommand = (name: string): name is SlashCommandName => COMMANDS.has(name)
+
+/**
+ * 这条输入是不是我们认识的命令。
+ *
+ * 只拦认识的命令名，其余一律按普通提问发出去：`/help` 留给用户自己问，
+ * `/etc 里那个文件是干嘛的`、`/tmp 目录满了怎么办` 这种问 Unix 路径的更不能被吃掉。
+ */
+export const isCommand = (
+  command: ParsedCommand | null
+): command is ParsedCommand & { name: SlashCommandName } =>
+  command !== null && isSupportedCommand(command.name)

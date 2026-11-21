@@ -28,7 +28,9 @@ vi.mock('../src/services/chat/db', () => ({
 }))
 
 vi.mock('../src/services/memory/api', async () => {
-  const actual = await vi.importActual<typeof import('../src/services/memory/api')>('../src/services/memory/api')
+  const actual = await vi.importActual<typeof import('../src/services/memory/api')>(
+    '../src/services/memory/api'
+  )
   return {
     ...actual,
     embedTexts: async (texts: string[]) => ({
@@ -80,7 +82,7 @@ describe('editMemory 定位', () => {
   it('库里只有一条时，描述够像（≥0.80）就直接改，不再回候选', async () => {
     rows.clear()
     put('m5', '最爱吃芒果布丁', unit(1, 0))
-    embeddings.set('我最爱吃的那道甜点', unit(0.83, 0.56))   // 0.83：压过不相关上限 0.58，低于 0.85
+    embeddings.set('我最爱吃的那道甜点', unit(0.83, 0.56)) // 0.83：压过不相关上限 0.58，低于 0.85
     const result = await editMemory({ id: '我最爱吃的那道甜点', content: '其实最爱吃提拉米苏' })
     expect(result.ok).toBe(true)
     expect((rows.get('m5') as { content: string }).content).toBe('其实最爱吃提拉米苏')

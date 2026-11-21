@@ -406,7 +406,6 @@ export const zh = {
     '压缩后，较早的对话只以一段摘要的形式保留给模型，细节会丢失。原文仍在这台设备上，可以随时撤销。',
   compactConfirmOk: '压缩',
   compactConfirmCancel: '取消',
-  compactUnknownCommand: '未知命令',
   compactionBusyStreaming: '正在生成回复，稍后再压缩',
   compactionBusyCompacting: '正在压缩，请稍等',
   compactionEmpty: '这个会话还没有可压缩的内容',

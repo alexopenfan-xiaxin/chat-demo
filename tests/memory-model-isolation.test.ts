@@ -29,7 +29,8 @@ vi.mock('../src/services/chat/db', () => ({
 }))
 
 /** 假向量：所有文本都映射到同一个方向，保证「同模型的条目」一定过阈值 */
-const vectorOf = (dim: number) => Array.from({ length: dim }, (_value, index) => (index === 0 ? 1 : 0))
+const vectorOf = (dim: number) =>
+  Array.from({ length: dim }, (_value, index) => (index === 0 ? 1 : 0))
 
 // 重算任务现在先看本地模型在不在；node 里没有 Cache Storage，直接放行
 vi.mock('../src/services/memory/localModel', () => ({
@@ -38,7 +39,9 @@ vi.mock('../src/services/memory/localModel', () => ({
 }))
 
 vi.mock('../src/services/memory/api', async () => {
-  const actual = await vi.importActual<typeof import('../src/services/memory/api')>('../src/services/memory/api')
+  const actual = await vi.importActual<typeof import('../src/services/memory/api')>(
+    '../src/services/memory/api'
+  )
   return {
     ...actual,
     // 开关已经切到 bge-m3，重算任务才会开张
@@ -138,6 +141,8 @@ describe('跨模型的条目', () => {
     expect(useReindex.getState().done).toBe(3)
     expect(useReindex.getState().total).toBe(3)
     expect(useReindex.getState().running).toBe(false)
-    expect([...rows.values()].every((entry) => (entry as { model: string }).model === NEW_MODEL)).toBe(true)
+    expect(
+      [...rows.values()].every((entry) => (entry as { model: string }).model === NEW_MODEL)
+    ).toBe(true)
   })
 })

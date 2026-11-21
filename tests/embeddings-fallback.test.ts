@@ -105,7 +105,9 @@ describe('写入路径的换路', () => {
   })
 
   it('bge-m3 5xx 也降级讯飞同源', async () => {
-    installFetch((url) => (url === CF ? new Response('bad gateway', { status: 502 }) : okResponse()))
+    installFetch((url) =>
+      url === CF ? new Response('bad gateway', { status: 502 }) : okResponse()
+    )
 
     const result = await saveMemory({ content: '咖啡只喝冰美式', tags: [], sessionId: 's1' })
 

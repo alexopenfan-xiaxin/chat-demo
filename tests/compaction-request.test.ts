@@ -23,13 +23,29 @@ const assistant = (text: string) =>
  */
 describe('压缩后的请求组装', () => {
   it('摘要放最前，紧跟一条 assistant 占位，再接保留的轮次', () => {
-    const history = [user('第一个问题'), assistant('第一个回答'), user('第二个问题'), assistant('第二个回答')] as never[]
-    const messages = toRequestMessages(history, user('新问题'), undefined, false, undefined, undefined, '摘要正文')
+    const history = [
+      user('第一个问题'),
+      assistant('第一个回答'),
+      user('第二个问题'),
+      assistant('第二个回答'),
+    ] as never[]
+    const messages = toRequestMessages(
+      history,
+      user('新问题'),
+      undefined,
+      false,
+      undefined,
+      undefined,
+      '摘要正文'
+    )
 
     expect(messages[0]).toMatchObject({ role: 'user' })
     expect(String((messages[0] as { content: string }).content)).toContain('摘要正文')
     expect(String((messages[0] as { content: string }).content)).toContain('我之前和你聊过一些事。')
-    expect(messages[1]).toMatchObject({ role: 'assistant', content: [{ type: 'text', text: '好的。' }] })
+    expect(messages[1]).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'text', text: '好的。' }],
+    })
     expect(messages[2]).toMatchObject({ role: 'user' })
     expect(messages.at(-1)).toMatchObject({ role: 'user' })
   })
@@ -42,7 +58,15 @@ describe('压缩后的请求组装', () => {
 
   it('摘要后面不会出现连续两条 user', () => {
     const history = [user('问题'), assistant('回答')] as never[]
-    const messages = toRequestMessages(history, user('新问题'), undefined, false, undefined, undefined, '摘要')
+    const messages = toRequestMessages(
+      history,
+      user('新问题'),
+      undefined,
+      false,
+      undefined,
+      undefined,
+      '摘要'
+    )
     const roles = messages.map((message) => message.role)
     expect(roles.slice(0, 2)).toEqual(['user', 'assistant'])
     for (let index = 1; index < roles.length; index += 1) {

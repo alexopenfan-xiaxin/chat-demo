@@ -18,7 +18,7 @@ import {
   prepareDraftMessage,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
-import { isSupportedCommand, parseSlashCommand } from './slash.js'
+import { isCommand, parseSlashCommand } from './slash.js'
 import { serverTools } from '../memory/tools.js'
 import {
   buildBlock,
@@ -939,7 +939,8 @@ export const compactSession = async (
   }
   const session = getSession(sessionId)
   if (!session) {
-    return 'compacting'
+    // 会话被删或切走了：按失败处理，别谎称「正在压缩」
+    return 'failed'
   }
   const messages = getVisibleMessages(session)
   // 已经压过一轮时，只把「上次保留的那段」再总结，旧摘要原文一起进新摘要
@@ -1116,11 +1117,7 @@ export const sendMessage = (targetSessionId: string | null) => {
   const { text, files } = prepared
   // 斜杠命令在组装请求之前拦下：命令本身不能进 history，也不能当提问发给上游
   const command = parseSlashCommand(text)
-  if (command) {
-    if (!isSupportedCommand(command.name)) {
-      showToast(translate('compactUnknownCommand'))
-      return false
-    }
+  if (isCommand(command)) {
     if (targetSessionId === null) {
       showToast(translate('compactionEmpty'))
       return false

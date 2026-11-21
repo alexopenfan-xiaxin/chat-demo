@@ -74,18 +74,30 @@ describe('resolveUpstreamKey', () => {
   const decryptOk = async () => 'wbk_user_own_key'
 
   it('解出 key 且 quota > 0 时按有限额度处理', async () => {
-    const result = await resolveUpstreamKey({ enc: 'cipher', quota: 10 }, { KEY_ENC_SECRET: 's' }, decryptOk)
+    const result = await resolveUpstreamKey(
+      { enc: 'cipher', quota: 10 },
+      { KEY_ENC_SECRET: 's' },
+      decryptOk
+    )
     expect(result.key).toBe('wbk_user_own_key')
     expect(result.unlimited).toBe(false)
   })
 
   it('quota 0 表示不限额', async () => {
-    const result = await resolveUpstreamKey({ enc: 'cipher', quota: 0 }, { KEY_ENC_SECRET: 's' }, decryptOk)
+    const result = await resolveUpstreamKey(
+      { enc: 'cipher', quota: 0 },
+      { KEY_ENC_SECRET: 's' },
+      decryptOk
+    )
     expect(result.unlimited).toBe(true)
   })
 
   it('没有密文时返回空 key：这就是 no_key 那条路径，绝不回落到管理员 key', async () => {
-    const result = await resolveUpstreamKey(null, { KEY_ENC_SECRET: 's', UPSTREAM_KEY_UNLIMITED: '1' }, decryptOk)
+    const result = await resolveUpstreamKey(
+      null,
+      { KEY_ENC_SECRET: 's', UPSTREAM_KEY_UNLIMITED: '1' },
+      decryptOk
+    )
     expect(result.key).toBe('')
   })
 

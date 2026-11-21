@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { splitSpeechSegments, SPEECH_SEGMENT_MAX, SPEECH_SEGMENT_MIN } from '../src/services/speech/segments'
+import {
+  splitSpeechSegments,
+  SPEECH_SEGMENT_MAX,
+  SPEECH_SEGMENT_MIN,
+} from '../src/services/speech/segments'
 
 const strip = (value: string) => value.replace(/\s+/g, '')
 
 /** 一段正常的正文：句子长短不一，标点齐全 */
 const sample = Array.from(
   { length: 12 },
-  (_, index) => `这是第${index + 1}句用来测试分段的内容，它有一点长，大概几十个字，方便凑出合适的段长。`
+  (_, index) =>
+    `这是第${index + 1}句用来测试分段的内容，它有一点长，大概几十个字，方便凑出合适的段长。`
 ).join('')
 
 describe('朗读分段', () => {
@@ -40,7 +45,8 @@ describe('朗读分段', () => {
   })
 
   it('超长单句退到逗号处切，不在词中间硬切', () => {
-    const long = Array.from({ length: 40 }, (_, index) => `第${index + 1}个分句内容`).join('，') + '。'
+    const long =
+      Array.from({ length: 40 }, (_, index) => `第${index + 1}个分句内容`).join('，') + '。'
     const segments = splitSpeechSegments(long)
     expect(segments.length).toBeGreaterThan(1)
     for (const segment of segments.slice(0, -1)) {

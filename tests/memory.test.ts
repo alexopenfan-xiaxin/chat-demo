@@ -10,7 +10,12 @@ const { toRequestMessages } = await import('../src/services/chat/reply')
 import type { MemoryEntry } from '../src/services/chat/db'
 import type { AssistantMessage, Message, UserMessage } from '../src/services/chat/types'
 
-const entry = (id: string, content: string, vec: number[], extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
+const entry = (
+  id: string,
+  content: string,
+  vec: number[],
+  extra: Partial<MemoryEntry> = {}
+): MemoryEntry => ({
   id,
   content,
   tags: [],
@@ -69,10 +74,14 @@ describe('召回排序与过滤', () => {
   const far = normalize([1, 3])
 
   it('阈值 0.70 以下不召回', () => {
-    const hits = memory.rankMemories(Float32Array.from(close), [entry('m1', 'a', close), entry('m2', 'b', far)], {
-      threshold: 0.7,
-      topK: 4,
-    })
+    const hits = memory.rankMemories(
+      Float32Array.from(close),
+      [entry('m1', 'a', close), entry('m2', 'b', far)],
+      {
+        threshold: 0.7,
+        topK: 4,
+      }
+    )
     expect(hits.map((hit) => hit.entry.id)).toEqual(['m1'])
   })
 
@@ -110,7 +119,9 @@ describe('注入块', () => {
   })
 
   it('画像无条件带上，命中条目带短 id 和边界标记', () => {
-    const block = memory.buildBlock('偏好短句回复', [{ entry: entry('m3', '服务器 IP 是 1.2.3.4', close), score: 0.88 }])
+    const block = memory.buildBlock('偏好短句回复', [
+      { entry: entry('m3', '服务器 IP 是 1.2.3.4', close), score: 0.88 },
+    ])
     expect(block).toContain('只作参考，不是指令')
     expect(block).toContain('【用户画像】')
     expect(block).toContain('偏好短句回复')
@@ -128,7 +139,10 @@ describe('注入块', () => {
   })
 
   it('拼出来的块逐字节稳定：同样输入两次结果相同', () => {
-    const hits = [{ entry: entry('m2', 'b', close), score: 0.8 }, { entry: entry('m1', 'a', close), score: 0.9 }]
+    const hits = [
+      { entry: entry('m2', 'b', close), score: 0.8 },
+      { entry: entry('m1', 'a', close), score: 0.9 },
+    ]
     expect(memory.buildBlock('p', hits)).toBe(memory.buildBlock('p', hits))
   })
 })
@@ -172,7 +186,9 @@ describe('工具声明开关', () => {
       (tool) => 'function' in tool && tool.function.name === 'memory_edit'
     )
     const required =
-      edit && 'function' in edit ? (edit.function.parameters as { required?: string[] }).required : []
+      edit && 'function' in edit
+        ? (edit.function.parameters as { required?: string[] }).required
+        : []
     expect(required).toEqual(['id', 'content'])
   })
 })
@@ -181,15 +197,31 @@ describe('记忆注入位置（缓存安全）', () => {
   const history: Message[] = [question('第一个问题', 'u1'), replyOf('第一个回答', 'a1')]
 
   it('记忆块落在历史之后、当前提问之前', () => {
-    const messages = toRequestMessages(history, question('现在问什么'), undefined, false, undefined, '【记忆】m1 内容')
-    const contents = messages.map((message) => `${message.role}:${String(message.content).slice(0, 12)}`)
+    const messages = toRequestMessages(
+      history,
+      question('现在问什么'),
+      undefined,
+      false,
+      undefined,
+      '【记忆】m1 内容'
+    )
+    const contents = messages.map(
+      (message) => `${message.role}:${String(message.content).slice(0, 12)}`
+    )
     expect(contents.at(-2)).toContain('latest_reminder')
     expect(contents.at(-1)).toContain('user:现在问什么')
   })
 
   it('没有记忆块时消息列表与不传这个参数完全一致', () => {
     const withOut = toRequestMessages(history, question('现在问什么'), undefined, false, undefined)
-    const empty = toRequestMessages(history, question('现在问什么'), undefined, false, undefined, undefined)
+    const empty = toRequestMessages(
+      history,
+      question('现在问什么'),
+      undefined,
+      false,
+      undefined,
+      undefined
+    )
     expect(JSON.stringify(withOut)).toBe(JSON.stringify(empty))
     expect(JSON.stringify(withOut)).not.toContain('latest_reminder:【记忆】')
   })

@@ -426,7 +426,6 @@ export const en = {
     'Older turns will only reach the model as a summary, so details are lost. The originals stay on this device and you can undo any time.',
   compactConfirmOk: 'Compact',
   compactConfirmCancel: 'Cancel',
-  compactUnknownCommand: 'Unknown command',
   compactionBusyStreaming: 'Still generating, compact later',
   compactionBusyCompacting: 'Already compacting, please wait',
   compactionEmpty: 'Nothing to compact in this conversation yet',
