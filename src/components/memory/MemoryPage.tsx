@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { navigateTo } from '../../app/route.js'
 import { useTranslate } from '../../i18n/index.js'
-import { EMBEDDINGS_MODEL, useMemoryStatus } from '../../services/memory/api.js'
+import { refreshMemoryAvailability, useMemoryStatus } from '../../services/memory/api.js'
+import { warmLocalModel } from '../../services/memory/localEmbed.js'
+import { LOCAL_MODEL_LABEL, downloadLocalModel } from '../../services/memory/localModel.js'
 import { useReindex } from '../../services/memory/reindex.js'
 import {
   MEMORY_ITEM_LIMIT,
@@ -21,7 +23,7 @@ import {
   type MemoryHit,
 } from '../../services/memory/store.js'
 import { useChatStore } from '../../services/chat/store.js'
-import { useSettings } from '../../services/settings.js'
+import { setMemory, useSettings } from '../../services/settings.js'
 import type { MemoryEntry } from '../../services/chat/db.js'
 import { openSettings } from '../settings/settingsDialogState.js'
 import { Button } from '../base/Button.js'
@@ -61,11 +63,56 @@ const relativeTimeKey = (at: number, now: number) => {
   return null
 }
 
+
+/**
+ * 本地模型下载卡片：引导态与「开关开着但模型没下」共用一块。
+ * 进度按字节算，文案是「正在下载 12% · 约 25MB」；失败不静默，留在卡片里给重试。
+ */
+const ModelDownloadCard = ({
+  percent,
+  busy,
+  failed,
+  onDownload,
+}: {
+  percent: number
+  busy: boolean
+  failed: boolean
+  onDownload: () => void
+}) => {
+  const t = useTranslate()
+  return (
+    <div className={styles.guide}>
+      <span className={styles.guideMark}>
+        <IconBrainOutline size={24} />
+      </span>
+      <p className={styles.guideText}>{t('memoryModelNeeded')}</p>
+      {busy ? (
+        <div className={styles.modelProgress}>
+          <div className={styles.modelBar}>
+            <span className={styles.modelBarFill} style={{ width: `${percent}%` }} />
+          </div>
+          <p className={styles.caption}>{t('memoryModelDownloading', { percent })}</p>
+        </div>
+      ) : (
+        <Button variant="primary" size="l" className={styles.guideButton} onClick={onDownload}>
+          {t('memoryModelDownload')}
+        </Button>
+      )}
+      {failed ? <p className={styles.caption}>{t('memoryModelFailed')}</p> : null}
+    </div>
+  )
+}
+
 export const MemoryPage = () => {
   const t = useTranslate()
   const sessions = useChatStore((state) => state.sessions)
   const available = useMemoryStatus((state) => state.available)
   const memoryOn = useSettings((state) => state.memory)
+  /** 本地模型是否已下载完：null 表示还在查 */
+  const [modelReady, setModelReady] = useState<boolean | null>(null)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadPercent, setDownloadPercent] = useState(0)
+  const [downloadFailed, setDownloadFailed] = useState(false)
 
   const [profile, setProfile] = useState('')
   const [profileBusy, setProfileBusy] = useState(false)
@@ -99,6 +146,38 @@ export const MemoryPage = () => {
     const [text, list] = await Promise.all([loadProfile(), listMemories()])
     setProfile(text)
     setEntries(list)
+  }
+
+  // 模型在不在本机与开关无关：新用户要靠这个结果决定给不给下载入口
+  useEffect(() => {
+    void refreshMemoryAvailability().then(setModelReady)
+  }, [])
+
+  /**
+   * 下载本地模型：下完先把 Worker 的图建好，再打开开关（新用户走这条），
+   * 老用户本来开着，下载完直接回到内容区。
+   */
+  const downloadModel = async () => {
+    setDownloading(true)
+    setDownloadFailed(false)
+    setDownloadPercent(0)
+    try {
+      await downloadLocalModel((done, total) => {
+        setDownloadPercent(total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0)
+      })
+      await refreshMemoryAvailability()
+      setModelReady(true)
+      await warmLocalModel()
+      if (!memoryOn) {
+        setMemory(true)
+        return
+      }
+      await reload()
+    } catch {
+      setDownloadFailed(true)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   // 关闭记忆时这一页不发任何请求、也不读本地记忆：只在打开状态下加载
@@ -314,6 +393,29 @@ export const MemoryPage = () => {
       </button>
     )
 
+  // 开关开着但模型没下（老用户）：整页换成下载指引，别让他点什么都失败
+  if (memoryOn && modelReady === false) {
+    return (
+      <div className={styles.page} ref={scrollRef}>
+        <header className={clsx(styles.topbar, scrolled && styles.topbarScrolled)}>
+          <IconButton
+            icon={<IconArrowLeftOutline16 />}
+            size="m"
+            tooltip={t('memoryBack')}
+            onClick={() => navigateTo('/')}
+          />
+          <h1 className={styles.topTitle}>{t('memoryTitle')}</h1>
+        </header>
+        <ModelDownloadCard
+          percent={downloadPercent}
+          busy={downloading}
+          failed={downloadFailed}
+          onDownload={() => void downloadModel()}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className={styles.page} ref={scrollRef}>
       <header className={clsx(styles.topbar, scrolled && styles.topbarScrolled)}>
@@ -516,7 +618,7 @@ export const MemoryPage = () => {
               <div className={styles.sectionHead}>
                 <h3 className={styles.sectionTitle}>{t('memoryRetrievalTitle')}</h3>
                 <span className={styles.sectionMeta}>
-                  {t('memoryThresholdNote', { threshold: memoryThreshold(EMBEDDINGS_MODEL).toFixed(2), count: MEMORY_TOP_K })}
+                  {t('memoryThresholdNote', { threshold: memoryThreshold(LOCAL_MODEL_LABEL).toFixed(2), count: MEMORY_TOP_K })}
                 </span>
               </div>
               <div className={styles.searchWrap}>
@@ -538,14 +640,14 @@ export const MemoryPage = () => {
               </div>
               {hits === null ? null : hits.length === 0 ? (
                 <p className={styles.emptyHits}>
-                  {t('memoryNoHitAbove', { threshold: memoryThreshold(EMBEDDINGS_MODEL).toFixed(2) })}
+                  {t('memoryNoHitAbove', { threshold: memoryThreshold(LOCAL_MODEL_LABEL).toFixed(2) })}
                 </p>
               ) : (
                 <div className={styles.hits}>
                   {hits.map((hit) => (
                     <div
                       key={hit.entry.id}
-                      className={clsx(styles.hit, hit.score < memoryThreshold(EMBEDDINGS_MODEL) && styles.hitMiss)}
+                      className={clsx(styles.hit, hit.score < memoryThreshold(LOCAL_MODEL_LABEL) && styles.hitMiss)}
                     >
                       <span className={styles.hitScore}>{hit.score.toFixed(2)}</span>
                       <span className={styles.hitBar} aria-hidden="true">
@@ -595,16 +697,27 @@ export const MemoryPage = () => {
           <span className={styles.guideMark}>
             <IconBrainOutline size={24} />
           </span>
-          <h2 className={styles.guideTitle}>{t('memoryGuideTitle')}</h2>
-          <p className={styles.guideText}>{t('memoryGuideText')}</p>
-          <Button
-            variant="primary"
-            size="l"
-            className={styles.guideButton}
-            onClick={() => openSettings('general', 'memory')}
-          >
-            {t('memoryGuideAction')}
-          </Button>
+          {modelReady === false ? (
+            <ModelDownloadCard
+              percent={downloadPercent}
+              busy={downloading}
+              failed={downloadFailed}
+              onDownload={() => void downloadModel()}
+            />
+          ) : (
+            <>
+              <h2 className={styles.guideTitle}>{t('memoryGuideTitle')}</h2>
+              <p className={styles.guideText}>{t('memoryGuideText')}</p>
+              <Button
+                variant="primary"
+                size="l"
+                className={styles.guideButton}
+                onClick={() => openSettings('general', 'memory')}
+              >
+                {t('memoryGuideAction')}
+              </Button>
+            </>
+          )}
         </div>
       )}
 

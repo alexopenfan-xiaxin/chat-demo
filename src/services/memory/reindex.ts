@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import * as db from '../chat/db.js'
-import { EMBEDDINGS_MODEL, embedTextsAs } from './api.js'
+import { embedTexts } from './api.js'
+import { hasLocalModel } from './localModel.js'
 
 /**
  * 记忆索引升级：把本地条目的向量从一个模型重算成另一个。
@@ -14,9 +15,9 @@ import { EMBEDDINGS_MODEL, embedTextsAs } from './api.js'
  * 绝不因为一条算不出来就把整轮卡死。开记忆且浏览器空闲时才跑。
  */
 
-/** 每批条数与间隔：8 是 `/api/embed` 的单次上限，3 秒是别把探针额度打满 */
+/** 每批条数与间隔：本机推理没有额度限制，只留一点让出主线程的间隙 */
 export const REINDEX_BATCH = 8
-export const REINDEX_INTERVAL_MS = 3000
+export const REINDEX_INTERVAL_MS = 200
 /** 一批 8 条还要算推理，给 8 秒 */
 export const REINDEX_TIMEOUT_MS = 8000
 /** 探针用的固定短语：只为拿到目标模型的 `model` 标识，向量本身不用 */
@@ -43,9 +44,10 @@ let inFlight: Promise<void> | null = null
  * 只给「开关已经切到别的模型」时用：默认讯飞那条不需要迁移，
  * 直接返回，连一次网络请求都不发。
  */
-export const startReindex = (): Promise<void> => {
-  if (EMBEDDINGS_MODEL === 'qwen') {
-    return Promise.resolve()
+export const startReindex = async (): Promise<void> => {
+  // 没下载本地模型就没有可用的目标向量空间，等下载完再跑
+  if (!(await hasLocalModel())) {
+    return
   }
   if (inFlight) {
     return inFlight
@@ -60,7 +62,7 @@ export const startReindex = (): Promise<void> => {
 const runOnce = async (): Promise<void> => {
   let label = ''
   try {
-    const probe = await embedTextsAs('cf-bge-m3', [PROBE_TEXT], REINDEX_TIMEOUT_MS)
+    const probe = await embedTexts([PROBE_TEXT], REINDEX_TIMEOUT_MS)
     label = probe.model
   } catch {
     // 模型这一跳都不通就别开张：等下一轮，别把条目改成半成品
@@ -78,8 +80,7 @@ const runOnce = async (): Promise<void> => {
   for (let start = 0; start < stale.length; start += REINDEX_BATCH) {
     const batch = stale.slice(start, start + REINDEX_BATCH)
     try {
-      const result = await embedTextsAs(
-        'cf-bge-m3',
+      const result = await embedTexts(
         batch.map((entry) => entry.content),
         REINDEX_TIMEOUT_MS
       )

@@ -5,6 +5,7 @@ import {
   RECALL_FALLBACK_TIMEOUT_MS,
   WRITE_TIMEOUT_MS,
 } from './api.js'
+import { LOCAL_MODEL_LABEL } from './localModel.js'
 import type { MemoryFailReason } from './reasons.js'
 
 /**
@@ -24,10 +25,21 @@ import type { MemoryFailReason } from './reasons.js'
  */
 export const MEMORY_THRESHOLD_QWEN = 0.7
 export const MEMORY_THRESHOLD_BGE = 0.55
+/**
+ * 本地 bge-small-zh-v1.5（512 维）实测：相关均值 0.605、明显无关最大 0.421，
+ * 40 对样本上「召回≥95%」的最低点是 0.461。队长定 0.46。
+ * **这个数只在本地模型上成立**，别拿它去配 cf-bge-m3 的 1024 维条目。
+ */
+export const MEMORY_THRESHOLD_LOCAL = 0.46
 
-/** 按模型名挑门槛：bge-m3 与 qwen 的分数不在一个尺度上 */
-export const memoryThreshold = (model: string): number =>
-  model.toLowerCase().includes('bge') ? MEMORY_THRESHOLD_BGE : MEMORY_THRESHOLD_QWEN
+/** 按模型名挑门槛：三套向量空间的分数不在一个尺度上，共用一个数必然一边失效 */
+export const memoryThreshold = (model: string): number => {
+  const name = model.toLowerCase()
+  if (name === LOCAL_MODEL_LABEL || name.startsWith('local-')) {
+    return MEMORY_THRESHOLD_LOCAL
+  }
+  return name.includes('bge') ? MEMORY_THRESHOLD_BGE : MEMORY_THRESHOLD_QWEN
+}
 export const MEMORY_TOP_K = 4
 /** 召回正文合计上限（画像不算在这里，它无条件带上） */
 export const MEMORY_BLOCK_LIMIT = 1200
@@ -77,7 +89,7 @@ export const rankMemories = (
     /** 只跟同一模型的条目比：换模型后旧条目在重算完成前静默跳过 */
     model?: string
   } = {
-    threshold: MEMORY_THRESHOLD_QWEN,
+    threshold: MEMORY_THRESHOLD_LOCAL,
     topK: MEMORY_TOP_K,
   }
 ): MemoryHit[] => {
