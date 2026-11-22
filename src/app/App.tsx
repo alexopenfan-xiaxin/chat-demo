@@ -9,6 +9,7 @@ import { startReindex } from '../services/memory/reindex.js'
 import { useSettings } from '../services/settings.js'
 import { applyAccountScope } from '../services/account-scope.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
+import { migrateLegacyHistory } from '../services/legacy-migrate-runner.js'
 import {
   bindChatPersistence,
   initChat,
@@ -24,6 +25,7 @@ import { MobileHeader } from '../components/session/MobileHeader.js'
 import { Welcome } from '../components/session/Welcome.js'
 import { ensureApiKey } from '../components/settings/settingsDialogState.js'
 import { SettingsDialog } from '../components/settings/SettingsDialog.js'
+import { ImportProgressOverlay } from '../components/settings/ImportProgressOverlay.js'
 import { Toast } from '../components/base/Toast.js'
 import { showToast } from '../components/base/toastState.js'
 import { onUploadNotice } from '../services/attachments.js'
@@ -184,6 +186,11 @@ export const App = () => {
       await applyAccountScope(user?.id ?? null)
       if (!cancelled && user) {
         await initChat()
+        // 旧库迁移放首屏之后：不 await，界面先用当前账号的空库进来，迁完再刷新侧栏。
+        // 它自己也只跑一次（浏览器级标记），切号中途被打断由存储层世代校验挡下。
+        if (!cancelled) {
+          void migrateLegacyHistory(user.id)
+        }
       }
     })()
     return () => {
@@ -336,6 +343,8 @@ export const App = () => {
         <SearchPanel />
       </div>
       <SettingsDialog />
+      {/* 浮层挂在应用层：导入从设置里发起、旧库迁移在登录后自动跑，都得能看见 */}
+      <ImportProgressOverlay />
       <Toast />
     </>
   )

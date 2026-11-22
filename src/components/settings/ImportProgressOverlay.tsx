@@ -70,7 +70,10 @@ export const ImportProgressOverlay = () => {
   const t = useTranslate()
   const importing = useChatStore((state) => state.importingHistory)
   const progress = useChatStore((state) => state.importProgress)
-  const active = importing || progress !== null
+  // 旧库迁移复用这一层：同样是一条本地写入的进度，没必要再做一套皮
+  const migratingLegacy = useChatStore((state) => state.migratingLegacy)
+  const legacyProgress = useChatStore((state) => state.legacyProgress)
+  const active = importing || progress !== null || migratingLegacy
   const [mounted, setMounted] = useState(active)
   const [slow, setSlow] = useState(false)
   const [view, setView] = useState<View | null>(null)
@@ -78,6 +81,8 @@ export const ImportProgressOverlay = () => {
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'failed'>('idle')
   const startedAt = useRef<number>(Date.now())
   const wasActive = useRef(active)
+  /** 这一轮是迁移还是导入：结束时迁移不读导入报告，也不留结果面板（完成提示走 toast） */
+  const wasLegacy = useRef(false)
   /** 秒数单独走 200ms 的心跳，不跟着导入进度刷新，免得把节流又冲掉 */
   const [nowAt, setNowAt] = useState(() => Date.now())
 
@@ -89,12 +94,27 @@ export const ImportProgressOverlay = () => {
   }, [progress])
 
   useEffect(() => {
+    if (legacyProgress !== null) {
+      setView({ done: legacyProgress.done, total: legacyProgress.total, stage: 'writing' })
+    }
+  }, [legacyProgress])
+
+  useEffect(() => {
     if (!mounted || result !== null) {
       return
     }
     const timer = window.setInterval(() => setNowAt(Date.now()), 200)
     return () => window.clearInterval(timer)
   }, [mounted, result])
+
+  /** 这一轮是迁移而不是导入；判定单独记一笔，主 effect 只跟 active，避免进度跳一次就把秒表重置 */
+  const legacyMode = migratingLegacy && !importing && progress === null
+
+  useEffect(() => {
+    if (active) {
+      wasLegacy.current = legacyMode
+    }
+  }, [active, legacyMode])
 
   useEffect(() => {
     if (active) {
@@ -108,8 +128,14 @@ export const ImportProgressOverlay = () => {
     if (!wasActive.current) {
       return
     }
-    // 导入刚结束：把这一轮的明细摊开，等用户看完点关闭
     wasActive.current = false
+    // 迁移结束没有报告可摊：条数与结果已经由 toast 说过，这里直接收起来
+    if (wasLegacy.current) {
+      wasLegacy.current = false
+      setMounted(false)
+      setView(null)
+      return
+    }
     const [report] = readImportReports()
     if (report) {
       setResult({ report, ok: report.outcome === 'ok' })

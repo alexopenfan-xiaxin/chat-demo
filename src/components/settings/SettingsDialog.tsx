@@ -43,7 +43,6 @@ import {
   useSettingsDialog,
   type SettingsSection,
 } from './settingsDialogState.js'
-import { ImportProgressOverlay } from './ImportProgressOverlay.js'
 import styles from './Settings.module.css'
 
 /**
@@ -136,7 +135,6 @@ const SettingsContent = () => {
           )}
         </div>
       </Modal>
-      <ImportProgressOverlay />
       {historyImport.file ? <ImportConfirm historyImport={historyImport} /> : null}
       {historyDelete.opened ? <DeleteAllConfirm historyDelete={historyDelete} /> : null}
     </>

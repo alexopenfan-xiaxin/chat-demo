@@ -339,6 +339,12 @@ type ChatState = {
     /** listing＝还在解析中央目录，checking＝校验格式，writing＝逐条写入 */
     stage?: 'checking' | 'listing' | 'writing' | 'committing' | 'rebuilding'
   } | null
+  /**
+   * 旧库迁移：登录后自动跑，界面上复用导入那套浮层。
+   * 与 importProgress 分开，免得两条流程互相盖掉对方的数字。
+   */
+  migratingLegacy: boolean
+  legacyProgress: { done: number; total: number } | null
 }
 
 export const useChatStore = create<ChatState>(() => ({
@@ -353,11 +359,13 @@ export const useChatStore = create<ChatState>(() => ({
   streaming: {},
   compacting: {},
   importProgress: null,
+  migratingLegacy: false,
+  legacyProgress: null,
 }))
 
 const { getState: get, setState: set } = useChatStore
 
-const sortSessions = (sessions: SessionSummary[]) =>
+export const sortSessions = (sessions: SessionSummary[]) =>
   [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
 
 const getSession = (id: string) => {
