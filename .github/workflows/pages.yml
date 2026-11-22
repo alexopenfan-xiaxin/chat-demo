@@ -43,6 +43,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # 测试本身只有几秒（36 个文件 / 246 个用例，本机端到端 3.2s），
+      # 单独拆 job 反而要多跑一次安装，所以放在同一个 job 里、构建之前
+      - name: Test
+        run: pnpm test
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
