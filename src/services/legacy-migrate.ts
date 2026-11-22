@@ -164,7 +164,9 @@ export const migrateLegacyOnce = async (
       return { status: 'skipped', reason: 'target-not-empty' }
     }
 
-    const total = sessions.length + memories.length + 1
+    // 读阶段只占一半，最后的满格留给提交：旧库大时读到九成就长时间静住，
+    // 看起来像卡在 99%；而事务本身是一条，中间没有可报的进度
+    const total = (sessions.length + memories.length) * 2 + 1
     let done = 0
     onProgress?.(done, total)
 
@@ -209,7 +211,7 @@ export const migrateLegacyOnce = async (
       memories,
       profile,
     })
-    done += 1
+    done = total
     onProgress?.(done, total)
 
     migrateImportReport(userId)

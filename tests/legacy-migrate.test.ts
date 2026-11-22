@@ -116,9 +116,10 @@ describe('旧库一次性迁移', () => {
     expect((await db.loadMemoryProfile())?.text).toBe('在做 ds-chat')
     // 导入报告跟着账号分键
     expect(localStorage.getItem('chat-demo:import-report:' + A)).toBe('[{"outcome":"ok"}]')
-    // 进度是一次一条地报上去的，浮层才有东西可画
+    // 进度是一次一条地报上去的，浮层才有东西可画：
+    // 总量按「读一半、提交后一次到满」算，2 条会话 + 2 条记忆 → (2+2)*2+1 = 9
     expect(seen.at(0)).toBe(0)
-    expect(seen.at(-1)).toBe(5)
+    expect(seen.at(-1)).toBe(9)
 
     // 旧库不动：数量与内容都还在
     const old = await openDB('chat-demo')

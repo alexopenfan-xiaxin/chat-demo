@@ -39,10 +39,14 @@ export const migrateLegacyHistory = async (userId: string): Promise<void> => {
         // 读列表失败（切号、连接被掐）不该变成未捕获的 rejection：
         // 数据已经安全落库，下次登录 initChat 自然会读到
       }
-      showToast({
-        key: 'legacyMigrated',
-        params: { sessions: result.stats.sessions, memories: result.stats.memories },
-      })
+      // 弹之前再比一次账号：写到一半切走时数据落在原来的账号，
+      // 提示就不该弹给现在这个人
+      if (db.currentScopeUserId() === userId) {
+        showToast({
+          key: 'legacyMigrated',
+          params: { sessions: result.stats.sessions, memories: result.stats.memories },
+        })
+      }
     } else if (result.status === 'failed') {
       // eslint-disable-next-line no-console
       console.warn('[legacy] migration failed twice, old database kept intact', result.error)

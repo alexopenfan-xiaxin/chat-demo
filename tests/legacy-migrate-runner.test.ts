@@ -54,6 +54,7 @@ const installStorage = () => {
 
 const { migrateLegacyHistory } = await import('../src/services/legacy-migrate-runner')
 const { useChatStore } = await import('../src/services/chat/store')
+const { scopeState } = await import('../src/services/chat/scope')
 
 const USER = '11111111-2222-3333-4444-555555555555'
 
@@ -65,6 +66,7 @@ beforeEach(() => {
   migrate.inspect = { sessions: 1, memories: 0 }
   toasts.length = 0
   useChatStore.setState({ migratingLegacy: false, legacyProgress: null, sessions: [] })
+  scopeState.userId = USER
 })
 
 describe('登录后自动迁移旧库', () => {
@@ -120,6 +122,16 @@ describe('登录后自动迁移旧库', () => {
     expect(migrate.calls).toBe(1)
     expect(toasts).toEqual([])
     expect(useChatStore.getState().sessions).toEqual([])
+  })
+
+  it('成功时已经切到别的账号就不弹提示', async () => {
+    migrate.results = [{ status: 'done', stats: { sessions: 1, memories: 0 } }]
+    // 数据落在 A，人已经切到 B：这句话不该弹给 B
+    scopeState.userId = '99999999-8888-7777-6666-555555555555'
+
+    await migrateLegacyHistory(USER)
+
+    expect(toasts).toEqual([])
   })
 
   it('没有旧库时连迁移流程都不进', async () => {

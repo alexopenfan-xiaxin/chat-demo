@@ -20,6 +20,8 @@ const installStorage = () => {
 const gate = vi.hoisted(() => ({
   calls: 0,
   failOnce: false,
+  /** bundle 是否已经提交完（用来校验进度最后一格在提交之后） */
+  resolved: false,
   before: null as null | (() => Promise<void>),
 }))
 
@@ -36,7 +38,9 @@ vi.mock('../src/services/chat/db', async (original) => {
       if (gate.before) {
         await gate.before()
       }
-      return actual.saveLegacyBundle(...args)
+      const out = await actual.saveLegacyBundle(...args)
+      gate.resolved = true
+      return out
     },
   }
 })
@@ -44,6 +48,7 @@ vi.mock('../src/services/chat/db', async (original) => {
 const db = await import('../src/services/chat/db')
 const { migrateLegacyOnce, LEGACY_MIGRATED_FLAG } = await import('../src/services/legacy-migrate')
 const { applyAccountScope } = await import('../src/services/account-scope')
+const { scopeState } = await import('../src/services/chat/scope')
 
 const A = '11111111-2222-3333-4444-555555555555'
 const B = '99999999-8888-7777-6666-555555555555'
@@ -84,6 +89,7 @@ beforeEach(async () => {
   installStorage()
   gate.calls = 0
   gate.failOnce = false
+  gate.resolved = false
   gate.before = null
   await db.setStorageScope(null)
   await deleteDB('chat-demo')
@@ -128,6 +134,66 @@ describe('迁移钉在起始账号上', () => {
     // 拿 A 的 id 来迁，但当前作用域是 B：入口直接拒绝，连旧库都不打开
     expect(await migrateLegacyOnce(A)).toEqual({ status: 'aborted' })
     expect(await db.loadSessionSummaries()).toHaveLength(0)
+  })
+})
+
+describe('进度上报', () => {
+  it('满格只在提交之后上报，写之前最多到 total - 1', async () => {
+    await seedLegacy()
+    await applyAccountScope(A)
+    const marks: Array<{ done: number; resolved: boolean }> = []
+
+    const result = await migrateLegacyOnce(A, (done) =>
+      marks.push({ done, resolved: gate.resolved })
+    )
+
+    expect(result.status).toBe('done')
+    const total = marks.at(-1)?.done ?? 0
+    expect(marks.slice(0, -1).every((mark) => mark.done < total)).toBe(true)
+    expect(marks.at(-1)).toEqual({ done: total, resolved: true })
+  })
+})
+
+describe('事务中途失败整体回滚', () => {
+  const countStores = async (userId: string) => {
+    const handle = await openDB(db.dbNameFor(userId))
+    const counts = {
+      sessions: await handle.count('sessions'),
+      summaries: await handle.count('sessionSummaries'),
+    }
+    handle.close()
+    return counts
+  }
+
+  it('会话已经写进事务、作用域随后变化时，显式 abort 把它们一起撤掉', async () => {
+    await applyAccountScope(A)
+    // 会话写完之后读 memories，这时改作用域：这是「逻辑错误」而不是失败的请求，
+    // IndexedDB 不会因此自动回滚，只有 catch 里的 abortTransaction 能撤销
+    const bundle = {
+      sessions: [session('s1') as never, session('s2') as never],
+      files: [],
+      get memories() {
+        scopeState.userId = B
+        return []
+      },
+      profile: undefined,
+    }
+    await expect(db.saveLegacyBundle(A, bundle)).rejects.toThrow(/scope/i)
+
+    expect(await countStores(A)).toEqual({ sessions: 0, summaries: 0 })
+  })
+
+  it('某个请求失败时（不可克隆的数据）也不留半截', async () => {
+    await applyAccountScope(A)
+    const bad = [{ id: 'm1', content: '坏数据', vec: () => {}, dim: 2 }] as never
+    await expect(
+      db.saveLegacyBundle(A, {
+        sessions: [session('s1') as never],
+        files: [],
+        memories: bad,
+      })
+    ).rejects.toThrow()
+    expect(await countStores(A)).toEqual({ sessions: 0, summaries: 0 })
   })
 })
 
