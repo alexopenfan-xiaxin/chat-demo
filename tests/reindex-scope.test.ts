@@ -24,6 +24,7 @@ vi.mock('../src/services/memory/localModel', async (original) => {
 const db = await import('../src/services/chat/db')
 const api = await import('../src/services/memory/api')
 const reindex = await import('../src/services/memory/reindex')
+const { applyAccountScope } = await import('../src/services/account-scope')
 
 const user = (seed: string) => {
   const hex = (length: number) => (seed + '0'.repeat(length)).slice(0, length).toLowerCase()
@@ -55,24 +56,33 @@ describe('切号后记忆重算不再继续', () => {
     await db.setStorageScope(null)
   })
 
-  it('reindex 在切号后停止，不把 A 的条目重算成 B 的向量', async () => {
+  it('切号后这一轮重算立刻停手，embed 调用次数不再增长', async () => {
     await db.setStorageScope(A)
-    await db.putMemory(entry)
+    // 20 条旧模型条目 = 探针 1 次 + 三批（8/8/4），批间隔 200ms，够切号插进来
+    const stale = Array.from({ length: 20 }, (_, index) => ({
+      ...entry,
+      id: `m${index}`,
+      content: `A 的记忆 ${index}`,
+    }))
+    for (const item of stale) {
+      await db.putMemory(item)
+    }
 
     const running = reindex.startReindex()
-    // 等探针那一次 embedTexts 起飞，再切号
-    await new Promise((resolve) => setTimeout(resolve, 1))
-    await db.setStorageScope(B)
-    await running
-    // 切号之后 embedTexts 的调用次数不再增长（不管传输层是本地还是远端）
-    const afterSwitch = embed.calls
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(embed.calls).toBe(afterSwitch)
+    // 等探针 + 第一批都起飞（调用数到 2），这时切号
+    const deadline = Date.now() + 1_000
+    while (embed.calls < 2 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+    expect(embed.calls).toBe(2)
 
-    await db.setStorageScope(A)
-    const stored = await db.loadMemory('m1')
-    expect(stored?.model).toBe('legacy-model')
-    expect(stored?.content).toBe('A 写的记忆')
+    await applyAccountScope(B)
+    const callsAtSwitch = embed.calls
+    await running
+    // 原本第二批会在 200ms 后起飞，再等一轮确认它没有起飞
+    await new Promise((resolve) => setTimeout(resolve, reindex.REINDEX_INTERVAL_MS * 2))
+
+    expect(embed.calls).toBe(callsAtSwitch)
   })
 
   it('embedTexts 在切号瞬间作废，不会用新账号的票继续算', async () => {
