@@ -20,6 +20,7 @@ import {
 import { createLatestReminder } from './latestReminder.js'
 import { isCommand, parseSlashCommand } from './slash.js'
 import { trackRequest, untrackRequest } from '../account-abort.js'
+import { cardHint, parseToolArgs } from './toolArgs.js'
 import { serverTools } from '../memory/tools.js'
 import {
   buildBlock,
@@ -80,7 +81,7 @@ const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
 
-type ToolCall = { callId: string; name: string; arguments: string }
+export type ToolCall = { callId: string; name: string; arguments: string }
 
 /**
  * 给用户看的过程文案：正在搜索/正在读取。
@@ -116,17 +117,29 @@ const toolStatusText = (call: ToolCall): string => {
  * 工具结果一律当作**不可信数据**：只有搜索结果的标题/链接/摘要或网页标题+正文，
  * 不带会话 token、用户邮箱、历史消息。失败也回一条 error 描述，让模型自己决定怎么说。
  */
-const runToolCall = async (
+/**
+ * 导出只为一个测试用入口：参数拒绝的行为（不发请求、不动记忆、仍留失败卡片）
+ * 只能从执行层看。业务代码里它仍然是内部函数，别在别处调用。
+ */
+export const runToolCall = async (
   call: ToolCall,
   signal: AbortSignal,
   sessionId: string
 ): Promise<{ output: string; blocks: ReplyBlock[] }> => {
-  let args: Record<string, unknown> = {}
-  try {
-    args = JSON.parse(call.arguments) as Record<string, unknown>
-  } catch {
-    args = {}
+  // 参数先按 schema 校验：不合规的调用不发请求、不动记忆，只把原因回给模型。
+  // 搜索与读取仍留一张失败卡片——用户已经在等这次调用的结果，界面上不该毫无动静。
+  const parsed = parseToolArgs(call.name, call.arguments)
+  if (!parsed.ok) {
+    const hint = cardHint(call.name, call.arguments)
+    const blocks =
+      call.name === 'web_search'
+        ? searchBlocks(call.callId, hint, [], true)
+        : call.name === 'read_url'
+          ? fetchBlocks(call.callId, hint, undefined, true)
+          : []
+    return { output: JSON.stringify({ error: parsed.error }), blocks }
   }
+  const args = parsed.value
   try {
     if (call.name === 'web_search') {
       const query = typeof args.query === 'string' ? args.query : ''

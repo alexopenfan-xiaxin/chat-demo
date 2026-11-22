@@ -161,6 +161,26 @@ export type MessageParam =
   | { role: 'assistant'; content: AssistantBlockParam[] }
 
 /**
+ * 工具参数属性：JSON Schema 的一小块子集。
+ *
+ * 早先这里只有 `{ type, description }`，写不出数组元素类型和长度上限，于是模型看到的
+ * 约束比执行层弱——它会发出 `tags` 不是字符串、`query` 长到 2000 字这类参数，
+ * 到执行层才失败。约束要写在这里，模型才看得见。
+ */
+export type ToolProperty = {
+  type: string
+  description?: string
+  /** `type: 'array'` 时的元素结构 */
+  items?: ToolProperty
+  minLength?: number
+  maxLength?: number
+  pattern?: string
+  minItems?: number
+  maxItems?: number
+  enum?: string[]
+}
+
+/**
  * 标准 function 工具声明。旧版只给 `{type:'deepseek_web_search', name}` 这种没有 schema
  * 的声明，模型填不出参数、arguments 恒为 {}，所以联网工具从来没真正执行过。
  */
@@ -171,7 +191,7 @@ export type FunctionToolParam = {
     description: string
     parameters: {
       type: 'object'
-      properties: Record<string, { type: string; description?: string }>
+      properties: Record<string, ToolProperty>
       required?: string[]
     }
   }
