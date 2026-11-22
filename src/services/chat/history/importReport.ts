@@ -37,11 +37,26 @@ export type ImportRunReport = {
 /** 只留最近几次：定位用，不值得无限堆在 localStorage 里 */
 const KEEP = 3
 
-export const IMPORT_REPORT_KEY = 'chat-demo:import-report'
+export const scopeImportReportKey = (userId: string | null): string =>
+  userId ? `chat-demo:import-report:${userId}` : ''
+
+/**
+ * 导入报告跟着账号走：它含会话标题这类摘要，跨账号看见不合适。
+ * 未登录时不读也不写（返回空），和存储层「没有作用域就不动数据」保持一致。
+ */
+let reportScope: string | null = null
+
+export const setImportReportScope = (userId: string | null): void => {
+  reportScope = userId
+}
 
 export const readImportReports = (): ImportRunReport[] => {
+  const key = scopeImportReportKey(reportScope)
+  if (!key) {
+    return []
+  }
   try {
-    const raw = localStorage.getItem(IMPORT_REPORT_KEY)
+    const raw = localStorage.getItem(key)
     if (!raw) {
       return []
     }
@@ -134,9 +149,14 @@ export const saveImportReport = (report: ImportRunReport): void => {
   console.table(rows)
   // eslint-disable-next-line no-console
   console.info('import report', report)
+  const key = scopeImportReportKey(reportScope)
+  if (!key) {
+    // 没有账号作用域就不落盘：宁可这次不记，也不写进别人的键
+    return
+  }
   try {
     const recent = [report, ...readImportReports()].slice(0, KEEP)
-    localStorage.setItem(IMPORT_REPORT_KEY, JSON.stringify(recent))
+    localStorage.setItem(key, JSON.stringify(recent))
   } catch {
     // 存储不可用（隐私模式、配额满）时不要影响导入本身
   }

@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import * as db from '../chat/db.js'
 import { embedTexts } from './api.js'
 import { hasLocalModel } from './localModel.js'
+import { isScopeMismatch } from '../chat/db.js'
+import { trackRequest, untrackRequest } from '../account-abort.js'
 
 /**
  * 记忆索引升级：把本地条目的向量从一个模型重算成另一个。
@@ -57,14 +59,24 @@ export const startReindex = async (): Promise<void> => {
   if (inFlight) {
     return inFlight
   }
-  inFlight = runOnce().finally(() => {
-    inFlight = null
-  })
+  const controller = trackRequest(new AbortController())
+  inFlight = runOnce(controller.signal)
+    .catch((error) => {
+      // 切号打断不算错误：这条重算已经作废
+      if (!isScopeMismatch(error) && !controller.signal.aborted) {
+        // eslint-disable-next-line no-console
+        console.warn('[memory] reindex stopped', error)
+      }
+    })
+    .finally(() => {
+      untrackRequest(controller)
+      inFlight = null
+    })
   return inFlight
 }
 
 /** 只跑一轮：拿到目标模型标识 → 筛出旧模型条目 → 分批重算 */
-const runOnce = async (): Promise<void> => {
+const runOnce = async (signal: AbortSignal): Promise<void> => {
   let label = ''
   try {
     const probe = await embedTexts([PROBE_TEXT], REINDEX_TIMEOUT_MS)
@@ -105,6 +117,9 @@ const runOnce = async (): Promise<void> => {
       useReindex.setState((state) => ({ ...state, done: state.done + batch.length }))
     } catch {
       // 这一批算不出来：条目保留旧模型，召回时继续跳过，下一轮再试
+    }
+    if (signal.aborted) {
+      return
     }
     if (start + REINDEX_BATCH < stale.length) {
       await sleep(REINDEX_INTERVAL_MS)

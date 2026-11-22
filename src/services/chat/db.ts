@@ -83,7 +83,173 @@ interface ChatDB extends DBSchema {
   }
 }
 
+import {
+  ScopeMismatchError,
+  currentScopeUserId,
+  isScopeMismatch,
+  scopeFingerprint,
+  scopeState,
+} from './scope.js'
+
+export { ScopeMismatchError, currentScopeUserId, isScopeMismatch, scopeFingerprint }
+/** 正在进行的读写事务数：切号要等它们收尾 */
+let activeWrites = 0
+let settleQueue: Array<() => void> = []
+
+
 let dbPromise: Promise<IDBPDatabase<ChatDB>> | null = null
+
+/**
+ * 库名 = `chat-demo:u:<user.id>`，**原样拼接、不做任何改写**。
+ *
+ * `user.id` 是 users 表里的 UUID（36 位、带连字符，注册时由 `crypto.randomUUID()` 生成），
+ * 既不是邮箱也不是会话票，所以同一账号反复登录拿到的库名不变。
+ * 不截断、不去连字符：把 36 位压成 32 位会引入「两个不同 id 映射到同一库名」的可能。
+ */
+const USER_ID = /^[a-f0-9-]{1,36}$/
+
+export const dbNameFor = (userId: string): string => {
+  const normalized = userId.toLowerCase()
+  if (!USER_ID.test(normalized)) {
+    throw new Error(`invalid user id for storage scope: ${JSON.stringify(userId).slice(0, 40)}`)
+  }
+  return `chat-demo:u:${normalized}`
+}
+
+
+
+const endWrite = () => {
+  activeWrites -= 1
+  if (activeWrites <= 0) {
+    activeWrites = 0
+    for (const resolve of settleQueue.splice(0)) {
+      resolve()
+    }
+  }
+}
+
+/** 等正在进行的读写收尾（切号顺序：先中止流，再等这里，最后换库） */
+export const drainWrites = async (): Promise<void> => {
+  if (activeWrites === 0) {
+    return
+  }
+  await new Promise<void>((resolve) => settleQueue.push(resolve))
+}
+
+/**
+ * 切账号作用域。调用方必须先中止所有在跑的流，再调这里。
+ *
+ * 顺序是固定的：先把世代推进一步（旧连接的所有写入口立刻开始拒绝）→ 等在途事务收尾
+ * → 才置空连接、换库名。反过来做的话，已经拿到旧连接的事务会继续把数据写进旧库。
+ */
+export const setStorageScope = async (userId: string | null): Promise<void> => {
+  if (userId === scopeState.userId && !scopeState.switching) {
+    return
+  }
+  scopeState.switching = true
+  // 世代先推进：旧连接上的写入口立刻开始拒绝
+  scopeState.generation += 1
+  try {
+    // 等在途事务收尾，再换库
+    await drainWrites()
+    const previous = dbPromise
+    dbPromise = null
+    scopeState.userId = userId
+    if (previous) {
+      void previous
+        .then((db) => db.close())
+        .catch(() => undefined)
+    }
+  } finally {
+    scopeState.switching = false
+  }
+}
+
+const WRITE_METHODS = new Set(['put', 'add', 'delete', 'clear'])
+
+/** 读写事务按世代守卫：过期世代的写一律抛 ScopeMismatchError，事务随之回滚 */
+const guardTransaction = <T extends object>(tx: T, generation: number): T =>
+  new Proxy(tx, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target)
+      if (typeof value !== 'function') {
+        return value
+      }
+      if (prop === 'objectStore' || prop === 'store') {
+        return (...args: unknown[]) => {
+          const result = (value as (...a: unknown[]) => unknown).apply(target, args)
+          if (prop === 'store') {
+            return guardStoreObject(result as object, generation)
+          }
+          return guardStoreObject(result as object, generation)
+        }
+      }
+      return (value as (...a: unknown[]) => unknown).bind(target)
+    },
+  })
+
+const guardStoreObject = <T extends object>(store: T, generation: number): T =>
+  new Proxy(store, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target)
+      if (typeof value !== 'function') {
+        return value
+      }
+      if (typeof prop === 'string' && WRITE_METHODS.has(prop)) {
+        return (...args: unknown[]) => {
+          if (generation !== scopeState.generation) {
+            throw new ScopeMismatchError()
+          }
+          // 直连 db.put 也要算进在途写，否则切号不会等它
+          activeWrites += 1
+          try {
+            return (value as (...a: unknown[]) => unknown).apply(target, args)
+          } finally {
+            queueMicrotask(endWrite)
+          }
+        }
+      }
+      return (value as (...a: unknown[]) => unknown).bind(target)
+    },
+  })
+
+/** 连接只在作用域内有效：世代一过期，旧连接上的任何事务都拒绝 */
+const guardConnection = <T extends object>(db: T, generation: number): T =>
+  new Proxy(db, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target)
+      if (typeof value !== 'function') {
+        return value
+      }
+      if (prop === 'transaction') {
+        return (...args: unknown[]) => {
+          if (generation !== scopeState.generation) {
+            throw new ScopeMismatchError()
+          }
+          const readwrite = args[1] === 'readwrite'
+          if (readwrite) {
+            activeWrites += 1
+          }
+          const tx = (value as (...a: unknown[]) => unknown).apply(target, args) as object & {
+            done?: Promise<unknown>
+          }
+          if (readwrite) {
+            void Promise.resolve(tx.done).catch(() => undefined).finally(endWrite)
+          }
+          return guardTransaction(tx, generation)
+        }
+      }
+      if (typeof prop === 'string' && WRITE_METHODS.has(prop)) {
+        return (...args: unknown[]) => {
+          if (generation !== scopeState.generation) {
+            throw new ScopeMismatchError()
+          }
+          return (value as (...a: unknown[]) => unknown).apply(target, args)
+        }
+      }
+      return (value as (...a: unknown[]) => unknown).bind(target)
+    },
+  })
 
 const storedSummary = (session: Session): StoredSessionSummary => ({
   ...toSessionSummary(session),
@@ -105,8 +271,22 @@ const abortTransaction = (tx: { abort(): void }) => {
 }
 
 // 每个操作拿到连接后立即创建事务；IndexedDB 按创建顺序执行范围重叠的事务，读取总能看到之前发起的写入。
-const getDB = () =>
-  (dbPromise ??= openDB<ChatDB>('chat-demo', DB_VERSION, {
+const getDB = (): Promise<IDBPDatabase<ChatDB>> => {
+  if (!scopeState.userId || scopeState.switching) {
+    // 启动时序错位时这里会让界面看起来「数据全没了」，留一条线索便于定位
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[storage] read/write rejected: no account scope or switching', {
+        userId: scopeState.userId,
+        switching: scopeState.switching,
+      })
+    }
+    // 未登录、或正在切号：不建库、不写。抛同一个错误，调用方按「这次读写作废」处理
+    return Promise.reject(new ScopeMismatchError())
+  }
+  const generation = scopeState.generation
+  const name = dbNameFor(scopeState.userId)
+  return (dbPromise ??= openDB<ChatDB>(name, DB_VERSION, {
     upgrade(db, _oldVersion, _newVersion, tx) {
       // 初始化当前格式需要的存储与索引，不迁移旧消息。
       for (const name of ['sessions', 'files', 'sessionsStaging', 'filesStaging'] as const) {
@@ -134,11 +314,14 @@ const getDB = () =>
         summaries.createIndex('fileIds', 'fileIds', { multiEntry: true })
       }
     },
-  }).catch((error: unknown) => {
-    // 打开失败后允许界面重试，避免一直复用已拒绝的 Promise。
-    dbPromise = null
-    throw error
-  }))
+  })
+    .then((db) => guardConnection(db, generation))
+    .catch((error: unknown) => {
+      // 打开失败后允许界面重试，避免一直复用已拒绝的 Promise。
+      dbPromise = null
+      throw error
+    }))
+}
 
 export const loadSessionSummaries = async (): Promise<SessionSummary[]> =>
   (await (await getDB()).getAll('sessionSummaries')).map(toSessionSummary)

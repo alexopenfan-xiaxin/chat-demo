@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { ApiError } from '../api/client.js'
 import { ensureAccessToken } from '../auth.js'
 import { embedLocal } from './localEmbed.js'
+import { ScopeMismatchError, scopeFingerprint } from '../chat/scope.js'
 import { LOCAL_MODEL_LABEL, hasLocalModel } from './localModel.js'
 
 /**
@@ -335,10 +336,20 @@ export const embedTexts = async (
   timeoutMs: number,
   options: EmbedOptions = {}
 ): Promise<EmbeddingResult> => {
+  // 记忆正文出了设备就是「以谁的票发的」问题：切号后旧任务必须作废，
+  // 否则 A 的正文会用 B 的票打到向量接口、还占 B 的配额
+  const fingerprint = scopeFingerprint()
+  const assertSameAccount = () => {
+    if (fingerprint !== scopeFingerprint()) {
+      throw new ScopeMismatchError()
+    }
+  }
+  assertSameAccount()
   if (REMOTE_EMBEDDINGS_ENABLED) {
     return embedTextsAs(EMBEDDINGS_MODEL, texts, timeoutMs, options)
   }
   const result = await embedLocal(texts, timeoutMs)
+  assertSameAccount()
   useMemoryStatus.setState({ available: true })
   return { vectors: result.vectors, dim: result.dim, model: LOCAL_MODEL_LABEL }
 }

@@ -110,6 +110,8 @@ export const createConfig = ({
     }),
     new rspack.DefinePlugin({
       __API_ORIGIN__: JSON.stringify(apiOrigin),
+      // 开发态标记：只用来决定要不要打诊断日志（例如存储作用域被拒）
+      __DEV__: JSON.stringify(dev),
       __TURNSTILE_SITE_KEY__: JSON.stringify(process.env.TURNSTILE_SITE_KEY ?? DEFAULT_TURNSTILE_SITE_KEY),
       __HCAPTCHA_SITE_KEY__: JSON.stringify(process.env.HCAPTCHA_SITE_KEY ?? DEFAULT_HCAPTCHA_SITE_KEY),
     }),

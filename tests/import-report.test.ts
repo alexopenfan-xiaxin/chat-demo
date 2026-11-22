@@ -1,14 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  IMPORT_REPORT_KEY,
   createImportRun,
   formatImportReports,
   readImportReports,
   saveImportReport,
+  scopeImportReportKey,
+  setImportReportScope,
   type ImportRunReport,
 } from '../src/services/chat/history/importReport'
 
+/** 导入报告按账号分键：测试固定用这个 user.id */
+const USER = '11111111-2222-3333-4444-555555555555'
+const KEY = scopeImportReportKey(USER)
+
 /** node 里没有 localStorage：用最小的内存实现替代，测的是存取与裁剪逻辑 */
+const useAccount = (userId: string | null = USER) => setImportReportScope(userId)
+
 const installStorage = () => {
   const store = new Map<string, string>()
   vi.stubGlobal('localStorage', {
@@ -89,6 +96,7 @@ describe('writing 内部细分', () => {
 describe('导入明细存取', () => {
   beforeEach(() => {
     installStorage()
+    useAccount()
   })
 
   it('写进去能原样读出来', () => {
@@ -107,7 +115,7 @@ describe('导入明细存取', () => {
   })
 
   it('存储里是坏数据时按空处理，不抛错', () => {
-    localStorage.setItem(IMPORT_REPORT_KEY, '{not json')
+    localStorage.setItem(KEY, '{not json')
     expect(readImportReports()).toEqual([])
   })
 

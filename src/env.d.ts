@@ -7,6 +7,7 @@ declare module '*.css' {}
 
 /** 公开 API 的地址，见 rspack.config.ts 的 createConfig */
 declare const __API_ORIGIN__: string
+declare const __DEV__: boolean
 
 /** Turnstile 的公开 sitekey，构建时由 rspack DefinePlugin 注入 */
 declare const __TURNSTILE_SITE_KEY__: string

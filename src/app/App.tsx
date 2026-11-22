@@ -7,6 +7,7 @@ import { refreshMemoryAvailability } from '../services/memory/api.js'
 import { warmLocalModel } from '../services/memory/localEmbed.js'
 import { startReindex } from '../services/memory/reindex.js'
 import { useSettings } from '../services/settings.js'
+import { applyAccountScope } from '../services/account-scope.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
 import {
   bindChatPersistence,
@@ -170,13 +171,31 @@ export const App = () => {
     }
   }, [user, memoryOn])
 
-  // 登录之后才碰聊天数据：未登录时不该读本地会话，也不该弹 API Key 设置
+  /**
+   * 账号作用域：登录、切号、登出都先把存储作用域切到当前 user.id，再碰聊天数据。
+   * 未登录时作用域为空，存储层拒绝一切读写，因此不会建库、不会读到上一个账号的东西。
+   */
+  useEffect(() => {
+    if (user === undefined) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      await applyAccountScope(user?.id ?? null)
+      if (!cancelled && user) {
+        await initChat()
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  // 未登录时不该弹 API Key 设置
   useEffect(() => {
     if (!user) {
       return
     }
-    void initChat()
-    // 首次打开先在设置里输入 API Key
     ensureApiKey()
   }, [user])
 

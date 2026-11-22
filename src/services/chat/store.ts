@@ -19,6 +19,7 @@ import {
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
 import { isCommand, parseSlashCommand } from './slash.js'
+import { trackRequest, untrackRequest } from '../account-abort.js'
 import { serverTools } from '../memory/tools.js'
 import {
   buildBlock,
@@ -462,6 +463,11 @@ const persist = (sessionId: string) => {
         }
       })
       .catch((error: unknown) => {
+        // 切号瞬间的写会被存储层拒绝：这次写本就该作废，不当成保存失败
+        if (db.isScopeMismatch(error)) {
+          unsavedSessions.delete(sessionId)
+          return
+        }
         db.reportStorageError('save session')(error)
         if (epoch === historyEpoch && getSession(sessionId)) {
           set((state) => ({
@@ -840,6 +846,38 @@ const removeSessionData = async (id: string): Promise<DeleteOutcome> => {
 export const stopReply = (sessionId: string) => getStreamController(sessionId)?.abort()
 
 /**
+ * 切账号 / 登出时的内存清理：中止所有在跑的流、清掉待写队列与草稿。
+ *
+ * 顺序由调用方保证（先这里、再换存储作用域）：先把流掐断，之后那些流再想写回，
+ * 会撞上 db 层的世代校验被丢弃；定时器跟着 signal 一起结束。
+ */
+export const resetForAccountSwitch = (): void => {
+  for (const controller of Object.values(get().streaming)) {
+    controller.abort()
+  }
+  unsavedSessions.clear()
+  pendingFiles.clear()
+  clearAllDrafts()
+  sessionLoads.clear()
+  sessionAccess.clear()
+  historyEpoch += 1
+  initTask = undefined
+  set({
+    ready: false,
+    initError: false,
+    importingHistory: false,
+    sessions: [],
+    sessionCache: {},
+    sessionLoadErrors: {},
+    sessionSaveErrors: {},
+    activeId: null,
+    streaming: {},
+    compacting: {},
+    importProgress: null,
+  })
+}
+
+/**
  * 摘要请求的超时：一次独立的大请求（输入可能到 70 万 token），
  * 60 秒不够，按队长定的 180 秒。
  */
@@ -847,7 +885,7 @@ const SUMMARY_TIMEOUT = 180_000
 
 /** 摘要请求：不带工具、不带记忆、关闭思考；失败返回 null，历史一个字节都不动 */
 const requestSummary = async (text: string): Promise<string | null> => {
-  const controller = new AbortController()
+  const controller = trackRequest(new AbortController())
   const timer = setTimeout(() => controller.abort(), SUMMARY_TIMEOUT)
   let out = ''
   try {
@@ -876,6 +914,7 @@ const requestSummary = async (text: string): Promise<string | null> => {
     return null
   } finally {
     clearTimeout(timer)
+    untrackRequest(controller)
   }
   const trimmed = out.trim()
   return trimmed === '' ? null : trimmed

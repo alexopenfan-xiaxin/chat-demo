@@ -36,6 +36,42 @@ const KEYS = {
   memory: 'chat-demo:memory',
 } as const
 
+/**
+ * 账号作用域：跟着人走的开关（思考、搜索、记忆）按 `:<user.id>` 分键存，
+ * 主题、语言、字号、侧栏这些纯外观留在全局键上——换账号不该把界面翻个底朝天。
+ *
+ * 没登录时作用域为空：这些开关只用内存里的默认值，不读也不写全局键，
+ * 免得「A 退出后 B 还没登录」的窗口把 A 的偏好写坏。
+ */
+let settingsScope: string | null = null
+
+const SCOPED: ReadonlySet<string> = new Set(['thinking', 'search', 'memory'])
+
+const scopedKey = (base: string, field: string): string | null =>
+  SCOPED.has(field) ? (settingsScope ? `${base}:${settingsScope}` : null) : base
+
+/** 切换账号：重新按新作用域读一遍开关，外观项保持不动 */
+export const setSettingsScope = (userId: string | null): void => {
+  settingsScope = userId
+  useSettings.setState({
+    thinking: readSetting('thinking') === 'true',
+    search: readSetting('search') === 'true',
+    memory: readSetting('memory') === 'true',
+  })
+}
+
+const readSetting = (field: 'thinking' | 'search' | 'memory'): string | null => {
+  const key = scopedKey(KEYS[field], field)
+  return key ? read(key) : null
+}
+
+const writeSetting = (field: 'thinking' | 'search' | 'memory', value: boolean): void => {
+  const key = scopedKey(KEYS[field], field)
+  if (key) {
+    write(key, String(value))
+  }
+}
+
 const read = (key: string) => {
   try {
     return localStorage.getItem(key)
@@ -116,11 +152,12 @@ export const useSettings = create<Settings>(() => ({
   location: initialLocation(),
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
-  thinking: read(KEYS.thinking) === 'true',
-  search: read(KEYS.search) === 'true',
+  // 三个开关跟着账号走，登录前一律按默认（关）显示
+  thinking: false,
+  search: false,
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
   // 默认关闭：记忆要用户自己打开才开始采集与召回
-  memory: read(KEYS.memory) === 'true',
+  memory: false,
 }))
 
 export const setLocale = (locale: Locale) => {
@@ -154,17 +191,17 @@ export const purgeLegacyApiKey = () => {
 }
 
 export const setThinking = (thinking: boolean) => {
-  write(KEYS.thinking, String(thinking))
+  writeSetting('thinking', thinking)
   useSettings.setState({ thinking })
 }
 
 export const setSearch = (search: boolean) => {
-  write(KEYS.search, String(search))
+  writeSetting('search', search)
   useSettings.setState({ search })
 }
 
 export const setMemory = (memory: boolean) => {
-  write(KEYS.memory, String(memory))
+  writeSetting('memory', memory)
   useSettings.setState({ memory })
 }
 
