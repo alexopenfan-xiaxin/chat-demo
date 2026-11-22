@@ -17,6 +17,9 @@ import { scopeImportReportKey } from './chat/history/importReport.js'
  * 只迁一次：迁完写浏览器级标记。标记放 localStorage 而不是 IndexedDB，因为它描述的是
  * 「这台浏览器已经做过迁移」，与哪个账号无关——多个账号共用浏览器时，只有第一个
  * 登录并触发迁移的账号会拿到旧数据，不会重复归给后来的人。
+ *
+ * 写入是原子的（`db.saveLegacyBundle`）：要么全部落库，要么一条都没有。
+ * 中途失败或切号不会留下半截库，「目标库为空才迁」这条判据才敢在下次重试时复用。
  */
 
 /** 旧库名，与分区前的库名一致 */
@@ -30,6 +33,8 @@ export type LegacyStats = { sessions: number; memories: number }
 
 export type LegacyMigrateResult =
   | { status: 'skipped'; reason: 'migrated' | 'target-not-empty' | 'no-legacy' }
+  /** 迁移途中切了账号：什么都没写，不算失败，也不该重试或写标记 */
+  | { status: 'aborted' }
   | { status: 'done'; stats: LegacyStats }
   | { status: 'failed'; error: string }
 
@@ -113,8 +118,8 @@ const migrateImportReport = (userId: string): void => {
 /**
  * 跑一次迁移。调用方负责在登录态落定后调用，并按返回值决定要不要提示。
  *
- * `userId` 只用于导入报告分键；会话、记忆、画像都通过 `db.*` 写入，
- * 因此自动带上当前作用域与世代校验——切号中途被打断就按作废处理。
+ * `userId` 同时是写入归属：迁移一开始就钉住它，之后每一步都确认作用域没变过。
+ * 切了账号就返回 `aborted`——既不能把 A 的旧数据写进 B 的库，也不能算成失败去重试。
  */
 export const migrateLegacyOnce = async (
   userId: string,
@@ -128,6 +133,11 @@ export const migrateLegacyOnce = async (
     // localStorage 不可用（隐私模式）：退回每次启动都检查，至少不会静默不迁
   }
 
+  // 作用域不是这个账号：说明登录态已经变了，什么都不做
+  if (db.currentScopeUserId() !== userId) {
+    return { status: 'aborted' }
+  }
+
   const legacy = await openLegacy()
   if (!legacy) {
     return { status: 'skipped', reason: 'no-legacy' }
@@ -136,10 +146,10 @@ export const migrateLegacyOnce = async (
   try {
     const sessions = (await legacy.getAll('sessions')) as Session[]
     const memories = legacy.objectStoreNames.contains('memories')
-      ? await legacy.getAll('memories')
+      ? ((await legacy.getAll('memories')) as db.MemoryEntry[])
       : []
     const profile = legacy.objectStoreNames.contains('memoryProfile')
-      ? await legacy.get('memoryProfile', 'profile')
+      ? ((await legacy.get('memoryProfile', 'profile')) as db.MemoryProfile | undefined)
       : undefined
 
     if (sessions.length === 0 && memories.length === 0) {
@@ -147,7 +157,8 @@ export const migrateLegacyOnce = async (
     }
 
     // 只在当前账号库为空时迁：已有数据说明这台浏览器的主账号已经建起来了，
-    // 再合一次就得处理 id 冲突与「谁的更可信」，那是另一件事
+    // 再合一次就得处理 id 冲突与「谁的更可信」，那是另一件事。
+    // 写入是原子的，所以「非空」只可能来自真正的既有数据，不会来自上次的半截失败。
     const target = await readTarget()
     if (target.sessions > 0 || target.memories > 0) {
       return { status: 'skipped', reason: 'target-not-empty' }
@@ -157,43 +168,47 @@ export const migrateLegacyOnce = async (
     let done = 0
     onProgress?.(done, total)
 
+    const normalized: Session[] = []
     // 会话里引用的附件原件也在这台浏览器里：不搬的话历史消息的图片全变破图
     const fileIds = new Set<string>()
     for (const session of sessions) {
-      const normalized = normalizeSession(session)
-      for (const message of normalized.messages) {
+      const item = normalizeSession(session)
+      for (const message of item.messages) {
         if (message.role === 'user') {
           for (const file of message.files) {
             fileIds.add(file.id)
           }
         }
       }
-      await db.saveSession(normalized)
+      normalized.push(item)
       done += 1
       onProgress?.(done, total)
     }
 
     // 只搬被引用到的原件：旧库里没人引用的孤立文件不必复制一份占地方
+    const files: db.StoredFile[] = []
     if (fileIds.size > 0 && legacy.objectStoreNames.contains('files')) {
-      const files: db.StoredFile[] = []
       for (const id of fileIds) {
-        const stored = await legacy.get('files', id)
+        const stored = (await legacy.get('files', id)) as db.StoredFile | undefined
         if (stored?.blob) {
           files.push(stored)
         }
       }
-      if (files.length > 0) {
-        await db.saveFiles(files)
-      }
     }
-    for (const entry of memories) {
-      await db.putMemory(entry)
-      done += 1
-      onProgress?.(done, total)
+    // 记忆只是计数上报，写入统一在原子事务里做
+    done += memories.length
+    onProgress?.(done, total)
+
+    if (db.currentScopeUserId() !== userId) {
+      return { status: 'aborted' }
     }
-    if (profile) {
-      await db.saveMemoryProfile(profile)
-    }
+
+    await db.saveLegacyBundle(userId, {
+      sessions: normalized,
+      files,
+      memories,
+      profile,
+    })
     done += 1
     onProgress?.(done, total)
 
@@ -207,6 +222,10 @@ export const migrateLegacyOnce = async (
 
     return { status: 'done', stats: { sessions: sessions.length, memories: memories.length } }
   } catch (error) {
+    if (db.isScopeMismatch(error)) {
+      // 写事务被切号掐断并回滚：什么都没落库，不算失败
+      return { status: 'aborted' }
+    }
     return { status: 'failed', error: error instanceof Error ? error.message : '迁移失败' }
   } finally {
     legacy.close()

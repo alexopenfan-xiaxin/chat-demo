@@ -349,6 +349,70 @@ export const saveSession = async (session: Session, files: StoredFile[] = []): P
   ])
 }
 
+/** 旧库迁移要一次写进去的东西：会话、附件原件、记忆、画像 */
+export type LegacyBundle = {
+  sessions: Session[]
+  files: StoredFile[]
+  memories: MemoryEntry[]
+  profile?: MemoryProfile
+}
+
+/**
+ * 旧库迁移的整包写入：一个跨 store 的 `readwrite` 事务，失败整体回滚。
+ *
+ * 为什么必须原子：分条写一旦中途失败就留下半截库，而「目标库为空才迁」这条判据
+ * 在重试时看到非空就再也不敢补写——半截数据会被永久冻在那里。一次提交让
+ * 「要么全在、要么全不在」成立，重试的语义才立得住。
+ *
+ * `owner` 是迁移开始时的作用域。切号之后不能把上一个账号的旧数据写进新账号的库：
+ * 光靠世代守卫不够——切号会把连接置空，下一次 `getDB()` 直接开的是新账号的库，
+ * 世代是新的，写会成功。所以入口、每个 store 写完、提交前各确认一次，
+ * 变了就 abort 并抛 `ScopeMismatchError`。
+ */
+export const saveLegacyBundle = async (owner: string, bundle: LegacyBundle): Promise<void> => {
+  const assertOwner = () => {
+    if (currentScopeUserId() !== owner) {
+      throw new ScopeMismatchError()
+    }
+  }
+  assertOwner()
+  const connection = await getDB()
+  assertOwner()
+  const tx = connection.transaction(
+    ['sessions', 'sessionSummaries', 'files', 'memories', 'memoryProfile'],
+    'readwrite'
+  )
+  await Promise.all([
+    (async () => {
+      try {
+        const sessions = tx.objectStore('sessions')
+        const summaries = tx.objectStore('sessionSummaries')
+        for (const session of bundle.sessions) {
+          await sessions.put(session)
+          await summaries.put(storedSummary(session))
+        }
+        const files = tx.objectStore('files')
+        for (const file of bundle.files) {
+          await files.put(file)
+        }
+        assertOwner()
+        const memories = tx.objectStore('memories')
+        for (const entry of bundle.memories) {
+          await memories.put(entry)
+        }
+        if (bundle.profile) {
+          await tx.objectStore('memoryProfile').put(bundle.profile)
+        }
+        assertOwner()
+      } catch (error) {
+        abortTransaction(tx)
+        throw error
+      }
+    })(),
+    tx.done,
+  ])
+}
+
 /** 未打开的会话也可重命名，只读取该会话，原子更新详情和列表。 */
 export const renameSession = async (id: string, title: string): Promise<void> => {
   const tx = (await getDB()).transaction(['sessions', 'sessionSummaries'], 'readwrite')

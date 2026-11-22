@@ -11,12 +11,16 @@ const migrate = vi.hoisted(() => ({
   results: [] as Array<Record<string, unknown>>,
   /** 调用那一刻 store 里的状态：浮层靠它显示「正在迁移」 */
   during: [] as Array<{ migrating: boolean }>,
+  /** null 表示这台浏览器没有旧库 */
+  inspect: { sessions: 1, memories: 0 } as null | { sessions: number; memories: number },
   summaries: [{ id: 's1', title: '旧会话', createdAt: 1, updatedAt: 1 }],
 }))
 
 const toasts = vi.hoisted(() => [] as unknown[])
 
 vi.mock('../src/services/legacy-migrate', () => ({
+  /** 前置探测：默认「有旧库」，单独一条用例覆盖「没有」 */
+  inspectLegacy: async () => (migrate.inspect === null ? null : { sessions: 1, memories: 0 }),
   migrateLegacyOnce: async (
     _userId: string,
     onProgress?: (done: number, total: number) => void
@@ -58,6 +62,7 @@ beforeEach(() => {
   migrate.calls = 0
   migrate.results = []
   migrate.during = []
+  migrate.inspect = { sessions: 1, memories: 0 }
   toasts.length = 0
   useChatStore.setState({ migratingLegacy: false, legacyProgress: null, sessions: [] })
 })
@@ -115,6 +120,22 @@ describe('登录后自动迁移旧库', () => {
     expect(migrate.calls).toBe(1)
     expect(toasts).toEqual([])
     expect(useChatStore.getState().sessions).toEqual([])
+  })
+
+  it('没有旧库时连迁移流程都不进', async () => {
+    migrate.inspect = null
+    await migrateLegacyHistory(USER)
+    expect(migrate.calls).toBe(0)
+    expect(useChatStore.getState().migratingLegacy).toBe(false)
+    expect(toasts).toEqual([])
+  })
+
+  it('切号打断时既不重试也不提示', async () => {
+    migrate.results = [{ status: 'aborted' }]
+    await migrateLegacyHistory(USER)
+    expect(migrate.calls).toBe(1)
+    expect(toasts).toEqual([])
+    expect(useChatStore.getState().legacyProgress).toBeNull()
   })
 
   it('已经在跑时不重入', async () => {
