@@ -95,15 +95,15 @@ describe('账号隔离', () => {
   })
 
   it('切号会中止已登记的摘要、重算等后台请求', async () => {
-    const { trackRequest, untrackRequest } = await import('../src/services/account-abort')
+    const { trackRequest } = await import('../src/services/account-abort')
     await applyAccountScope(user('77'))
     const summary = trackRequest(new AbortController())
     expect(summary.signal.aborted).toBe(false)
 
     await applyAccountScope(user('88'))
     // 摘要请求最长 180 秒、记忆重算逐批跑，它们不在 streaming 表里，只能靠登记表统一掐断
+    // 不用收尾：abortTrackedRequests() 会把整个登记表清空
     expect(summary.signal.aborted).toBe(true)
-    untrackRequest(summary)
   })
 
   it('老库 chat-demo 不在分区范围内，切换不会碰它', async () => {

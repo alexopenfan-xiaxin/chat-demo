@@ -53,7 +53,9 @@ describe('切号后记忆重算不再继续', () => {
   beforeEach(async () => {
     embed.calls = 0
     embed.delay = 5
-    await db.setStorageScope(null)
+    // 走生产入口：除了清空作用域，也把上一轮遗留的登记项一并中止，
+    // 免得某条用例忘了 await 时把它的 controller 带进下一轮
+    await applyAccountScope(null)
   })
 
   it('切号后这一轮重算立刻停手，embed 调用次数不再增长', async () => {
