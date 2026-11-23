@@ -1606,7 +1606,15 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
  * 补传失败时回复记为 upload 错误，可重试。
  * 服务端判定 file_id 失效时重新补传后重发，退避重试且次数有上限，超过则按原始报错收尾。
  */
-const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
+/**
+ * 导出的原因只有一个：轮内快照（提醒、记忆块）是否真的复用，只有在一次真实的
+ * 多轮工具往返里才能看出来。生产代码里它是内部函数。
+ */
+export const streamReply = async (
+  sessionId: string,
+  initial: AssistantMessage,
+  request: Request
+) => {
   const controller = new AbortController()
   set((state) => ({ streaming: { ...state.streaming, [sessionId]: controller } }))
   let reply = initial
@@ -1617,6 +1625,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     updateReply(sessionId, reply)
   }
   streamFlushes.set(sessionId, flush)
+
+  // 提醒快照整轮只生成一次：日期、时区、语言、位置在轮首取一次，
+  // 工具往返的每个子请求复用同一份。各生成一次的话，跨日或设置变化会让尾巴对不上，
+  // 前缀缓存从提醒那一行起整段作废——一轮里工具调几次就白扔几次。
+  const reminderSnapshot = createLatestReminder(useSettings.getState())
 
   // 记忆开关在整轮里取一次：关闭时不声明工具、不检索、不注入
   const memoryEnabled = useSettings.getState().memory
@@ -1660,10 +1673,10 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         try {
           const prepared = await prepareFiles(sessionId, request, controller.signal)
           preparing = false
-          // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
+          // 续写沿用原回答快照；同一轮的其它子请求复用轮首那份，不再重新生成
           const latestReminder = prepared.prefix
             ? prepared.prefix.latestReminder
-            : createLatestReminder(useSettings.getState())
+            : reminderSnapshot
           reply = { ...reply, latestReminder }
           updateReply(sessionId, reply)
           persist(sessionId)
